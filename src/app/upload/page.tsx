@@ -66,3 +66,7 @@ export default function UploadPage() {
       }
 
       setStatus("Saved! ✅");
+      setText("");
+      setFile(null);
+    } catch (err) {
+      setStatus("Something went wrong. Try
