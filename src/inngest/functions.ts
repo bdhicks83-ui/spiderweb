@@ -1,22 +1,31 @@
-// Background processing — Week 3.
-// Flow: source uploaded → extract text (if image) → extract insights → rows in `insights`.
 import { inngest } from "./client";
+import { createClient } from "@supabase/supabase-js";
+import Anthropic from "@anthropic-ai/sdk";
 
-export const processSource = inngest.createFunction(
-  { id: "process-source" },
-  { event: "source/uploaded" },
-  async ({ event, step }) => {
-    const { sourceId } = event.data as { sourceId: string };
-
-    // TODO Week 3:
-    // 1. step.run("load-source") — fetch source row + file from Storage
-    // 2. step.run("extract-text") — claude.extractText() if kind === 'screenshot'
-    // 3. step.run("extract-insights") — claude.extractInsights(rawText)
-    // 4. step.run("save-insights") — insert rows, set source.status = 'processed'
-    // On failure: set source.status = 'failed' + error message (Week 4 polish)
-
-    return { sourceId, status: "stub — implement in Week 3" };
-  }
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export const functions = [processSource];
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+});
+
+export const extractInsights = inngest.createFunction(
+  { id: "extract-insights" },
+  { event: "source/extract-insights" },
+  async ({ event, step }) => {
+    const { source_id } = event.data;
+
+    const source = await step.run("fetch-source", async () => {
+      const { data, error } = await supabase
+        .from("sources")
+        .select("id, user_id, raw_text, extracted_text")
+        .eq("id", source_id)
+        .single();
+
+      if (error || !data) throw new Error("Source not found");
+      return data;
+    });
+
+    const textToProcess = source.extracted_text
