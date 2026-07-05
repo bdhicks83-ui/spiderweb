@@ -1,17 +1,19 @@
 "use client";
-// Email magic-link login — no passwords to manage.
+// Magic-link + password login (password = fast dev testing).
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function Login() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const supabase = createClient();
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
@@ -20,31 +22,48 @@ export default function Login() {
     else setSent(true);
   }
 
-  if (sent)
+  async function signInPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setError(error.message);
+    else window.location.href = "/";
+  }
+
+  if (sent) {
     return (
       <main>
         <h1>Check your email 📬</h1>
         <p>Magic link sent to {email}. Click it and you&apos;re in.</p>
       </main>
     );
+  }
 
   return (
     <main>
       <h1>Log in</h1>
-      <form onSubmit={sendLink}>
+
+      <form onSubmit={signInPassword}>
         <input
           type="email"
-          required
+          placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          style={{ padding: 8, fontSize: 16, width: "100%", maxWidth: 320 }}
         />
-        <button type="submit" style={{ padding: 8, fontSize: 16, marginLeft: 8 }}>
-          Send magic link
-        </button>
+        <input
+          type="password"
+          placeholder="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button type="submit">Log in with password</button>
       </form>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+
+      <p style={{ margin: "16px 0" }}>— or —</p>
+
+      <button onClick={sendLink}>Send magic link instead</button>
+
+      {error && <p style={{ color: "red" }}>{error}</p>}
     </main>
   );
 }
