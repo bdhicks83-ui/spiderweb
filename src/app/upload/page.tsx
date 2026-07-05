@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -63,4 +63,19 @@ export default function UploadPage() {
       <p>Paste text:</p>
       <textarea
         value={text}
-        onChange={(e) =>
+        onChange={(e) => setText(e.target.value)}
+        rows={6}
+        style={{ width: "100%" }}
+      />
+      <p>Or upload a screenshot:</p>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+      />
+      <br /><br />
+      <button onClick={handleSubmit}>Submit</button>
+      <p>{status}</p>
+    </div>
+  );
+}
