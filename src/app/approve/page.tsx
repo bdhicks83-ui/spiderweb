@@ -67,6 +67,14 @@ export default function ApprovePage() {
         return;
       }
 
+      if (status === 'approved') {
+        fetch('/api/embed-insight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ insight_id: current.id }),
+        }).catch(() => {});
+      }
+
       setProcessing(false);
       setIndex((prev) => prev + 1);
     } catch (err) {
