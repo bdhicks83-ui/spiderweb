@@ -65,8 +65,33 @@ export default function UploadPage() {
         }
       }
 
-      setStatus("Saved! ✅");
+      setStatus("Saved! " + String.fromCodePoint(0x2705));
       setText("");
       setFile(null);
     } catch (err) {
-      setStatus("Something went wrong. Try
+      setStatus("Something went wrong. Try again.");
+    }
+  }
+
+  return (
+    <div style={{ padding: 40, maxWidth: 500 }}>
+      <h1>Upload</h1>
+      <p>Paste text:</p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={6}
+        style={{ width: "100%" }}
+      />
+      <p>Or upload a screenshot:</p>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+      />
+      <br /><br />
+      <button onClick={handleSubmit}>Submit</button>
+      <p>{status}</p>
+    </div>
+  );
+}
