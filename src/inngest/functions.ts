@@ -28,4 +28,51 @@ export const extractInsights = inngest.createFunction(
       return data;
     });
 
-    const textToProcess = source.extracted_text
+    const textToProcess = source.extracted_text || source.raw_text;
+    if (!textToProcess) throw new Error("No text found on this source");
+
+    const insightTexts = await step.run("extract-with-claude", async () => {
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        messages: [
+          {
+            role: "user",
+            content: `Break the following text into discrete, standalone insights. Each insight should be one clear idea, framework, or takeaway that could stand on its own — not a full paragraph summary.
+
+Return ONLY a JSON array of strings, nothing else. No markdown, no preamble, no code fences.
+
+Text:
+"""
+${textToProcess}
+"""`,
+          },
+        ],
+      });
+
+      const responseText = message.content
+        .filter((block) => block.type === "text")
+        .map((block) => ("text" in block ? block.text : ""))
+        .join("");
+
+      const cleaned = responseText.replace(/```json|```/g, "").trim();
+      return JSON.parse(cleaned) as string[];
+    });
+
+    await step.run("save-insights", async () => {
+      const rows = insightTexts.map((content) => ({
+        user_id: source.user_id,
+        source_id: source.id,
+        content,
+        status: "pending",
+      }));
+
+      const { error } = await supabase.from("insights").insert(rows);
+      if (error) throw new Error(error.message);
+    });
+
+    return { success: true, count: insightTexts.length };
+  }
+);
+
+export const functions = [extractInsights];
