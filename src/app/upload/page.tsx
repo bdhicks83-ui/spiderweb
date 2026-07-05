@@ -52,20 +52,32 @@ export default function UploadPage() {
       }
 
       if (filePath) {
-        const res = await fetch("/api/extract", {
+        const ocrRes = await fetch("/api/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sourceId: inserted.id }),
         });
-        if (!res.ok) {
-          setStatus("Saved, but text extraction failed. It'll show as an error in your sources.");
+        if (!ocrRes.ok) {
+          setStatus("Saved, but text extraction failed. It will show as an error in your sources.");
           setText("");
           setFile(null);
           return;
         }
       }
 
-      setStatus("Saved! " + String.fromCodePoint(0x2705));
+      const insightsRes = await fetch("/api/extract-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_id: inserted.id }),
+      });
+      if (!insightsRes.ok) {
+        setStatus("Saved, but insight extraction failed to start.");
+        setText("");
+        setFile(null);
+        return;
+      }
+
+      setStatus("Saved! Insights are processing.");
       setText("");
       setFile(null);
     } catch (err) {
