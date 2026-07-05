@@ -9,73 +9,60 @@ export default function UploadPage() {
   const supabase = createClient();
 
   async function handleSubmit() {
-    setStatus("Uploading...");
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setStatus("Not logged in.");
+    if (!text.trim() && !file) {
+      setStatus("Add some text or a screenshot first.");
       return;
     }
 
-    let filePath: string | null = null;
-    if (file) {
-      const path = `${user.id}/${Date.now()}-${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("uploads")
-        .upload(path, file);
-      if (uploadError) {
-        setStatus(`Upload failed: ${uploadError.message}`);
+    setStatus("Uploading...");
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setStatus("Not logged in.");
         return;
       }
-      filePath = path;
-    }
 
-    const { data: inserted, error: insertError } = await supabase
-      .from("sources")
-      .insert({
-        user_id: user.id,
-        raw_text: text || null,
-        file_path: filePath,
-      })
-      .select()
-      .single();
+      let filePath: string | null = null;
+      if (file) {
+        const path = `${user.id}/${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("uploads")
+          .upload(path, file);
+        if (uploadError) {
+          setStatus(`Upload failed: ${uploadError.message}`);
+          return;
+        }
+        filePath = path;
+      }
 
-    if (insertError) {
-      setStatus(`Save failed: ${insertError.message}`);
-      return;
-    }
+      const { data: inserted, error: insertError } = await supabase
+        .from("sources")
+        .insert({
+          user_id: user.id,
+          raw_text: text || null,
+          file_path: filePath,
+        })
+        .select()
+        .single();
 
-    if (filePath) {
-      await fetch("/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceId: inserted.id }),
-      });
-    }
+      if (insertError) {
+        setStatus(`Save failed: ${insertError.message}`);
+        return;
+      }
 
-    setStatus("Saved! ✅");
-    setText("");
-    setFile(null);
-  }
+      if (filePath) {
+        const res = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourceId: inserted.id }),
+        });
+        if (!res.ok) {
+          setStatus("Saved, but text extraction failed. It'll show as an error in your sources.");
+          setText("");
+          setFile(null);
+          return;
+        }
+      }
 
-  return (
-    <div style={{ padding: 40, maxWidth: 500 }}>
-      <h1>Upload</h1>
-      <p>Paste text:</p>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={6}
-        style={{ width: "100%" }}
-      />
-      <p>Or upload a screenshot:</p>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => setFile(e.target.files?.[0] || null)}
-      />
-      <br /><br />
-      <button onClick={handleSubmit}>Submit</button>
-      <p>{status}</p>
-    </div>
-  );
-}
+      setStatus("Saved! ✅");
