@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -76,4 +76,13 @@ export async function POST(req: NextRequest) {
 
       const { error: insertError } = await supabase.from('connections').insert(rows);
       if (insertError) {
-        return NextResponse.json({ success:
+        return NextResponse.json({ success: true, embedded: true, connectionError: insertError.message });
+      }
+    }
+
+    return NextResponse.json({ success: true, embedded: true, connectionsFound: matches?.length || 0 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
