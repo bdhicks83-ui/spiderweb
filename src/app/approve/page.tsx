@@ -68,7 +68,7 @@ export default function ApprovePage() {
       }
 
       if (status === 'approved') {
-        fetch('/api/embed-insight', {
+        fetch('/api/embed-insights', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ insight_id: current.id }),
