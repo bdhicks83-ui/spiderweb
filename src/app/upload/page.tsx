@@ -16,7 +16,46 @@ export default function UploadPage() {
   const [waitSeconds, setWaitSeconds] = useState(0);
   const [waitRun, setWaitRun] = useState(0); // bumped on retry to restart timers
   const [retrying, setRetrying] = useState(false);
+  const [gateChecked, setGateChecked] = useState(false);
   const router = useRouter();
+
+  // Phase 6 Slice 1 — brand-new users (no goal set AND no sources yet)
+  // do onboarding before their first upload.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!user) {
+        // Not logged in — let the existing submit-time check handle it.
+        setGateChecked(true);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("goal_track")
+        .eq("id", user.id)
+        .single();
+      if (cancelled) return;
+
+      if (!profile?.goal_track) {
+        const { count } = await supabase
+          .from("sources")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id);
+        if (cancelled) return;
+        if ((count ?? 0) === 0) {
+          router.replace("/onboarding");
+          return;
+        }
+      }
+      setGateChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   // Waiting phase: tick a timer + poll for insights tied to this source
   useEffect(() => {
@@ -158,6 +197,15 @@ export default function UploadPage() {
       setStatus("Retry failed to start. You can still go to Approve.");
     }
     setRetrying(false);
+  }
+
+  if (!gateChecked) {
+    return (
+      <div style={styles.center}>
+        <div style={styles.spinner} aria-hidden="true" />
+        <style>{`@keyframes upload-spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   if (phase === "waiting") {
