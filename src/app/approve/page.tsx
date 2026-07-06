@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -19,6 +19,9 @@ export default function ApprovePage() {
   const [processing, setProcessing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // First-ever-approval badge state
+  const [priorApprovedCount, setPriorApprovedCount] = useState<number | null>(null);
+  const [showFirstBadge, setShowFirstBadge] = useState(false);
 
   useEffect(() => {
     loadInsights();
@@ -41,6 +44,16 @@ export default function ApprovePage() {
         setInsights(data || []);
         setIndex(0);
       }
+
+      // How many insights has this user ever approved? (RLS scopes to the
+      // logged-in user, same as the pending query above.)
+      const { count, error: countError } = await supabase
+        .from('insights')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'approved');
+
+      // If the count fails, default to "not first" so we never show a wrong badge.
+      setPriorApprovedCount(countError ? 1 : (count ?? 0));
     } catch (err) {
       setLoadError('Something went wrong loading insights.');
       setInsights([]);
@@ -75,6 +88,18 @@ export default function ApprovePage() {
         }).catch(() => {});
       }
 
+      // Badge logic: show once, on the very first approval this user has
+      // ever made. Any later decision hides it again.
+      if (status === 'approved' && priorApprovedCount === 0) {
+        setShowFirstBadge(true);
+        setPriorApprovedCount(1);
+      } else {
+        setShowFirstBadge(false);
+        if (status === 'approved' && priorApprovedCount !== null) {
+          setPriorApprovedCount(priorApprovedCount + 1);
+        }
+      }
+
       setProcessing(false);
       setIndex((prev) => prev + 1);
     } catch (err) {
@@ -82,6 +107,10 @@ export default function ApprovePage() {
       setProcessing(false);
     }
   }
+
+  const firstBadge = showFirstBadge ? (
+    <p style={styles.firstBadge}>🌱 First insight captured</p>
+  ) : null;
 
   if (loading) {
     return (
@@ -114,6 +143,7 @@ export default function ApprovePage() {
   if (index >= insights.length) {
     return (
       <div style={styles.center}>
+        {firstBadge}
         <h2>All done!</h2>
         <p>
           You reviewed {insights.length} insight{insights.length === 1 ? '' : 's'}.
@@ -132,6 +162,8 @@ export default function ApprovePage() {
       <div style={styles.progress}>
         {index + 1} of {insights.length}
       </div>
+
+      {firstBadge}
 
       <div style={styles.card}>
         <p style={styles.content}>{current.content}</p>
@@ -184,6 +216,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     color: '#888',
     fontWeight: 500,
+  },
+  firstBadge: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#16a34a',
+    backgroundColor: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    borderRadius: '9999px',
+    padding: '6px 14px',
+    margin: 0,
   },
   card: {
     maxWidth: '600px',
