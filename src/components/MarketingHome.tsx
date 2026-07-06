@@ -731,7 +731,7 @@ const CSS = `
 @keyframes hb-drip { 0% { transform: scaleY(0); transform-origin: top; } 55% { transform: scaleY(1); transform-origin: top; } 100% { transform: scaleY(0); transform-origin: bottom; } }
 
 /* Pinned narrative */
-.hb-how { position: relative; z-index: 1; height: 400vh; }
+.hb-how { position: relative; z-index: 1; height: 200vh; }
 .hb-how-sticky {
   position: sticky; top: 0; height: 100vh;
   display: flex; flex-direction: column; justify-content: center; align-items: center;
