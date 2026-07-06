@@ -1,8 +1,10 @@
 'use client';
 
-// Phase 5 — "Ask Your Spiderweb": ask a question, get an answer grounded
-// in your own approved insights, then export it as a report, podcast, or
-// deck. Auth is enforced by the API routes (401 → friendly message).
+// Phase 6 — Consultative Ask: ask a question, answer Claude's follow-ups one
+// at a time, then get a recommendation with pros/cons grounded only in your
+// approved insights. Exports (report/podcast/deck) reuse the existing routes
+// by flattening the recommendation into answer text.
+// Auth is enforced by the API routes (401 → friendly message).
 
 import { useState } from 'react';
 
@@ -12,12 +14,22 @@ type Source = {
   similarity: number;
 };
 
+type Recommendation = {
+  recommendation: string;
+  pros: string[];
+  cons: string[];
+  gaps: string | null;
+};
+
+type Turn = { role: 'you' | 'spiderweb'; text: string };
+
 type AskState =
   | { phase: 'idle' }
-  | { phase: 'loading' }
+  | { phase: 'starting' }
+  | { phase: 'interview'; sessionId: string; followUp: string; sending: boolean }
   | { phase: 'error'; message: string }
   | { phase: 'noMatch'; message: string }
-  | { phase: 'answered'; answer: string; sources: Source[] };
+  | { phase: 'done'; rec: Recommendation; sources: Source[] };
 
 type Format = 'report' | 'podcast' | 'deck';
 
@@ -27,21 +39,45 @@ const FORMATS: { key: Format; label: string; loadingLabel: string }[] = [
   { key: 'deck', label: 'Deck (.pptx)', loadingLabel: 'Building deck...' },
 ];
 
+// Flatten the structured recommendation for the export routes, which expect
+// a plain answer string.
+function recToText(rec: Recommendation): string {
+  const parts = [rec.recommendation];
+  if (rec.pros.length) parts.push(`Pros:\n${rec.pros.map((p) => `- ${p}`).join('\n')}`);
+  if (rec.cons.length) parts.push(`Cons:\n${rec.cons.map((c) => `- ${c}`).join('\n')}`);
+  if (rec.gaps) parts.push(`Not covered by my insights: ${rec.gaps}`);
+  return parts.join('\n\n');
+}
+
 export default function AskPage() {
-  const [question, setQuestion] = useState('');
+  const [input, setInput] = useState('');
   const [askedQuestion, setAskedQuestion] = useState('');
+  const [transcript, setTranscript] = useState<Turn[]>([]);
   const [state, setState] = useState<AskState>({ phase: 'idle' });
   const [showSources, setShowSources] = useState(false);
   const [formatLoading, setFormatLoading] = useState<Format | null>(null);
   const [formatError, setFormatError] = useState<string | null>(null);
 
-  async function ask() {
-    const q = question.trim();
-    if (!q || state.phase === 'loading') return;
+  const busy =
+    state.phase === 'starting' ||
+    (state.phase === 'interview' && state.sending);
 
-    setState({ phase: 'loading' });
+  function fail(message: string) {
+    setState({ phase: 'error', message });
+  }
+
+  // First submit: start a session. May come back with a follow-up question
+  // or, if Claude already has enough, the final recommendation.
+  async function ask() {
+    const q = input.trim();
+    if (!q || busy) return;
+
+    setAskedQuestion(q);
+    setTranscript([{ role: 'you', text: q }]);
+    setInput('');
     setShowSources(false);
     setFormatError(null);
+    setState({ phase: 'starting' });
 
     try {
       const res = await fetch('/api/ask', {
@@ -49,32 +85,87 @@ export default function AskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q }),
       });
-
       const data = await res.json();
 
-      if (res.status === 401) {
-        setState({ phase: 'error', message: 'Please log in to ask your Spiderweb.' });
-        return;
-      }
-      if (!res.ok) {
-        setState({ phase: 'error', message: data.error || 'Something went wrong. Try again.' });
-        return;
-      }
-      if (data.noMatch) {
-        setState({ phase: 'noMatch', message: data.message });
-        return;
-      }
+      if (res.status === 401) return fail('Please log in to ask your Spiderweb.');
+      if (!res.ok) return fail(data.error || 'Something went wrong. Try again.');
+      if (data.noMatch) return setState({ phase: 'noMatch', message: data.message });
 
-      setAskedQuestion(q);
-      setState({ phase: 'answered', answer: data.answer, sources: data.sources || [] });
+      handleStep(data);
     } catch {
-      setState({ phase: 'error', message: 'Something went wrong. Try again.' });
+      fail('Something went wrong. Try again.');
     }
   }
 
-  // Re-uses the answer already retrieved — no second search.
+  // Subsequent submits: answer the pending follow-up.
+  async function answer() {
+    if (state.phase !== 'interview' || state.sending) return;
+    const a = input.trim();
+    if (!a) return;
+
+    setTranscript((t) => [...t, { role: 'you', text: a }]);
+    setInput('');
+    setState({ ...state, sending: true });
+
+    try {
+      const res = await fetch('/api/ask/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: state.sessionId, answer: a }),
+      });
+      const data = await res.json();
+
+      if (res.status === 401) return fail('Please log in to ask your Spiderweb.');
+      if (!res.ok) return fail(data.error || 'Something went wrong. Try again.');
+
+      handleStep(data);
+    } catch {
+      fail('Something went wrong. Try again.');
+    }
+  }
+
+  // Shared: both routes answer with either another follow-up or the final
+  // recommendation.
+  function handleStep(data: {
+    done: boolean;
+    sessionId: string;
+    followUp?: string;
+    recommendation?: string;
+    pros?: string[];
+    cons?: string[];
+    gaps?: string | null;
+    sources?: Source[];
+  }) {
+    if (!data.done && data.followUp) {
+      setTranscript((t) => [...t, { role: 'spiderweb', text: data.followUp! }]);
+      setState({
+        phase: 'interview',
+        sessionId: data.sessionId,
+        followUp: data.followUp,
+        sending: false,
+      });
+      return;
+    }
+    setState({
+      phase: 'done',
+      rec: {
+        recommendation: data.recommendation || '',
+        pros: data.pros || [],
+        cons: data.cons || [],
+        gaps: data.gaps ?? null,
+      },
+      sources: data.sources || [],
+    });
+  }
+
+  function submit() {
+    if (state.phase === 'interview') answer();
+    else ask();
+  }
+
+  // Re-uses the recommendation already retrieved — no second search.
   async function downloadFormat(format: Format) {
-    if (state.phase !== 'answered' || formatLoading) return;
+    if (state.phase !== 'done' || formatLoading) return;
 
     setFormatLoading(format);
     setFormatError(null);
@@ -85,7 +176,7 @@ export default function AskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: askedQuestion,
-          answer: state.answer,
+          answer: recToText(state.rec),
           sources: state.sources,
         }),
       });
@@ -123,42 +214,69 @@ export default function AskPage() {
     }
   }
 
-  const loading = state.phase === 'loading';
+  const interviewing = state.phase === 'interview';
+  const inputVisible = state.phase === 'idle' || state.phase === 'starting' || interviewing
+    || state.phase === 'error' || state.phase === 'noMatch';
 
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
         <h1 style={styles.title}>Ask Your Spiderweb</h1>
         <p style={styles.subtitle}>
-          Answers come only from insights you&apos;ve captured and approved.
+          It asks a few questions first, then recommends — grounded only in
+          insights you&apos;ve captured and approved.
         </p>
 
-        <div style={styles.inputRow}>
-          <input
-            style={styles.input}
-            type="text"
-            value={question}
-            placeholder="Ask a question..."
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') ask();
-            }}
-            disabled={loading}
-          />
-          <button
-            style={{
-              ...styles.askButton,
-              ...(loading || !question.trim() ? styles.askButtonDisabled : {}),
-            }}
-            onClick={ask}
-            disabled={loading || !question.trim()}
-          >
-            {loading ? 'Thinking...' : 'Ask'}
-          </button>
-        </div>
+        {transcript.length > 0 && (
+          <div style={styles.transcript}>
+            {transcript.map((turn, i) => (
+              <div
+                key={i}
+                style={{
+                  ...styles.bubble,
+                  ...(turn.role === 'you' ? styles.bubbleYou : styles.bubbleWeb),
+                }}
+              >
+                <span style={styles.bubbleLabel}>
+                  {turn.role === 'you' ? 'You' : 'Your Spiderweb'}
+                </span>
+                <span style={styles.bubbleText}>{turn.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {state.phase === 'loading' && (
+        {inputVisible && (
+          <div style={styles.inputRow}>
+            <input
+              style={styles.input}
+              type="text"
+              value={input}
+              placeholder={interviewing ? 'Type your answer...' : 'Ask a question...'}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submit();
+              }}
+              disabled={busy}
+            />
+            <button
+              style={{
+                ...styles.askButton,
+                ...(busy || !input.trim() ? styles.askButtonDisabled : {}),
+              }}
+              onClick={submit}
+              disabled={busy || !input.trim()}
+            >
+              {busy ? 'Thinking...' : interviewing ? 'Answer' : 'Ask'}
+            </button>
+          </div>
+        )}
+
+        {state.phase === 'starting' && (
           <p style={styles.loadingText}>Searching your captured expertise...</p>
+        )}
+        {interviewing && state.sending && (
+          <p style={styles.loadingText}>Thinking about what else it needs...</p>
         )}
 
         {state.phase === 'error' && <p style={styles.errorText}>{state.message}</p>}
@@ -169,10 +287,36 @@ export default function AskPage() {
           </div>
         )}
 
-        {state.phase === 'answered' && (
+        {state.phase === 'done' && (
           <>
             <div style={styles.answerCard}>
-              <p style={styles.answerText}>{state.answer}</p>
+              <p style={styles.answerText}>{state.rec.recommendation}</p>
+
+              {state.rec.pros.length > 0 && (
+                <div style={styles.prosConsBlock}>
+                  <span style={styles.prosConsTitle}>Pros</span>
+                  <ul style={styles.prosConsList}>
+                    {state.rec.pros.map((p, i) => (
+                      <li key={i} style={styles.proItem}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {state.rec.cons.length > 0 && (
+                <div style={styles.prosConsBlock}>
+                  <span style={styles.prosConsTitle}>Cons</span>
+                  <ul style={styles.prosConsList}>
+                    {state.rec.cons.map((c, i) => (
+                      <li key={i} style={styles.conItem}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {state.rec.gaps && (
+                <p style={styles.gapsText}>Not covered by your insights: {state.rec.gaps}</p>
+              )}
 
               <p style={styles.basedOn}>
                 Based on {state.sources.length} of your insight
@@ -201,7 +345,7 @@ export default function AskPage() {
             </div>
 
             <div style={styles.formatBar}>
-              <span style={styles.formatLabel}>Get this answer as:</span>
+              <span style={styles.formatLabel}>Get this recommendation as:</span>
               <div style={styles.formatButtons}>
                 <button style={{ ...styles.formatButton, ...styles.formatButtonActive }} disabled>
                   Text ✓
@@ -253,6 +397,43 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '15px',
     color: '#666',
     margin: 0,
+  },
+  transcript: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    marginTop: '8px',
+  },
+  bubble: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    padding: '12px 16px',
+    borderRadius: '12px',
+    maxWidth: '85%',
+  },
+  bubbleYou: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#111',
+    color: '#fff',
+  },
+  bubbleWeb: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#f2f2f2',
+    color: '#111',
+    border: '1px solid #e0e0e0',
+  },
+  bubbleLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    opacity: 0.6,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  bubbleText: {
+    fontSize: '15px',
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap',
   },
   inputRow: {
     display: 'flex',
@@ -314,6 +495,44 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '16px',
     lineHeight: 1.7,
     whiteSpace: 'pre-wrap',
+  },
+  prosConsBlock: {
+    marginTop: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  prosConsTitle: {
+    fontSize: '13px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    color: '#555',
+  },
+  prosConsList: {
+    margin: 0,
+    paddingLeft: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  proItem: {
+    fontSize: '15px',
+    lineHeight: 1.6,
+    color: '#1a7f37',
+  },
+  conItem: {
+    fontSize: '15px',
+    lineHeight: 1.6,
+    color: '#b35900',
+  },
+  gapsText: {
+    marginTop: '16px',
+    marginBottom: 0,
+    fontSize: '14px',
+    color: '#777',
+    fontStyle: 'italic',
+    lineHeight: 1.6,
   },
   basedOn: {
     marginTop: '16px',

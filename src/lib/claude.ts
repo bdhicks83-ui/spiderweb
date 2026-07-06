@@ -106,6 +106,115 @@ export async function extractInsights(rawText: string): Promise<string[]> {
   }
 }
 
+// Phase 6: consultative ask — shared shapes + formatting helpers.
+export type QAPair = { question: string; answer: string };
+
+function formatInsights(insightContents: string[]): string {
+  return insightContents.map((c, i) => `[${i + 1}] ${c}`).join("\n\n");
+}
+
+function formatQAPairs(qaPairs: QAPair[]): string {
+  if (qaPairs.length === 0) return "(none yet)";
+  return qaPairs
+    .map((p, i) => `${i + 1}. Q: ${p.question}\n   A: ${p.answer}`)
+    .join("\n");
+}
+
+// Strip a ```json fence if the model wrapped its output in one.
+function parseJson(text: string): unknown | null {
+  try {
+    return JSON.parse(text.replace(/^```json?\n?|```$/g, "").trim());
+  } catch {
+    return null;
+  }
+}
+
+// Phase 6: decide whether a follow-up question is genuinely needed before
+// recommending. Model-driven — no fixed script. Returns null on any failure
+// so callers can fall back to synthesizing immediately.
+export type FollowUpDecision = { done: boolean; question: string | null };
+
+export async function nextFollowUp(
+  question: string,
+  insightContents: string[],
+  qaPairs: QAPair[],
+  maxRemaining: number
+): Promise<FollowUpDecision | null> {
+  const prompt = await loadPrompt("ask-followup", {
+    insights: formatInsights(insightContents),
+    question,
+    qa_pairs: formatQAPairs(qaPairs),
+    max_remaining: String(maxRemaining),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 512,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    done?: unknown;
+    question?: unknown;
+  } | null;
+  if (!parsed || typeof parsed.done !== "boolean") return null;
+  if (parsed.done) return { done: true, question: null };
+  if (typeof parsed.question !== "string" || !parsed.question.trim())
+    return null;
+  return { done: false, question: parsed.question.trim() };
+}
+
+// Phase 6: final synthesis — recommendation + pros/cons grounded ONLY in the
+// matched insights (same "no outside knowledge" rule as answerFromInsights).
+export type Recommendation = {
+  recommendation: string;
+  pros: string[];
+  cons: string[];
+  gaps: string | null;
+};
+
+const isStringArray = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((x) => typeof x === "string");
+
+export async function recommendFromInsights(
+  question: string,
+  insightContents: string[],
+  qaPairs: QAPair[]
+): Promise<Recommendation | null> {
+  const prompt = await loadPrompt("ask-recommend", {
+    insights: formatInsights(insightContents),
+    question,
+    qa_pairs: formatQAPairs(qaPairs),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    recommendation?: unknown;
+    pros?: unknown;
+    cons?: unknown;
+    gaps?: unknown;
+  } | null;
+  if (
+    !parsed ||
+    typeof parsed.recommendation !== "string" ||
+    !isStringArray(parsed.pros) ||
+    !isStringArray(parsed.cons)
+  ) {
+    return null;
+  }
+  return {
+    recommendation: parsed.recommendation,
+    pros: parsed.pros,
+    cons: parsed.cons,
+    gaps: typeof parsed.gaps === "string" && parsed.gaps.trim() ? parsed.gaps : null,
+  };
+}
+
 // Phase 5: question + matched insight excerpts -> grounded answer in the
 // expert's own voice. The system prompt forbids outside knowledge.
 export async function answerFromInsights(

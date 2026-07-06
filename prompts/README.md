@@ -6,6 +6,10 @@ Doctrine: prompts live in the repo, reviewed and diffed like any other source fi
 |---|---|---|
 | `extract-text.md` | OCR/transcription of uploads | Week 2 |
 | `extract-insights.md` | Raw text → discrete insights | Week 3 |
+| `draft-framework.md` | Insight cluster → framework draft | Phase 3 |
+| `ask-spiderweb.md` | Single-shot grounded answer (legacy) | Phase 5 |
+| `ask-followup.md` | Decide if a follow-up question is needed | Phase 6 |
+| `ask-recommend.md` | Final recommendation + pros/cons | Phase 6 |
 
 Rules:
 - One prompt per file. Markdown. `{{variable}}` placeholders.
