@@ -1,4 +1,5 @@
-// Claude API wrapper — Week 2 (OCR), Week 3 (insight extraction), Phase 3 (framework drafting).
+// Claude API wrapper — Week 2 (OCR), Week 3 (insight extraction), Phase 3 (framework drafting),
+// Phase 5 (Ask Your Spiderweb).
 // Doctrine: prompts load from /prompts, never inline.
 import Anthropic from "@anthropic-ai/sdk";
 import { readFile } from "fs/promises";
@@ -97,4 +98,23 @@ export async function extractInsights(rawText: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+// Phase 5: question + matched insight excerpts → grounded answer in the
+// expert's own voice. The system prompt forbids outside knowledge.
+export async function answerFromInsights(
+  question: string,
+  insightContents: string[]
+): Promise<string> {
+  const system = await loadPrompt("ask-spiderweb", {
+    insights: insightContents.map((c, i) => `[${i + 1}] ${c}`).join("\n\n"),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 1024,
+    system,
+    messages: [{ role: "user", content: question }],
+  });
+  const block = msg.content[0];
+  return block.type === "text" ? block.text : "";
 }

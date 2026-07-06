@@ -6,16 +6,23 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "remotion:studio": "remotion studio src/remotion/index.ts",
+    "render:test": "node scripts/render-test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@remotion/bundler": "^4.0.0",
+    "@remotion/cli": "^4.0.0",
+    "@remotion/media-utils": "^4.0.0",
+    "@remotion/renderer": "^4.0.0",
     "@supabase/ssr": "^0.6.0",
     "@supabase/supabase-js": "^2.47.0",
     "inngest": "^3.29.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
