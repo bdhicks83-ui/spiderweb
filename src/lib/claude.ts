@@ -1,4 +1,4 @@
-// Claude API wrapper — Week 2 (OCR) and Week 3 (insight extraction).
+// Claude API wrapper — Week 2 (OCR), Week 3 (insight extraction), Phase 3 (framework drafting).
 // Doctrine: prompts load from /prompts, never inline.
 import Anthropic from "@anthropic-ai/sdk";
 import { readFile } from "fs/promises";
@@ -44,6 +44,41 @@ export async function extractText(
   });
   const block = msg.content[0];
   return block.type === "text" ? block.text : "";
+}
+
+// Phase 3: cluster of insights → drafted framework (name + description + write-up)
+export type FrameworkDraft = {
+  name: string;
+  description: string;
+  writeup: string;
+};
+
+export async function draftFramework(
+  insightContents: string[]
+): Promise<FrameworkDraft | null> {
+  const prompt = await loadPrompt("draft-framework", {
+    insights: insightContents.map((c, i) => `${i + 1}. ${c}`).join("\n"),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const block = msg.content[0];
+  if (block.type !== "text") return null;
+  try {
+    const parsed = JSON.parse(block.text.replace(/^```json?\n?|```$/g, "").trim());
+    if (
+      typeof parsed.name === "string" &&
+      typeof parsed.description === "string" &&
+      typeof parsed.writeup === "string"
+    ) {
+      return parsed as FrameworkDraft;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // Week 3: raw text → discrete insights
