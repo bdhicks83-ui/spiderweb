@@ -1,4 +1,5 @@
-// Dashboard — department grid ("It Pays" access control) + clusters + frameworks.
+// Homepage — Human Bloom marketing page for visitors, Spiderweb dashboard when logged in.
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -9,6 +10,12 @@ import {
 } from "@/lib/access";
 import DraftFrameworkButton from "@/components/DraftFrameworkButton";
 import ApproveFrameworkButton from "@/components/ApproveFrameworkButton";
+import MarketingHome from "@/components/MarketingHome";
+
+export const metadata: Metadata = {
+  title: "Human Bloom — Your AI Company. Built Around You.",
+  description: "The Operating System for Human Expertise.",
+};
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -16,16 +23,9 @@ export default async function Dashboard() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Logged out → animated marketing homepage (Phase 4)
   if (!user) {
-    return (
-      <main>
-        <h1>🕸️ Spiderweb</h1>
-        <p>It remembers.</p>
-        <p>
-          <Link href="/login">Log in →</Link>
-        </p>
-      </main>
-    );
+    return <MarketingHome />;
   }
 
   // ─── Phase 4: plan → unlocked departments ───
