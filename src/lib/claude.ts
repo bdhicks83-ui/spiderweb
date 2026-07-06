@@ -1,4 +1,4 @@
-// Claude API wrapper — Week 2 (OCR), Week 3 (insight extraction), Phase 3 (framework drafting),
+﻿// Claude API wrapper — Week 2 (OCR), Week 3 (insight extraction), Phase 3 (framework drafting),
 // Phase 5 (Ask Your Spiderweb).
 // Doctrine: prompts load from /prompts, never inline.
 import Anthropic from "@anthropic-ai/sdk";
@@ -6,6 +6,13 @@ import { readFile } from "fs/promises";
 import path from "path";
 
 const anthropic = new Anthropic(); // reads ANTHROPIC_API_KEY from env
+
+// Claude can return a "thinking" block before the actual "text" block.
+// Always find the first text block instead of assuming content[0] is it.
+function firstText(content: { type: string; text?: string }[]): string {
+  const block = content.find((b) => b.type === "text");
+  return block?.text ?? "";
+}
 
 export async function loadPrompt(
   name: string,
@@ -21,7 +28,7 @@ export async function loadPrompt(
   );
 }
 
-// Week 2: image → text (OCR/transcription)
+// Week 2: image -> text (OCR/transcription)
 export async function extractText(
   imageBase64: string,
   mediaType: "image/png" | "image/jpeg"
@@ -43,11 +50,10 @@ export async function extractText(
       },
     ],
   });
-  const block = msg.content[0];
-  return block.type === "text" ? block.text : "";
+  return firstText(msg.content as { type: string; text?: string }[]);
 }
 
-// Phase 3: cluster of insights → drafted framework (name + description + write-up)
+// Phase 3: cluster of insights -> drafted framework (name + description + write-up)
 export type FrameworkDraft = {
   name: string;
   description: string;
@@ -65,10 +71,10 @@ export async function draftFramework(
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });
-  const block = msg.content[0];
-  if (block.type !== "text") return null;
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
   try {
-    const parsed = JSON.parse(block.text.replace(/^```json?\n?|```$/g, "").trim());
+    const parsed = JSON.parse(text.replace(/^```json?\n?|```$/g, "").trim());
     if (
       typeof parsed.name === "string" &&
       typeof parsed.description === "string" &&
@@ -82,7 +88,7 @@ export async function draftFramework(
   }
 }
 
-// Week 3: raw text → discrete insights
+// Week 3: raw text -> discrete insights
 export async function extractInsights(rawText: string): Promise<string[]> {
   const prompt = await loadPrompt("extract-insights", { raw_text: rawText });
   const msg = await anthropic.messages.create({
@@ -90,17 +96,17 @@ export async function extractInsights(rawText: string): Promise<string[]> {
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
   });
-  const block = msg.content[0];
-  if (block.type !== "text") return [];
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return [];
   try {
-    const parsed = JSON.parse(block.text.replace(/^```json?\n?|```$/g, "").trim());
+    const parsed = JSON.parse(text.replace(/^```json?\n?|```$/g, "").trim());
     return Array.isArray(parsed.insights) ? parsed.insights : [];
   } catch {
     return [];
   }
 }
 
-// Phase 5: question + matched insight excerpts → grounded answer in the
+// Phase 5: question + matched insight excerpts -> grounded answer in the
 // expert's own voice. The system prompt forbids outside knowledge.
 export async function answerFromInsights(
   question: string,
@@ -115,6 +121,5 @@ export async function answerFromInsights(
     system,
     messages: [{ role: "user", content: question }],
   });
-  const block = msg.content[0];
-  return block.type === "text" ? block.text : "";
+  return firstText(msg.content as { type: string; text?: string }[]);
 }
