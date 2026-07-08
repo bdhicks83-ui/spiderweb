@@ -91,7 +91,7 @@ export default function UploadPage() {
 
   async function handleSubmit() {
     if (!text.trim() && !file) {
-      setStatus("Add some text or a screenshot first.");
+      setStatus("Add some text, a screenshot, or a PDF first.");
       return;
     }
 
@@ -120,12 +120,19 @@ export default function UploadPage() {
         filePath = path;
       }
 
+      // Provenance: label the source by what it actually is. PDFs route to
+      // Claude's document extractor; images to vision OCR; text stays text.
+      const isPdf =
+        !!file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+      const kind = file ? (isPdf ? "pdf" : "screenshot") : "text";
+
       const { data: inserted, error: insertError } = await supabase
         .from("sources")
         .insert({
           user_id: user.id,
           raw_text: text || null,
           file_path: filePath,
+          kind,
         })
         .select()
         .single();
@@ -136,7 +143,10 @@ export default function UploadPage() {
         return;
       }
 
-      if (filePath) {
+      // Images: OCR synchronously here (fast). PDFs: extraction happens in the
+      // background Inngest job (chunked per page-range), so we skip the sync
+      // call and let the waiting screen poll for the resulting insights.
+      if (filePath && !isPdf) {
         const ocrRes = await fetch("/api/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -247,13 +257,20 @@ export default function UploadPage() {
         style={{ width: "100%" }}
         disabled={phase === "submitting"}
       />
-      <p>Or upload a screenshot:</p>
+      <p>Or upload a screenshot or PDF:</p>
       <input
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf,.pdf"
         onChange={(e) => setFile(e.target.files?.[0] || null)}
         disabled={phase === "submitting"}
       />
+      {file && (
+        <p style={{ fontSize: 13, color: "#666" }}>
+          {file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf"
+            ? "📄 PDF — every page will be read."
+            : "🖼️ Image — text will be read from it."}
+        </p>
+      )}
       <br /><br />
       <button onClick={handleSubmit} disabled={phase === "submitting"}>
         {phase === "submitting" ? "Uploading..." : "Submit"}

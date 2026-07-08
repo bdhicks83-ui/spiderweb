@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveGapsForInsight } from '@/lib/ask';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,6 +56,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
+    // Step 6.5 — a newly-embedded insight may answer an open query gap.
+    let gapsResolved = 0;
+    try {
+      gapsResolved = await resolveGapsForInsight(supabase, insight.user_id, embeddingString);
+    } catch {
+      // non-fatal: gap resolution is best-effort
+    }
+
     const { data: matches, error: matchError } = await supabase.rpc('match_insights', {
       query_embedding: embeddingString,
       match_user_id: insight.user_id,
@@ -80,7 +89,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, embedded: true, connectionsFound: matches?.length || 0 });
+    return NextResponse.json({ success: true, embedded: true, connectionsFound: matches?.length || 0, gapsResolved });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

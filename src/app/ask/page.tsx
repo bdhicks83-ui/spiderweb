@@ -21,6 +21,19 @@ type Recommendation = {
   gaps: string | null;
 };
 
+type CaseExample = {
+  id: string;
+  situation: string | null;
+  action: string | null;
+  outcome: string | null;
+  lesson: string | null;
+  illustrates: string | null;
+};
+
+type Gap = { detected: boolean; type: 'coverage' | 'case_evidence_missing' | null };
+
+type GroundedSentence = { text: string; score: number };
+
 type Turn = { role: 'you' | 'spiderweb'; text: string };
 
 type AskState =
@@ -29,7 +42,7 @@ type AskState =
   | { phase: 'interview'; sessionId: string; followUp: string; sending: boolean }
   | { phase: 'error'; message: string }
   | { phase: 'noMatch'; message: string }
-  | { phase: 'done'; rec: Recommendation; sources: Source[] };
+  | { phase: 'done'; rec: Recommendation; sources: Source[]; examples: CaseExample[]; gap: Gap | null; grounded: GroundedSentence[] };
 
 type Format = 'report' | 'podcast' | 'deck';
 
@@ -135,6 +148,9 @@ export default function AskPage() {
     cons?: string[];
     gaps?: string | null;
     sources?: Source[];
+    examples?: CaseExample[];
+    gap?: Gap;
+    grounded?: GroundedSentence[];
   }) {
     if (!data.done && data.followUp) {
       setTranscript((t) => [...t, { role: 'spiderweb', text: data.followUp! }]);
@@ -155,6 +171,9 @@ export default function AskPage() {
         gaps: data.gaps ?? null,
       },
       sources: data.sources || [],
+      examples: data.examples || [],
+      gap: data.gap ?? null,
+      grounded: data.grounded || [],
     });
   }
 
@@ -224,7 +243,10 @@ export default function AskPage() {
         <h1 style={styles.title}>Ask Your Spiderweb</h1>
         <p style={styles.subtitle}>
           It asks a few questions first, then recommends — grounded only in
-          insights you&apos;ve captured and approved.
+          insights you&apos;ve captured and approved.{' '}
+          <a href="/simulate" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>
+            Simulate a decision instead →
+          </a>
         </p>
 
         {transcript.length > 0 && (
@@ -290,7 +312,42 @@ export default function AskPage() {
         {state.phase === 'done' && (
           <>
             <div style={styles.answerCard}>
-              <p style={styles.answerText}>{state.rec.recommendation}</p>
+              {state.grounded.length > 0 ? (
+                <>
+                  <p style={styles.answerText}>
+                    {state.grounded.map((g, i) => (
+                      <span key={i} style={shadeStyle(g.score)}>
+                        {g.text}{' '}
+                      </span>
+                    ))}
+                  </p>
+                  <p style={styles.heatmapLegend}>
+                    <span style={styles.legendStrong}>Darker</span> = more grounded in your
+                    insights; <span style={styles.legendWeak}>lighter</span> = thinner / inferred.
+                  </p>
+                </>
+              ) : (
+                <p style={styles.answerText}>{state.rec.recommendation}</p>
+              )}
+
+              {state.examples.length > 0 && (
+                <div style={styles.examplesBlock}>
+                  {state.examples.map((ex) => (
+                    <div key={ex.id} style={styles.exampleCard}>
+                      <span style={styles.exampleLabel}>📌 Real example</span>
+                      {ex.illustrates && (
+                        <p style={styles.exampleIllustrates}>
+                          Backs up: {ex.illustrates}
+                        </p>
+                      )}
+                      {ex.situation && <ExampleRow k="Situation" v={ex.situation} />}
+                      {ex.action && <ExampleRow k="Action" v={ex.action} />}
+                      {ex.outcome && <ExampleRow k="Outcome" v={ex.outcome} />}
+                      {ex.lesson && <ExampleRow k="Lesson" v={ex.lesson} />}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {state.rec.pros.length > 0 && (
                 <div style={styles.prosConsBlock}>
@@ -366,10 +423,55 @@ export default function AskPage() {
               </div>
               {formatError && <p style={styles.errorText}>{formatError}</p>}
             </div>
+
+            {state.gap?.detected && (
+              <div style={styles.gapPrompt}>
+                {state.gap.type === 'case_evidence_missing' ? (
+                  <>
+                    <span style={styles.gapText}>
+                      You have the principle here — a real example would make it land harder.
+                    </span>
+                    <a href="/capture" style={styles.gapLink}>Add a quick example →</a>
+                  </>
+                ) : (
+                  <>
+                    <span style={styles.gapText}>
+                      Your Spiderweb is a little thin on this one. Want to add to it?
+                    </span>
+                    <a href="/upload" style={styles.gapLink}>Add a quick insight →</a>
+                  </>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
     </div>
+  );
+}
+
+// Confidence heatmap: map a 0..1 grounding score to text colour + underline.
+// Strong claims read near-black with a solid underline; thin ones fade to grey.
+function shadeStyle(score: number): React.CSSProperties {
+  const s = Math.max(0, Math.min(1, score));
+  // Interpolate grey (#94a3b8) → near-black (#0f172a).
+  const lerp = (a: number, b: number) => Math.round(a + (b - a) * s);
+  const r = lerp(0x94, 0x0f);
+  const g = lerp(0xa3, 0x17);
+  const b = lerp(0xb8, 0x2a);
+  const color = `rgb(${r}, ${g}, ${b})`;
+  return {
+    color,
+    borderBottom: `2px solid rgba(37, 99, 235, ${0.12 + s * 0.5})`,
+    paddingBottom: '1px',
+  };
+}
+
+function ExampleRow({ k, v }: { k: string; v: string }) {
+  return (
+    <p style={styles.exampleRow}>
+      <span style={styles.exampleRowKey}>{k}:</span> {v}
+    </p>
   );
 }
 
@@ -380,6 +482,80 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     padding: '48px 24px',
     fontFamily: 'system-ui, sans-serif',
+  },
+  examplesBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    marginTop: '16px',
+  },
+  exampleCard: {
+    padding: '14px 16px',
+    backgroundColor: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    borderRadius: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  exampleLabel: {
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#1d4ed8',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  exampleIllustrates: {
+    margin: '2px 0 6px',
+    fontSize: '13px',
+    color: '#1e3a8a',
+    fontStyle: 'italic',
+  },
+  exampleRow: {
+    margin: 0,
+    fontSize: '14px',
+    lineHeight: 1.5,
+    color: '#1e293b',
+  },
+  exampleRowKey: {
+    fontWeight: 700,
+  },
+  gapPrompt: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: '10px',
+    padding: '14px 18px',
+    backgroundColor: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    borderRadius: '12px',
+  },
+  gapText: {
+    fontSize: '14px',
+    color: '#166534',
+    lineHeight: 1.5,
+  },
+  gapLink: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#15803d',
+    textDecoration: 'none',
+    whiteSpace: 'nowrap',
+  },
+  heatmapLegend: {
+    margin: '12px 0 0',
+    fontSize: '12px',
+    color: '#94a3b8',
+    lineHeight: 1.5,
+  },
+  legendStrong: {
+    color: '#0f172a',
+    fontWeight: 700,
+  },
+  legendWeak: {
+    color: '#94a3b8',
+    fontWeight: 600,
   },
   container: {
     width: '100%',

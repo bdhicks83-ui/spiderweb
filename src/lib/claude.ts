@@ -215,6 +215,166 @@ export async function recommendFromInsights(
   };
 }
 
+// Phase 5 (Step 3): consistency / integrity check. Given a NEW insight and a
+// set of the user's existing approved insights on similar topics, decide
+// whether the new one DIRECTLY contradicts an established pattern. Returns
+// null on any model/parse failure so callers can fail open (approve normally).
+export type ConsistencyResult = {
+  contradicts: boolean;
+  contradictedIndex: number | null; // 1-based index into `candidates`, or null
+  existingPattern: string | null;
+};
+
+export async function checkConsistency(
+  newContent: string,
+  candidates: string[]
+): Promise<ConsistencyResult | null> {
+  if (candidates.length === 0) {
+    return { contradicts: false, contradictedIndex: null, existingPattern: null };
+  }
+  const prompt = await loadPrompt("consistency-check", {
+    new_insight: newContent,
+    candidates: candidates.map((c, i) => `${i + 1}. ${c}`).join("\n"),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 512,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    contradicts?: unknown;
+    contradicted_index?: unknown;
+    existing_pattern?: unknown;
+  } | null;
+  if (!parsed || typeof parsed.contradicts !== "boolean") return null;
+  if (!parsed.contradicts) {
+    return { contradicts: false, contradictedIndex: null, existingPattern: null };
+  }
+  const idx =
+    typeof parsed.contradicted_index === "number" &&
+    parsed.contradicted_index >= 1 &&
+    parsed.contradicted_index <= candidates.length
+      ? parsed.contradicted_index
+      : null;
+  return {
+    contradicts: true,
+    contradictedIndex: idx,
+    existingPattern:
+      typeof parsed.existing_pattern === "string" && parsed.existing_pattern.trim()
+        ? parsed.existing_pattern.trim()
+        : null,
+  };
+}
+
+// Phase 5 (Step 4): identity/credential plausibility check. Compares the
+// expert's claimed identity against their LinkedIn profile content and returns
+// a plausibility flag + short notes + extracted structured attributes. Returns
+// null on model/parse failure so the caller can leave the flag unchanged.
+export type ProfileVerification = {
+  flag: "consistent" | "partial_mismatch";
+  notes: string | null;
+  extracted: {
+    title: string | null;
+    industry: string | null;
+    seniority: string | null;
+    years_experience: number | null;
+  };
+};
+
+export async function verifyProfile(
+  claimed: string,
+  linkedin: string
+): Promise<ProfileVerification | null> {
+  const prompt = await loadPrompt("verify-profile", { claimed, linkedin });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 512,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    flag?: unknown;
+    notes?: unknown;
+    extracted?: {
+      title?: unknown;
+      industry?: unknown;
+      seniority?: unknown;
+      years_experience?: unknown;
+    };
+  } | null;
+  if (
+    !parsed ||
+    (parsed.flag !== "consistent" && parsed.flag !== "partial_mismatch")
+  ) {
+    return null;
+  }
+  const e = parsed.extracted ?? {};
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
+  return {
+    flag: parsed.flag,
+    notes: str(parsed.notes),
+    extracted: {
+      title: str(e.title),
+      industry: str(e.industry),
+      seniority: str(e.seniority),
+      years_experience: num(e.years_experience),
+    },
+  };
+}
+
+// Phase 6 Slice 2 (Step 9): Decision Simulation. Reasons through a NOVEL
+// scenario using the expert's captured heuristics as its operating logic, and
+// self-assesses how well the scenario maps to that captured thinking. Returns
+// null on model/parse failure.
+export type SimulationResult = {
+  analysis: string;
+  confidence: "high" | "medium" | "low";
+  confidenceStatement: string;
+};
+
+export async function simulateDecision(
+  scenario: string,
+  insightContents: string[]
+): Promise<SimulationResult | null> {
+  const prompt = await loadPrompt("simulate-decision", {
+    insights: formatInsights(insightContents),
+    scenario,
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 1536,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    analysis?: unknown;
+    confidence?: unknown;
+    confidence_statement?: unknown;
+  } | null;
+  if (
+    !parsed ||
+    typeof parsed.analysis !== "string" ||
+    (parsed.confidence !== "high" &&
+      parsed.confidence !== "medium" &&
+      parsed.confidence !== "low") ||
+    typeof parsed.confidence_statement !== "string"
+  ) {
+    return null;
+  }
+  return {
+    analysis: parsed.analysis,
+    confidence: parsed.confidence,
+    confidenceStatement: parsed.confidence_statement,
+  };
+}
+
 // Phase 5: question + matched insight excerpts -> grounded answer in the
 // expert's own voice. The system prompt forbids outside knowledge.
 export async function answerFromInsights(
@@ -231,4 +391,68 @@ export async function answerFromInsights(
     messages: [{ role: "user", content: question }],
   });
   return firstText(msg.content as { type: string; text?: string }[]);
+}
+
+// Resume builder (free-tier lead magnet): approved insights -> structured
+// resume sections. Grounded only in the insights (same doctrine as
+// answerFromInsights) — no invented employers, titles, or metrics. Returns
+// null on any model/parse failure so the route can fail with a clear error
+// instead of shipping a half-built PDF.
+export type ResumeFramework = { name: string; description: string };
+
+export type ResumeSynthesis = {
+  summary: string;
+  keyExperience: string[];
+  frameworks: ResumeFramework[];
+  strengths: string[];
+};
+
+function isFrameworkArray(v: unknown): v is ResumeFramework[] {
+  return (
+    Array.isArray(v) &&
+    v.every(
+      (f) =>
+        f &&
+        typeof f === "object" &&
+        typeof (f as Record<string, unknown>).name === "string" &&
+        typeof (f as Record<string, unknown>).description === "string"
+    )
+  );
+}
+
+export async function synthesizeResume(
+  insightContents: string[]
+): Promise<ResumeSynthesis | null> {
+  const prompt = await loadPrompt("synthesize-resume", {
+    insights: insightContents.map((c, i) => `${i + 1}. ${c}`).join("\n"),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    summary?: unknown;
+    key_experience?: unknown;
+    frameworks?: unknown;
+    strengths?: unknown;
+  } | null;
+  if (
+    !parsed ||
+    typeof parsed.summary !== "string" ||
+    !isStringArray(parsed.key_experience) ||
+    !isFrameworkArray(parsed.frameworks) ||
+    !isStringArray(parsed.strengths) ||
+    parsed.frameworks.length === 0
+  ) {
+    return null;
+  }
+  return {
+    summary: parsed.summary,
+    keyExperience: parsed.key_experience,
+    frameworks: parsed.frameworks,
+    strengths: parsed.strengths,
+  };
 }

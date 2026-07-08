@@ -5,8 +5,16 @@
 // sessions — no explicit ownership check needed beyond auth.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { nextFollowUp, recommendFromInsights, QAPair } from "@/lib/claude";
-import { MAX_FOLLOWUPS, Match, toSources } from "@/lib/ask";
+import {
+  MAX_FOLLOWUPS,
+  Match,
+  toSources,
+  gatherCaseExamples,
+  logQueryGaps,
+  groundClaims,
+} from "@/lib/ask";
 
 export async function POST(req: NextRequest) {
   try {
@@ -115,11 +123,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const examples = await gatherCaseExamples(supabase, matches);
+
+    const service = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const gap = await logQueryGaps(service, {
+      userId: user.id,
+      question: session.question,
+      questionEmbedding: null, // not stored on the session; helper re-embeds
+      strongMatches: matches,
+      recommendationGaps: recommendation.gaps,
+      examples,
+    });
+
     return NextResponse.json({
       done: true,
       sessionId: session.id,
       ...recommendation,
       sources: toSources(matches),
+      examples,
+      gap,
+      grounded: groundClaims(recommendation.recommendation, matches),
     });
   } catch (err) {
     console.error("Unexpected error in ask/answer route:", err);

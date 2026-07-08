@@ -10,6 +10,7 @@ Doctrine: prompts live in the repo, reviewed and diffed like any other source fi
 | `ask-spiderweb.md` | Single-shot grounded answer (legacy) | Phase 5 |
 | `ask-followup.md` | Decide if a follow-up question is needed | Phase 6 |
 | `ask-recommend.md` | Final recommendation + pros/cons | Phase 6 |
+| `synthesize-resume.md` | Approved insights → resume sections (summary/experience/frameworks/strengths) | Resume builder |
 
 Rules:
 - One prompt per file. Markdown. `{{variable}}` placeholders.

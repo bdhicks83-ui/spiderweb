@@ -6,8 +6,16 @@
 // final recommendation comes back immediately.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { nextFollowUp, recommendFromInsights } from "@/lib/claude";
-import { MAX_FOLLOWUPS, Match, toSources } from "@/lib/ask";
+import {
+  MAX_FOLLOWUPS,
+  Match,
+  toSources,
+  gatherCaseExamples,
+  logQueryGaps,
+  groundClaims,
+} from "@/lib/ask";
 
 // Below this similarity, a "match" is noise — better to admit no coverage
 // than hallucinate an answer from weakly related insights.
@@ -139,12 +147,31 @@ export async function POST(req: NextRequest) {
       .update({ recommendation, updated_at: new Date().toISOString() })
       .eq("id", session.id);
 
+    const examples = await gatherCaseExamples(supabase, strongMatches);
+
+    // Detect + log query gaps (service role: query_gaps is service-role-write).
+    const service = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const gap = await logQueryGaps(service, {
+      userId: user.id,
+      question: q,
+      questionEmbedding: embeddingString,
+      strongMatches,
+      recommendationGaps: recommendation.gaps,
+      examples,
+    });
+
     return NextResponse.json({
       noMatch: false,
       done: true,
       sessionId: session.id,
       ...recommendation,
       sources: toSources(strongMatches),
+      examples,
+      gap,
+      grounded: groundClaims(recommendation.recommendation, strongMatches),
     });
   } catch (err) {
     console.error("Unexpected error in ask route:", err);
