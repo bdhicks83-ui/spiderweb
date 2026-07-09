@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { generateSpeech } from "@/lib/elevenlabs";
 import { getPageCount, extractPageRangeBase64, PAGES_PER_CHUNK } from "@/lib/pdf";
+import { evaluateUploadRisk } from "@/lib/risk";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
@@ -108,7 +109,7 @@ export const extractInsights = inngest.createFunction(
     const source = await step.run("fetch-source", async () => {
       const { data, error } = await supabase
         .from("sources")
-        .select("id, user_id, kind, file_path, raw_text, extracted_text")
+        .select("id, user_id, kind, file_path, raw_text, extracted_text, origin")
         .eq("id", source_id)
         .single();
       if (error || !data) throw new Error("Source not found");
@@ -163,6 +164,16 @@ export const extractInsights = inngest.createFunction(
       throw new Error("No text found on this source");
     }
 
+    // Cache the upload's size for the huge-upload risk baseline (Phase 7), so
+    // that query never has to pull full document text.
+    const contentLength = textToProcess.length;
+    await step.run("save-content-length", async () => {
+      await supabase
+        .from("sources")
+        .update({ content_length: contentLength })
+        .eq("id", source.id);
+    });
+
     // ── Phase 2: extract insights, one segment at a time ──
     const segments = splitText(textToProcess, CHARS_PER_INSIGHT_CHUNK);
     const allInsights: string[] = [];
@@ -188,7 +199,29 @@ export const extractInsights = inngest.createFunction(
       if (error) throw new Error(error.message);
     });
 
-    return { success: true, count: allInsights.length, segments: segments.length };
+    // ── Phase 7: per-upload risk signals ──
+    // Only "own" (self_reported) uploads are scored against the user's own
+    // history/voice/background. Fully fail-open — evaluateUploadRisk never
+    // throws, so a flaky signal can't sink a successful extraction.
+    let risk: { fired: string[] } = { fired: [] };
+    if (source.origin === "self_reported") {
+      risk = await step.run("evaluate-upload-risk", async () =>
+        evaluateUploadRisk(
+          supabase,
+          source.user_id,
+          source.id,
+          textToProcess,
+          contentLength
+        )
+      );
+    }
+
+    return {
+      success: true,
+      count: allInsights.length,
+      segments: segments.length,
+      riskSignals: risk.fired,
+    };
   }
 );
 

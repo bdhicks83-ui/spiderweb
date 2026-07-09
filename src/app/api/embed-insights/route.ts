@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { resolveGapsForInsight } from '@/lib/ask';
+import { maybeRebuildVoiceProfile } from '@/lib/voice';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,6 +63,14 @@ export async function POST(req: NextRequest) {
       gapsResolved = await resolveGapsForInsight(supabase, insight.user_id, embeddingString);
     } catch {
       // non-fatal: gap resolution is best-effort
+    }
+
+    // Phase 7 — the approved corpus just grew; refresh the user's voice
+    // fingerprint if it has grown enough. Best-effort, never blocks approval.
+    try {
+      await maybeRebuildVoiceProfile(supabase, insight.user_id);
+    } catch {
+      // non-fatal: voice profile is a background risk signal
     }
 
     const { data: matches, error: matchError } = await supabase.rpc('match_insights', {

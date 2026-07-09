@@ -456,3 +456,92 @@ export async function synthesizeResume(
     strengths: parsed.strengths,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 7 — Risk monitoring Claude helpers.
+// Each is best-effort: returns null on any model/parse failure so the caller
+// fails OPEN (no signal fires — never block or penalise on a flaky call).
+// ─────────────────────────────────────────────────────────────────────────
+
+// Build a compact writing-style fingerprint from the author's own approved
+// writing samples. Returns the descriptor text, or null on failure.
+export async function buildVoiceFingerprint(
+  samples: string[]
+): Promise<string | null> {
+  if (samples.length === 0) return null;
+  const prompt = await loadPrompt("voice-fingerprint", {
+    samples: samples.map((s, i) => `${i + 1}. ${s}`).join("\n\n"),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 512,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  return text.trim() ? text.trim() : null;
+}
+
+// Shared shape for the two "does this new upload fit the expert?" checks.
+export type MatchJudgement = {
+  matches: boolean;
+  confidence: "low" | "medium" | "high";
+  reason: string | null;
+};
+
+function parseMatchJudgement(text: string): MatchJudgement | null {
+  const parsed = parseJson(text) as {
+    matches?: unknown;
+    confidence?: unknown;
+    reason?: unknown;
+  } | null;
+  if (
+    !parsed ||
+    typeof parsed.matches !== "boolean" ||
+    (parsed.confidence !== "low" &&
+      parsed.confidence !== "medium" &&
+      parsed.confidence !== "high")
+  ) {
+    return null;
+  }
+  return {
+    matches: parsed.matches,
+    confidence: parsed.confidence,
+    reason:
+      typeof parsed.reason === "string" && parsed.reason.trim()
+        ? parsed.reason.trim()
+        : null,
+  };
+}
+
+// Does a new upload plausibly match the author's established writing style?
+export async function checkVoiceMatch(
+  fingerprint: string,
+  sample: string
+): Promise<MatchJudgement | null> {
+  const prompt = await loadPrompt("voice-match", { fingerprint, sample });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 256,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  return parseMatchJudgement(text);
+}
+
+// Is a new upload consistent with the expert's established professional
+// background (built from their approved insights)?
+export async function checkBackgroundMatch(
+  background: string,
+  upload: string
+): Promise<MatchJudgement | null> {
+  const prompt = await loadPrompt("background-match", { background, upload });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 256,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  return parseMatchJudgement(text);
+}

@@ -4,6 +4,57 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-07-08 — Phase 7 risk monitoring: build the engine now, hold the cockpit
+
+**Context:** A cluster of trust/abuse signals (voice mismatch, oversized uploads,
+background mismatch) plus an admin risk queue were on the table. Building the admin UI
+now would produce a page with exactly one user to look at — untestable against a real
+second account.
+
+**Decision:** Ship the schema, scoring logic, and signal-firing (#1/#2/#3/#5) now; HOLD
+the admin UI (#4) until a real second user exists. The dismissal feedback loop (#6)
+stays unbuilt pending its own sign-off — only its forward hooks (`risk_tolerances`,
+`dismissed_at`) land now.
+
+**Options considered:**
+- Three independent triggers that each block/flag on their own — rejected: no shared
+  memory, no decay, noisy.
+- One unified per-user risk score that signals ADD to and that DECAYS when clean — chosen.
+- Build the admin page now too — rejected: untestable with one user; ship-thin doctrine.
+
+**Reasoning:**
+- **Unified score, not three triggers.** `risk_factors` (jsonb) is the source of truth;
+  `risk_score` is a derived cache = sum of decayed, non-dismissed weights. Weights:
+  voice +1, huge_upload +2, background_mismatch +3. Linear decay to zero over 30 days,
+  so a clean user drifts back to green on their own. Bands surface only, never
+  auto-block: `>=3` amber, `>=6` red.
+- **Signals never block.** Every check is fail-open — a flaky Claude call or missing
+  profile fires nothing and can't sink a successful extraction/approval.
+- **Voice mismatch is a recurring per-upload check**, not one-time. A running
+  `voice_profiles` fingerprint is built from the user's OWN (self_reported) approved
+  insights, rebuilt as that corpus grows (every 5 approvals, min 5 to exist). Each new
+  "own" upload is compared against it at extract time.
+- **Background mismatch: one sonnet-5 call per upload**, fires +3 ONLY on
+  `matches:false` + `confidence:high` — deliberately conservative so a soft signal
+  never reads as an accusation.
+- **Where it runs:** signals evaluate inside the Inngest extract job (has the text, is
+  retryable, off the request path). The voice fingerprint rebuilds on the approve path
+  (`/api/embed-insights`), because that's when the approved corpus changes.
+
+**Result:** New `src/lib/risk.ts`, `src/lib/voice.ts`, three `/prompts/*` files, three
+Claude wrappers in `claude.ts`; wired into `functions.ts` + `embed-insights`.
+`supabase/phase7-risk-monitoring.sql` lands the schema. Typechecks clean.
+
+**Holding #4 in practice:** the full engine runs live and self-tests against my own
+account (signals fire, score accrues + decays, data populates `credibility_scores`) —
+the admin page to VIEW that data across users is simply not built yet. Nothing is
+stubbed; the data is real and ready the day user #2 exists.
+
+**Next:** run the migration in Supabase; let signals accrue on real uploads; build the
+admin queue (#4) and the dismissal loop (#6) when a second user makes them testable.
+
+---
+
 ## 2026-07-07 — Combined build kickoff (PDF upload + Phase 5 + Phase 6 Slice 2)
 
 ### Environment / access findings

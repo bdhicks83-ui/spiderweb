@@ -9,3 +9,4 @@ build/
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+memory/
