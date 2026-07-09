@@ -39,7 +39,7 @@ const PDF_TRANSCRIBE_PROMPT =
 
 async function transcribePdfBase64(base64: string): Promise<string> {
   const msg = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-5",
     max_tokens: 8000,
     messages: [
       {
@@ -68,7 +68,7 @@ function splitText(text: string, size: number): string[] {
 async function insightsFromText(text: string): Promise<string[]> {
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       max_tokens: 8000,
       messages: [
         {
