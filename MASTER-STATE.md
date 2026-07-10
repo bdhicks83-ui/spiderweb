@@ -4,22 +4,27 @@ Full-replacement snapshot of the current build state. Overwrite this file each
 session; do not append. For the reasoning behind decisions, see `DECISION-LOG.md`
 (append-only).
 
-_Last updated: 2026-07-10 -- Phase 8 Credibility v2._
+_Last updated: 2026-07-10 -- Phase 5 Credibility v2 (dashboard-link fix)._
+
+> **Naming reconciliation:** the Cowork session that built this labeled it
+> "Phase 8" internally. Brian's canonical numbering -- and the shipped commit
+> `2a44e54 "Phase 5 Credibility v2"` -- call it **Phase 5**. This doc now uses
+> **Phase 5** throughout; "Block 1-5" still refers to the five sub-features below.
 
 ---
 
-## Phase 8 -- Expert Credibility v2 (5 Blocks)
+## Phase 5 -- Expert Credibility v2 (5 Blocks)
 
 Locked principle: **no recency-decay anywhere.** Quality locks at verification;
 corroboration is additive-only.
 
 | Block | Feature | Status | Local | Live |
 |---|---|---|---|---|
-| 1 | Quality + Corroboration scoring engine | **Shipped (local)** | Yes | No |
-| 2 | Non-blocking consistency + belief-revision gate | **Shipped (local)** | Yes | No |
+| 1 | Quality + Corroboration scoring engine | **Shipped + LIVE** | Yes | Yes |
+| 2 | Non-blocking consistency + belief-revision gate | **Shipped + LIVE** | Yes | Yes |
 | 3 | Cross-expert benchmarking | **Deferred (deliberate)** | No | No |
-| 4 | Org-fit matching | **Shipped (local)** | Yes | No |
-| 5 | Longitudinal growth score (dashboard-only) | **Shipped (local)** | Yes | No |
+| 4 | Org-fit matching | **Shipped + LIVE** | Yes | Yes |
+| 5 | Longitudinal growth score (dashboard-only) | **Shipped + LIVE** | Yes | Yes |
 
 **Block 3 is intentionally not built** -- it needs 5+ experts per competency to
 activate, which is untestable while participation is invite-only (one real
@@ -29,20 +34,41 @@ account). No schema, no stubs. Same ship-thin call as Phase 7's held admin UI.
 
 ## Local vs Live -- READ THIS
 
-- **LOCAL:** All Block 1/2/4/5 code is written and passes `tsc --noEmit` clean
-  (exit 0).
-- **LIVE:** **Nothing is live.** Not committed, not pushed, not deployed to
-  `spiderweb-nine.vercel.app`. The SQL migration has **not** been run against the
-  live Supabase (`ekjhwyeipzmmncfedeqm`).
+- **LOCAL:** All Block 1/2/4/5 code written, passes `tsc --noEmit` clean (exit 0).
+- **LIVE:** **All of Phase 5 is live.** Committed + pushed (`2a44e54`), deployed to
+  `spiderweb-nine.vercel.app`, SQL migration run against Supabase
+  (`ekjhwyeipzmmncfedeqm`). Data confirmed correct (503 approved insights under the
+  right user after the user_id migration fix).
 
-### Owner next steps to go live
-1. Run `supabase/phase8-credibility-v2.sql` in the Supabase SQL editor (idempotent,
-   safe to re-run).
-2. Commit + push + deploy per `deployment-workflow`.
-3. On the dashboard, hit **Refresh** on "Your Spiderweb's Value" once -- this runs
-   the retroactive per-insight scoring (`/api/score-insights`) over all existing
-   approved insights (Creator Expert Profile + the 18 LIT articles) and writes the
-   first growth snapshot.
+### The "cards not showing" bug (2026-07-10) -- ROOT CAUSE + FIX
+
+- **Symptom:** none of the three Phase 5 cards ("Your Spiderweb's Value" / Blocks
+  1+5, "Needs your context" / Block 2) appeared on the live root page `/`.
+- **Root cause:** *not* a fetch failure, stale build, or missing commit. All three
+  cards live in `/dashboard` (`src/app/dashboard/page.tsx`), and **nothing in the
+  app links to or redirects to `/dashboard`.** Login lands on `/`
+  (`login/page.tsx:40`), and the root page (`src/app/page.tsx`) only renders the
+  departments grid + Emerging patterns -- it never imported the cards. `/dashboard`
+  was an orphan URL reachable only by typing it manually. The *entire* hub (3 Phase
+  5 cards + resume banner + Phase 7 credibility score + gap banner + profile
+  verification) was stranded there for the same reason.
+- **Fix:** added a "📊 Your Dashboard" hub link on the root page `/`
+  (`src/app/page.tsx`, above the Departments grid) pointing to `/dashboard`. Chosen
+  over inlining the cards because it surfaces the whole hub with no server/client
+  component refactor. `/dashboard` was always the intended personal hub (see
+  DECISION-LOG Step 4) -- it was just never wired into navigation.
+
+### Card status after fix
+| Card | Route it lives on | Local | Live |
+|---|---|---|---|
+| Your Spiderweb's Value (Blocks 1+5) | `/dashboard` | Works | Reachable via new `/` link |
+| Needs your context (Block 2) | `/dashboard` | Works | Reachable via new `/` link |
+| (Growth trend, inside Block 1 card) | `/dashboard` | Works | Reachable via new `/` link |
+
+> First-run note: on `/dashboard`, hit **Refresh** on "Your Spiderweb's Value" once
+> to run retroactive per-insight scoring (`/api/score-insights`) over all approved
+> insights and write the first growth snapshot. Blocks 1 & 5 render their empty
+> state until that snapshot exists.
 
 ---
 

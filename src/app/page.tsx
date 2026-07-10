@@ -80,6 +80,45 @@ export default async function Dashboard() {
         </span>
       </p>
 
+      {/* ─── Your Dashboard hub link (Phase 5 cards, credibility score,
+             resume, gaps, verification all live here) ─── */}
+      <Link
+        href="/dashboard"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+          marginTop: "1.5rem",
+          padding: "1rem 1.25rem",
+          background: "#0f172a",
+          border: "1px solid #1e293b",
+          borderRadius: 12,
+          textDecoration: "none",
+          color: "#fff",
+        }}
+      >
+        <span>
+          <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>
+            📊 Your Dashboard
+          </span>
+          <span
+            style={{
+              display: "block",
+              color: "#94a3b8",
+              fontSize: "0.85rem",
+              marginTop: "0.15rem",
+            }}
+          >
+            Your Spiderweb&apos;s value, credibility score, resume, and insights
+            that need your context.
+          </span>
+        </span>
+        <span style={{ color: "#7dd3fc", fontWeight: 600, whiteSpace: "nowrap" }}>
+          Open →
+        </span>
+      </Link>
+
       {/* ─── Departments ─── */}
       <section style={{ marginTop: "1.5rem" }}>
         <h2 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "1rem" }}>

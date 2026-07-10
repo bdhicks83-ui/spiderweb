@@ -4,6 +4,47 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-07-10 -- Fix: Phase 5 dashboard cards invisible because `/dashboard` was orphaned
+
+**Naming:** the prior Cowork session labeled the Credibility-v2 work "Phase 8"
+internally. Canonical numbering (and the shipped commit `2a44e54`) is **Phase 5**.
+MASTER-STATE now reconciled to Phase 5; DECISION-LOG entries keep their original
+titles for history but the work is Phase 5.
+
+**Symptom:** none of the three new cards -- "Your Spiderweb's Value" (Blocks 1+5)
+and "Needs your context" (Block 2) -- appeared on the live root page `/`, above or
+below anything. No console errors.
+
+**Root cause (the real one, not the three hypotheses in the brief):** it was NOT a
+silent fetch failure, NOT a stale build, NOT a missing commit. The commit was on
+`origin/main` and deployed; the SQL was run; data was correct. The cards simply live
+in `src/app/dashboard/page.tsx` (route `/dashboard`), and **nothing in the entire app
+links or redirects to `/dashboard`.** A grep across every `.ts/.tsx` found zero
+navigations to it; login redirects to `/` (`login/page.tsx:40`); the root page
+(`src/app/page.tsx`) renders only the departments grid + Emerging patterns and never
+imported the cards. `/dashboard` was a dead-end URL reachable only by manual typing.
+The whole hub (3 Phase 5 cards + resume banner + Phase 7 credibility score + gap
+banner + profile verification) was stranded there for the same reason -- the prior
+session built `/dashboard` as the intended personal hub (Step 4 below) but never
+wired it into navigation.
+
+**Decision -- link the hub, don't inline the cards.** Added a "📊 Your Dashboard"
+link on the root page `/` (above Departments) pointing to `/dashboard`. Chosen over
+pulling the two cards onto `/` because: (a) it surfaces the *entire* stranded hub in
+one move, not just 3 cards; (b) `/` is a server component and the dashboard is a
+`'use client'` component with all its fetch/state logic -- inlining would mean a
+server/client boundary refactor and duplicated logic for no product gain; (c)
+`/dashboard` was always the designed home for this content. Owner (Brian) chose this
+approach when presented the fork.
+
+**Not touched (per constraints):** Phase 7 per-user credibility score card/logic;
+Block 3 cross-expert benchmarking (deliberately deferred).
+
+**Verification:** `tsc --noEmit` clean (exit 0). Change is a static `next/link` with
+no data fetching, so typecheck is sufficient. Deployed to `spiderweb-nine.vercel.app`.
+
+---
+
 ## 2026-07-10 -- Phase 8 Credibility v2: per-insight scoring, non-blocking consistency, org-fit, growth
 
 **Context:** The "Phase 5 / 5 Blocks" spec asked for an Expert Credibility Score
