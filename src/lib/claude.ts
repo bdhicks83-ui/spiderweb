@@ -458,6 +458,170 @@ export async function synthesizeResume(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Phase 8 — Credibility v2 Claude helpers.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Block 2 — Belief-revision depth gate. An explanation only earns credibility
+// if it names the prior belief, the catalyst, the current belief, and genuine
+// reasoning for why the new view is better (not just a restated conclusion).
+// Returns null on any model/parse failure so the caller can treat it as "not
+// yet passed" without crashing.
+export type BeliefRevisionScore = {
+  depthOk: boolean;
+  present: {
+    prior_belief: boolean;
+    catalyst: boolean;
+    current_belief: boolean;
+    reasoning: boolean;
+  };
+  note: string | null;
+};
+
+export async function scoreBeliefRevision(
+  priorContent: string,
+  newContent: string,
+  explanation: string
+): Promise<BeliefRevisionScore | null> {
+  const prompt = await loadPrompt("belief-revision", {
+    prior: priorContent,
+    current: newContent,
+    explanation,
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 512,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    depth_ok?: unknown;
+    present?: {
+      prior_belief?: unknown;
+      catalyst?: unknown;
+      current_belief?: unknown;
+      reasoning?: unknown;
+    };
+    note?: unknown;
+  } | null;
+  if (!parsed || typeof parsed.depth_ok !== "boolean") return null;
+  const p = parsed.present ?? {};
+  const b = (v: unknown): boolean => v === true;
+  return {
+    depthOk: parsed.depth_ok,
+    present: {
+      prior_belief: b(p.prior_belief),
+      catalyst: b(p.catalyst),
+      current_belief: b(p.current_belief),
+      reasoning: b(p.reasoning),
+    },
+    note: typeof parsed.note === "string" && parsed.note.trim() ? parsed.note.trim() : null,
+  };
+}
+
+// Block 4 — infer an expert's behavioral profile from their own insights.
+// No survey: pace/autonomy/formality/directness are read off their captured
+// thinking. Returns null on model/parse failure.
+export type BehavioralProfile = {
+  autonomy: string;
+  pace: string;
+  formality: string;
+  directness: string;
+  summary: string;
+};
+
+export async function inferBehavioralProfile(
+  insightContents: string[]
+): Promise<BehavioralProfile | null> {
+  const prompt = await loadPrompt("behavioral-profile", {
+    insights: formatInsights(insightContents),
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 700,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    autonomy?: unknown;
+    pace?: unknown;
+    formality?: unknown;
+    directness?: unknown;
+    summary?: unknown;
+  } | null;
+  const s = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  if (
+    !parsed ||
+    !s(parsed.autonomy) ||
+    !s(parsed.pace) ||
+    !s(parsed.formality) ||
+    !s(parsed.directness) ||
+    !s(parsed.summary)
+  ) {
+    return null;
+  }
+  return {
+    autonomy: s(parsed.autonomy)!,
+    pace: s(parsed.pace)!,
+    formality: s(parsed.formality)!,
+    directness: s(parsed.directness)!,
+    summary: s(parsed.summary)!,
+  };
+}
+
+// Block 4 — plain-English org-fit summary (NOT pass/fail). Compares the
+// inferred expert profile against an org's short intake and flags likely
+// friction points. Returns null on model/parse failure.
+export type OrgIntake = {
+  teamSize: string;
+  decisionStyle: string; // fast | consensus
+  pace: string; // fast | deliberate
+  formality: string; // formal | casual
+};
+
+export type OrgFit = {
+  summary: string;
+  frictionPoints: string[];
+};
+
+export async function assessOrgFit(
+  profile: BehavioralProfile,
+  intake: OrgIntake
+): Promise<OrgFit | null> {
+  const prompt = await loadPrompt("org-fit", {
+    expert_autonomy: profile.autonomy,
+    expert_pace: profile.pace,
+    expert_formality: profile.formality,
+    expert_directness: profile.directness,
+    expert_summary: profile.summary,
+    org_team_size: intake.teamSize,
+    org_decision_style: intake.decisionStyle,
+    org_pace: intake.pace,
+    org_formality: intake.formality,
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 700,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    summary?: unknown;
+    friction_points?: unknown;
+  } | null;
+  if (!parsed || typeof parsed.summary !== "string" || !parsed.summary.trim()) {
+    return null;
+  }
+  return {
+    summary: parsed.summary.trim(),
+    frictionPoints: isStringArray(parsed.friction_points) ? parsed.friction_points : [],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Phase 7 — Risk monitoring Claude helpers.
 // Each is best-effort: returns null on any model/parse failure so the caller
 // fails OPEN (no signal fires — never block or penalise on a flaky call).

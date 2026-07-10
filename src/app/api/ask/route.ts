@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { nextFollowUp, recommendFromInsights } from "@/lib/claude";
+import { bumpCorroboration } from "@/lib/insight-score";
 import {
   MAX_FOLLOWUPS,
   Match,
@@ -94,6 +95,22 @@ export async function POST(req: NextRequest) {
     }
 
     const contents = strongMatches.map((m) => m.content);
+
+    // 3b. Corroboration (Block 1): these insights were surfaced to answer a real
+    //     question — an additive, never-decreasing usage hit. Best-effort and
+    //     non-blocking: a failure here must never break the ask flow.
+    try {
+      const corroborationService = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      await bumpCorroboration(
+        corroborationService,
+        strongMatches.map((m) => m.id)
+      );
+    } catch (e) {
+      console.error("Corroboration bump failed (non-fatal):", e);
+    }
 
     // 4. Let Claude decide whether it needs context before recommending.
     //    A null decision (model hiccup) falls back to recommending now —

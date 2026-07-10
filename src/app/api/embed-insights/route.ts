@@ -2,6 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { resolveGapsForInsight } from '@/lib/ask';
 import { maybeRebuildVoiceProfile } from '@/lib/voice';
+import { detectContradiction } from '@/lib/consistency';
+import { scoreInsightAtApproval } from '@/lib/insight-score';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -98,7 +100,44 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, embedded: true, connectionsFound: matches?.length || 0, gapsResolved });
+    // Phase 8 (Block 2) — NON-BLOCKING consistency check. Approval already
+    // happened; if this insight contradicts an established pattern, flag it
+    // needs_explanation. It then earns no credibility until the expert explains
+    // the change (and clears the depth gate). Best-effort: fails open.
+    let needsExplanation = false;
+    try {
+      const finding = await detectContradiction(
+        supabase,
+        insight.user_id,
+        insight_id,
+        insight.content,
+        embeddingString
+      );
+      if (finding.contradicts) {
+        needsExplanation = true;
+        await supabase
+          .from('insights')
+          .update({
+            needs_explanation: true,
+            contradiction_note: finding.pattern,
+            contradicts_insight_id: finding.contradictedInsightId,
+          })
+          .eq('id', insight_id);
+      }
+    } catch {
+      // non-fatal: consistency flagging never disrupts approval
+    }
+
+    // Phase 8 (Block 1) — lock the per-insight quality score at verification.
+    // scoreInsightAtApproval self-skips insights flagged needs_explanation, so
+    // a contradiction stays unscored until it's explained.
+    try {
+      await scoreInsightAtApproval(supabase, insight_id);
+    } catch {
+      // non-fatal: scoring is additive metadata, never blocks approval
+    }
+
+    return NextResponse.json({ success: true, embedded: true, connectionsFound: matches?.length || 0, gapsResolved, needsExplanation });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

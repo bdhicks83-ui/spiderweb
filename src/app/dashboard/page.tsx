@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { badgeForScore } from '@/lib/insight-score';
 
 const supabase = createClient();
 
@@ -24,6 +25,15 @@ type QueryGap = {
   gap_description: string | null;
 };
 
+// Phase 8 (Block 2) — an approved insight that contradicts an established
+// pattern. Approved normally, but earns no credibility until the expert explains
+// what changed (and that explanation clears the belief-revision depth gate).
+type NeedsContext = {
+  id: string;
+  content: string;
+  contradiction_note: string | null;
+};
+
 type Credibility = {
   overall_score: number;
   source_diversity_pct: number;
@@ -31,6 +41,21 @@ type Credibility = {
   applied_evidence_ratio: number;
   avg_trust_tier: number;
   last_calculated_at: string | null;
+};
+
+// Phase 8 (Blocks 1 + 5) — per-insight portfolio strength + monthly growth trend.
+type GrowthSnapshot = {
+  snapshot_month: string;
+  combined_avg: number;
+  growth_value: number;
+  approved_count: number;
+};
+
+const BADGE_STYLE: Record<string, { bg: string; fg: string }> = {
+  Emerging: { bg: '#334155', fg: '#e2e8f0' },
+  Rising: { bg: '#1e3a8a', fg: '#bfdbfe' },
+  Verified: { bg: '#065f46', fg: '#a7f3d0' },
+  Elite: { bg: '#78350f', fg: '#fde68a' },
 };
 
 const BADGE: Record<Flag, { label: string; bg: string; fg: string; border: string; emoji: string }> = {
@@ -51,16 +76,63 @@ export default function DashboardPage() {
   const [score, setScore] = useState<Credibility | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [snapshots, setSnapshots] = useState<GrowthSnapshot[]>([]);
+  const [growthLoading, setGrowthLoading] = useState(false);
+  const [needsContext, setNeedsContext] = useState<NeedsContext[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
-      await Promise.all([loadProfile(), loadGaps(), loadScore()]);
+      await Promise.all([loadProfile(), loadGaps(), loadScore(), loadGrowth(), loadNeedsContext()]);
       setLoading(false);
     })();
   }, [router]);
+
+  async function loadNeedsContext() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from('insights')
+      .select('id, content, contradiction_note')
+      .eq('user_id', user.id)
+      .eq('needs_explanation', true)
+      .order('created_at', { ascending: false });
+    setNeedsContext((data as NeedsContext[]) || []);
+  }
+
+  // An explanation was submitted for one flagged insight — drop it from the list.
+  function clearNeedsContext(id: string) {
+    setNeedsContext((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  async function loadGrowth() {
+    try {
+      const res = await fetch('/api/growth');
+      if (!res.ok) return;
+      const data = await res.json();
+      setSnapshots((data.snapshots as GrowthSnapshot[]) || []);
+    } catch {
+      // non-fatal: growth trend is additive
+    }
+  }
+
+  // Retroactively score every approved insight (Block 1) then recompute this
+  // month's growth snapshot (Block 5), and reload the trend.
+  async function refreshGrowth() {
+    if (growthLoading) return;
+    setGrowthLoading(true);
+    try {
+      await fetch('/api/score-insights', { method: 'POST' });
+      await fetch('/api/growth', { method: 'POST' });
+      await loadGrowth();
+    } catch {
+      // leave existing trend in place on failure
+    } finally {
+      setGrowthLoading(false);
+    }
+  }
 
   async function loadScore() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -203,6 +275,12 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {needsContext.length > 0 && (
+          <NeedsContextCard items={needsContext} onResolved={clearNeedsContext} />
+        )}
+
+        <GrowthCard snapshots={snapshots} loading={growthLoading} onRefresh={refreshGrowth} />
+
         {gaps.length > 0 && (
           <div style={styles.gapBanner}>
             <h2 style={styles.gapBannerTitle}>🌱 Grow your Spiderweb</h2>
@@ -287,6 +365,217 @@ export default function DashboardPage() {
   );
 }
 
+// Phase 8 (Block 2). Lists approved insights flagged needs_explanation, each
+// with a small "Needs context" badge on the insight itself and an inline
+// belief-revision box. A depth-passing explanation unlocks the insight's score;
+// a shallow one is logged but doesn't. Reuses the gap-detection card pattern.
+function NeedsContextCard({
+  items,
+  onResolved,
+}: {
+  items: NeedsContext[];
+  onResolved: (id: string) => void;
+}) {
+  return (
+    <div style={styles.needsCard}>
+      <h2 style={styles.needsTitle}>🔄 Needs your context</h2>
+      <p style={styles.needsSub}>
+        A few insights look like they changed your earlier thinking. Explain what changed and why —
+        the prior belief, what shifted it, and why the new view is better. A real revision counts
+        toward your credibility; these don&apos;t until you do.
+      </p>
+      <div style={styles.needsList}>
+        {items.map((item) => (
+          <NeedsContextItem key={item.id} item={item} onResolved={onResolved} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NeedsContextItem({
+  item,
+  onResolved,
+}: {
+  item: NeedsContext;
+  onResolved: (id: string) => void;
+}) {
+  const [explanation, setExplanation] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [depthOk, setDepthOk] = useState<boolean | null>(null);
+
+  async function submit() {
+    if (submitting || !explanation.trim()) return;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/explain-revision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insight_id: item.id, explanation: explanation.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error || 'That didn’t save. Try again.');
+      } else {
+        setDepthOk(data.depth_ok === true);
+        setMessage(data.message || null);
+        // A real revision clears the flag; keep a shallow one visible to improve.
+        if (data.depth_ok === true) setTimeout(() => onResolved(item.id), 1600);
+      }
+    } catch {
+      setMessage('That didn’t save. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={styles.needsItem}>
+      <div style={styles.needsItemTop}>
+        <span style={styles.needsBadge}>Needs context</span>
+        {item.contradiction_note && (
+          <span style={styles.needsNote}>vs. “{item.contradiction_note}”</span>
+        )}
+      </div>
+      <p style={styles.needsContent}>{item.content}</p>
+      <textarea
+        style={styles.needsTextarea}
+        rows={3}
+        placeholder="I used to think… then… now I think… which is better because…"
+        value={explanation}
+        onChange={(e) => setExplanation(e.target.value)}
+        disabled={submitting || depthOk === true}
+      />
+      <div style={styles.needsRow}>
+        <button
+          style={styles.needsSubmit}
+          onClick={submit}
+          disabled={submitting || depthOk === true || !explanation.trim()}
+        >
+          {submitting ? 'Checking…' : depthOk === true ? 'Counted ✓' : 'Submit explanation'}
+        </button>
+        {message && (
+          <span style={{ ...styles.needsMessage, color: depthOk === false ? '#b45309' : '#15803d' }}>
+            {message}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Phase 8 (Blocks 1 + 5). Block 1: portfolio combined score as a number + a
+// status-word badge (no breakdown). Block 5: a simple growth trend line over the
+// monthly snapshots ("grown X% over N months"). Expert-only, dashboard-only.
+function GrowthCard({
+  snapshots,
+  loading,
+  onRefresh,
+}: {
+  snapshots: GrowthSnapshot[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const latest = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+  const badge = latest ? badgeForScore(latest.combined_avg) : null;
+  const badgeStyle = badge ? BADGE_STYLE[badge] : null;
+
+  // Growth headline: first vs. latest snapshot's growth_value.
+  let growthLine: string | null = null;
+  if (snapshots.length >= 2) {
+    const first = snapshots[0];
+    const months = snapshots.length - 1;
+    const base = first.growth_value || 1;
+    const pct = Math.round(((latest!.growth_value - first.growth_value) / base) * 100);
+    const span = months === 1 ? '1 month' : `${months} months`;
+    growthLine =
+      pct > 0
+        ? `Your Spiderweb's value has grown ${pct}% over ${span}.`
+        : pct < 0
+          ? `Your Spiderweb's value has moved ${pct}% over ${span}.`
+          : `Your Spiderweb's value has held steady over ${span}.`;
+  }
+
+  return (
+    <div style={styles.growthCard}>
+      <div style={styles.scoreHeader}>
+        <h2 style={styles.cardTitle}>Your Spiderweb&apos;s Value</h2>
+        <button style={styles.linkButtonSm} onClick={onRefresh} disabled={loading}>
+          {loading ? 'Updating…' : latest ? 'Refresh' : 'Calculate'}
+        </button>
+      </div>
+
+      {latest ? (
+        <>
+          <div style={styles.growthMain}>
+            <span style={styles.scoreNumber}>{latest.combined_avg}</span>
+            <span style={styles.scoreOutOf}>/ 100</span>
+            {badge && (
+              <span style={{ ...styles.statusBadge, background: badgeStyle!.bg, color: badgeStyle!.fg }}>
+                {badge}
+              </span>
+            )}
+          </div>
+          <p style={styles.growthSub}>
+            Portfolio strength across {latest.approved_count} approved{' '}
+            {latest.approved_count === 1 ? 'insight' : 'insights'}.
+          </p>
+          {snapshots.length >= 2 && <Sparkline values={snapshots.map((s) => s.growth_value)} />}
+          {growthLine && <p style={styles.growthLine}>{growthLine}</p>}
+          {snapshots.length < 2 && (
+            <p style={styles.help}>
+              One monthly snapshot so far — your trend line appears once there&apos;s a second month
+              to compare against.
+            </p>
+          )}
+        </>
+      ) : (
+        <p style={styles.help}>
+          Score your captured expertise to see your portfolio strength and track how your
+          Spiderweb&apos;s value grows month over month.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Tiny inline SVG trend line — no external chart dependency.
+function Sparkline({ values }: { values: number[] }) {
+  const W = 560;
+  const H = 60;
+  const P = 4;
+  const max = Math.max(...values, 100);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = values.length === 1 ? W / 2 : P + (i / (values.length - 1)) * (W - 2 * P);
+    const y = H - P - ((v - min) / range) * (H - 2 * P);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={styles.sparkline} preserveAspectRatio="none">
+      <polyline
+        points={pts.join(' ')}
+        fill="none"
+        stroke="#38bdf8"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {values.length > 0 && (
+        <circle
+          cx={pts[pts.length - 1].split(',')[0]}
+          cy={pts[pts.length - 1].split(',')[1]}
+          r={4}
+          fill="#22c55e"
+        />
+      )}
+    </svg>
+  );
+}
+
 function Metric({ label, pct, help }: { label: string; pct: number; help: string }) {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
@@ -349,4 +638,23 @@ const styles: Record<string, React.CSSProperties> = {
   metricBarTrack: { height: '8px', background: '#1e293b', borderRadius: '9999px', overflow: 'hidden' },
   metricBarFill: { height: '100%', background: 'linear-gradient(90deg,#38bdf8,#22c55e)', borderRadius: '9999px' },
   metricHelp: { fontSize: '12px', color: '#94a3b8' },
+  growthCard: { padding: '24px', backgroundColor: '#0b1220', border: '1px solid #1e293b', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: '#fff' },
+  growthMain: { display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' },
+  statusBadge: { fontSize: '13px', fontWeight: 700, padding: '4px 12px', borderRadius: '9999px', alignSelf: 'center' },
+  growthSub: { fontSize: '13px', color: '#94a3b8', margin: 0 },
+  growthLine: { fontSize: '15px', fontWeight: 600, color: '#7dd3fc', margin: '4px 0 0' },
+  sparkline: { display: 'block', marginTop: '6px' },
+  needsCard: { padding: '20px 22px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  needsTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: '#92400e' },
+  needsSub: { fontSize: '13px', color: '#a16207', margin: 0, lineHeight: 1.5 },
+  needsList: { display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '4px' },
+  needsItem: { background: '#fff', border: '1px solid #fef3c7', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' },
+  needsItemTop: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+  needsBadge: { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '9999px', padding: '3px 10px' },
+  needsNote: { fontSize: '12px', color: '#a16207', fontStyle: 'italic' },
+  needsContent: { fontSize: '15px', lineHeight: 1.5, color: '#1f2937', margin: 0 },
+  needsTextarea: { padding: '10px 12px', fontSize: '14px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
+  needsRow: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
+  needsSubmit: { padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: '#92400e', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  needsMessage: { fontSize: '13px', fontWeight: 500, lineHeight: 1.4, flex: 1, minWidth: '180px' },
 };

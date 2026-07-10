@@ -4,6 +4,73 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-07-10 -- Phase 8 Credibility v2: per-insight scoring, non-blocking consistency, org-fit, growth
+
+**Context:** The "Phase 5 / 5 Blocks" spec asked for an Expert Credibility Score
+system. But a per-USER credibility score (`credibility_scores` / `lib/credibility.ts`)
+and a *blocking* consistency check already shipped in the earlier Phase 5 steps (see
+below) and Phase 7 added a separate `risk_score`. To avoid conflating three different
+"credibility" things, this build adds a distinct per-INSIGHT scoring layer ALONGSIDE
+the existing per-user score, and switches consistency from blocking to non-blocking.
+
+**Locked principle honored:** NO recency-decay anywhere. `quality_score` locks at
+verification and never recalculates; `corroboration_score` is additive-only.
+
+**What was built, per block:**
+- **Block 1 -- Quality + Corroboration scoring (BUILT).** New columns on `insights`:
+  `quality_score`, `corroboration_score`, `corroboration_count`, `credibility_badge`,
+  `scored_at` (all inherit the single blanket ALL RLS policy -- no fragmentation).
+  Engine in `src/lib/insight-score.ts`: quality = source-tier x0.45 + triangulation
+  x0.30 + evidence-chain x0.25; combined = quality x0.7 + corroboration x0.3; badge
+  thresholds Emerging/Rising/Verified/Elite per spec. Quality locks at approval
+  (`scoreInsightAtApproval`, wired into `/api/embed-insights`). Retroactive scoring via
+  `backfillScores` + `POST /api/score-insights` (triggered by the dashboard "Refresh").
+  Corroboration bumps additively when an insight is surfaced to answer a question
+  (`bumpCorroboration`, wired into `/api/ask`). Dashboard shows portfolio combined
+  score + status-word badge (no breakdown), per spec.
+- **Block 2 -- Non-blocking consistency (BUILT).** `/api/embed-insights` now runs
+  `detectContradiction` server-side AFTER approval; a contradiction sets
+  `needs_explanation` + `contradiction_note` + `contradicts_insight_id` and does NOT
+  block. Flagged insights are excluded from scoring until explained. Belief-revision
+  depth gate (`prompts/belief-revision.md` + `scoreBeliefRevision`): an explanation
+  only unlocks scoring if it names prior belief + catalyst + current belief + genuine
+  reasoning; shallow ones are logged but don't unlock. `POST /api/explain-revision`.
+  **DEVIATION (deliberate):** spec said "badge on the insight itself, not a list," but
+  `needs_explanation` is set POST-approval and the app has no approved-insight detail
+  view. Reconciled by reusing the existing gap-detection card pattern (which the same
+  spec block explicitly said to reuse): a dashboard "Needs your context" card lists
+  each flagged insight with a small "Needs context" badge + inline explanation box.
+- **Block 3 -- Cross-expert benchmarking (NOT BUILT, deliberate).** Requires 5+ experts
+  per competency to activate; invite-only means one real account, so it is untestable
+  and would render nothing. Held per ship-thin doctrine (same call as Phase 7's admin
+  cockpit). No schema, no stubs.
+- **Block 4 -- Org-fit matching (BUILT).** Expert behavioral profile inferred from own
+  insights (`prompts/behavioral-profile.md` + `inferBehavioralProfile`), cached on
+  `profiles.behavioral_profile` (jsonb). Org intake -> plain-English fit summary
+  (`prompts/org-fit.md` + `assessOrgFit`), NOT pass/fail. `POST /api/org-fit` is
+  unauthenticated (a prospective buyer may have no account) and writes via service role
+  to `org_fit_assessments` (RLS on, no user policies -- the expert must never read it).
+  Org-facing page at `/org-fit`.
+- **Block 5 -- Longitudinal growth (BUILT, dashboard-only).** `growth_snapshots` table
+  (one row per user per month, unique). `computeGrowthSnapshot` (`src/lib/growth.ts`)
+  composites combined-avg x0.5 + insight-depth x0.25 + case-ratio x0.25. `GET/POST
+  /api/growth`. Dashboard "Your Spiderweb's Value" card renders the portfolio number +
+  badge and an inline SVG sparkline ("grown X% over N months"). NO external/marketing
+  sharing built, per explicit out-of-scope note.
+
+**Constraints honored:** Phase 7 `risk_score` / `credibility_scores` untouched
+(additive-only). No Identity/Credential Verification tiers added. `insights` RLS left as
+the single blanket ALL policy. Model IDs standardized on `claude-sonnet-5`.
+
+**Status -- LOCAL vs LIVE (do not conflate):**
+- **LOCAL:** All code above is written and passes `tsc --noEmit` clean (exit 0). SQL
+  migration authored at `supabase/phase8-credibility-v2.sql`.
+- **LIVE:** NOTHING is live. Not committed, not pushed, not deployed to
+  `spiderweb-nine.vercel.app`. The SQL migration has NOT been run against the live
+  Supabase (`ekjhwyeipzmmncfedeqm`) -- so the new columns/tables do not exist in prod
+  yet, and the features will error against live until it is run. Next steps (owner):
+  run the SQL in the Supabase SQL editor, then commit + deploy.
+
 ## 2026-07-08 — Phase 7 risk monitoring: build the engine now, hold the cockpit
 
 **Context:** A cluster of trust/abuse signals (voice mismatch, oversized uploads,

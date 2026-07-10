@@ -26,8 +26,8 @@ const COLORS = {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 40,
-    paddingBottom: 44,
+    paddingTop: 34,
+    paddingBottom: 32,
     paddingHorizontal: 44,
     fontFamily: "Helvetica",
     fontSize: 9.5,
@@ -35,48 +35,48 @@ const styles = StyleSheet.create({
   },
   name: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 22,
+    fontSize: 20,
     marginBottom: 2,
   },
   titleLine: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: COLORS.sub,
     marginBottom: 2,
   },
   subtitleLine: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: COLORS.faint,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   headerRule: {
     borderBottomWidth: 1.5,
     borderBottomColor: COLORS.ink,
-    marginBottom: 16,
+    marginBottom: 11,
   },
   section: {
-    marginBottom: 14,
+    marginBottom: 9,
   },
   sectionTitle: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 10,
+    fontSize: 9.5,
     letterSpacing: 1,
     color: COLORS.ink,
-    marginBottom: 6,
+    marginBottom: 4,
     textTransform: "uppercase",
   },
   sectionRule: {
     borderBottomWidth: 0.75,
     borderBottomColor: COLORS.rule,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   paragraph: {
     fontSize: 9.5,
-    lineHeight: 1.45,
+    lineHeight: 1.4,
     color: COLORS.ink,
   },
   bulletRow: {
     flexDirection: "row",
-    marginBottom: 4,
+    marginBottom: 3,
   },
   bulletDot: {
     width: 10,
@@ -86,10 +86,10 @@ const styles = StyleSheet.create({
   bulletText: {
     flex: 1,
     fontSize: 9.5,
-    lineHeight: 1.4,
+    lineHeight: 1.35,
   },
   frameworkRow: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   frameworkName: {
     fontFamily: "Helvetica-Bold",
@@ -99,12 +99,12 @@ const styles = StyleSheet.create({
   frameworkDesc: {
     fontSize: 9,
     color: COLORS.sub,
-    lineHeight: 1.35,
+    lineHeight: 1.3,
   },
   tagRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 2,
+    marginTop: 1,
   },
   tag: {
     fontSize: 8.5,
@@ -113,28 +113,28 @@ const styles = StyleSheet.create({
     borderWidth: 0.75,
     borderColor: "#bbf7d0",
     borderRadius: 3,
-    paddingVertical: 3,
+    paddingVertical: 2.5,
     paddingHorizontal: 7,
-    marginRight: 6,
-    marginBottom: 6,
+    marginRight: 5,
+    marginBottom: 5,
   },
   footer: {
     position: "absolute",
-    bottom: 20,
+    bottom: 12,
     left: 44,
     right: 44,
     textAlign: "center",
-    fontSize: 7.5,
+    fontSize: 7,
     color: COLORS.faint,
     borderTopWidth: 0.5,
     borderTopColor: COLORS.rule,
-    paddingTop: 8,
+    paddingTop: 5,
   },
 });
 
 function Bullet({ text }: { text: string }) {
   return (
-    <View style={styles.bulletRow}>
+    <View style={styles.bulletRow} wrap={false}>
       <Text style={styles.bulletDot}>—</Text>
       <Text style={styles.bulletText}>{text}</Text>
     </View>
@@ -174,14 +174,14 @@ export function ResumeDocument({ data }: { data: ResumeData }) {
           <Text style={styles.sectionTitle}>Frameworks</Text>
           <View style={styles.sectionRule} />
           {data.frameworks.map((f, i) => (
-            <View key={i} style={styles.frameworkRow}>
+            <View key={i} style={styles.frameworkRow} wrap={false}>
               <Text style={styles.frameworkName}>{f.name}</Text>
               <Text style={styles.frameworkDesc}>{f.description}</Text>
             </View>
           ))}
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Strengths</Text>
           <View style={styles.sectionRule} />
           <View style={styles.tagRow}>
