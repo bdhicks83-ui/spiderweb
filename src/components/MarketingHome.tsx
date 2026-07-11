@@ -18,6 +18,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Fraunces, Inter } from "next/font/google";
+import "@/styles/hb-foundation.css"; // Phase 1: fluid clamp() grid + spacing tokens
+import { gsap, ScrollTrigger, SplitText } from "@/lib/gsap"; // Phase 2: hero
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -209,29 +211,70 @@ export default function MarketingHome() {
   const dotRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   const howRef = useRef<HTMLElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const headlineRef = useRef<HTMLHeadingElement>(null);
   const mouse = useRef({ x: -9999, y: -9999 });
 
-  const [typed, setTyped] = useState(0);
   const [stage, setStage] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [cursorOn, setCursorOn] = useState(false);
 
-  const TOTAL = HEADLINE_1.length + HEADLINE_2.length;
-
-  // Typed headline
+  // ─── Hero entrance: SplitText word reveal + brief scroll-pin (Phase 2) ───
+  // The page scrolls inside the fixed .hb-root element, so ScrollTrigger must
+  // be told that element is the scroller — the window never scrolls here.
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setTyped(TOTAL);
-      return;
-    }
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      setTyped(i);
-      if (i >= TOTAL) window.clearInterval(id);
-    }, 45);
-    return () => window.clearInterval(id);
-  }, [TOTAL]);
+    const hero = heroRef.current;
+    const headline = headlineRef.current;
+    const root = rootRef.current;
+    if (!hero || !headline || !root) return;
+
+    const mm = gsap.matchMedia();
+
+    // Full motion: split the headline into masked lines/words, orchestrate a
+    // staggered rise, then hold the hero pinned just long enough for the
+    // entrance to land before the user can scroll past it.
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      const split = new SplitText(headline, {
+        type: "words",
+        wordsClass: "hb-word",
+      });
+
+      const ctx = gsap.context(() => {
+        const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+        tl.from(".hb-eyebrow", { y: 18, autoAlpha: 0, duration: 0.6 })
+          .from(
+            split.words,
+            { yPercent: 100, autoAlpha: 0, duration: 0.9, stagger: 0.055 },
+            "-=0.15"
+          )
+          .from(".hb-sub", { y: 20, autoAlpha: 0, duration: 0.7 }, "-=0.45")
+          .from(
+            ".hb-hero-ctas",
+            { y: 20, autoAlpha: 0, duration: 0.6 },
+            "-=0.45"
+          )
+          .from(".hb-scroll-hint", { autoAlpha: 0, duration: 0.6 }, "-=0.2");
+      }, hero);
+
+      const pin = ScrollTrigger.create({
+        trigger: hero,
+        scroller: root,
+        start: "top top",
+        end: "+=45%",
+        pin: true,
+        pinSpacing: true,
+      });
+
+      return () => {
+        pin.kill();
+        ctx.revert();
+        split.revert();
+      };
+    });
+
+    // Reduced motion: everything is already visible; no split, no pin.
+    return () => mm.revert();
+  }, []);
 
   // Shared mouse position (particles + cursor)
   useEffect(() => {
@@ -286,6 +329,12 @@ export default function MarketingHome() {
       const mx = mouse.current.x;
       const my = mouse.current.y;
 
+      // Phase 2: concentrate the web around the headline. Nodes/lines in the
+      // upper hero band render brighter, fading toward the lower page, so the
+      // field reads as scattered nodes gathered around the hero.
+      const band = h * 0.62;
+      const vbias = (y: number) => 0.62 + 0.7 * Math.max(0, 1 - y / band);
+
       for (const p of pts) {
         p.x += p.vx;
         p.y += p.vy;
@@ -312,7 +361,10 @@ export default function MarketingHome() {
           const dy = pts[i].y - pts[j].y;
           const d2 = dx * dx + dy * dy;
           if (d2 < 130 * 130) {
-            const a = (1 - Math.sqrt(d2) / 130) * 0.18;
+            const a =
+              (1 - Math.sqrt(d2) / 130) *
+              0.18 *
+              vbias((pts[i].y + pts[j].y) / 2);
             ctx.strokeStyle =
               (i + j) % 2 === 0
                 ? `rgba(0, 240, 168, ${a})`
@@ -328,7 +380,7 @@ export default function MarketingHome() {
 
       // Dots
       for (const p of pts) {
-        ctx.fillStyle = "rgba(190, 200, 215, 0.55)";
+        ctx.fillStyle = `rgba(190, 200, 215, ${0.55 * vbias(p.y)})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fill();
@@ -437,13 +489,6 @@ export default function MarketingHome() {
     return () => io.disconnect();
   }, []);
 
-  const t1 = HEADLINE_1.slice(0, Math.min(typed, HEADLINE_1.length));
-  const t2 =
-    typed > HEADLINE_1.length
-      ? HEADLINE_2.slice(0, typed - HEADLINE_1.length)
-      : "";
-  const typingDone = typed >= TOTAL;
-
   return (
     <div
       ref={rootRef}
@@ -483,24 +528,18 @@ export default function MarketingHome() {
       </nav>
 
       {/* ─── Hero ─── */}
-      <header id="top" className="hb-hero">
-        <p className="hb-eyebrow hb-fade" style={{ animationDelay: "0.1s" }}>
-          The Operating System for Human Expertise
-        </p>
-        <h1 className="hb-h1">
-          <span>{t1}</span>
-          <br />
-          <span className="hb-gradient">
-            {t2}
-            <span className={`hb-caret ${typingDone ? "hb-caret-done" : ""}`} />
-          </span>
+      <header id="top" ref={heroRef} className="hb-hero">
+        <p className="hb-eyebrow">The Operating System for Human Expertise</p>
+        <h1 className="hb-h1" ref={headlineRef}>
+          <span className="hb-h1-line">{HEADLINE_1}</span>
+          <span className="hb-h1-line hb-gradient">{HEADLINE_2}</span>
         </h1>
-        <p className="hb-sub hb-fade" style={{ animationDelay: "1.9s" }}>
+        <p className="hb-sub">
           Human Bloom turns what you already know into an AI company that works
           for you — seven departments, one source of truth: your expertise. You
           approve everything. It remembers everything.
         </p>
-        <div className="hb-hero-ctas hb-fade" style={{ animationDelay: "2.2s" }}>
+        <div className="hb-hero-ctas">
           <Magnetic href="/login?mode=signup" className="hb-btn hb-btn-lg">
             Start Free Today →
           </Magnetic>
@@ -508,7 +547,7 @@ export default function MarketingHome() {
             See how it works ↓
           </a>
         </div>
-        <div className="hb-scroll-hint hb-fade" style={{ animationDelay: "2.6s" }}>
+        <div className="hb-scroll-hint">
           <span />
         </div>
       </header>
@@ -701,20 +740,22 @@ const CSS = `
 }
 .hb-h1 {
   font-family: var(--font-fraunces), serif; font-weight: 600;
-  font-size: clamp(2.6rem, 7.5vw, 5.4rem); line-height: 1.08; margin: 0;
-  min-height: 2.3em; letter-spacing: -0.01em;
+  font-size: var(--hb-fs-h1); line-height: 1.08; margin: 0;
+  letter-spacing: -0.01em;
 }
+.hb-h1-line { display: block; }
+/* SplitText word wrappers — each word rises + fades in on load */
+.hb-word { display: inline-block; will-change: transform, opacity; }
 .hb-gradient {
   background: linear-gradient(100deg, var(--mint), var(--violet));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.hb-caret {
-  display: inline-block; width: 3px; height: 0.9em; margin-left: 4px;
-  background: var(--mint); vertical-align: -0.08em;
-  animation: hb-blink 0.9s step-end infinite;
+/* Keep the gradient per-word once SplitText wraps them (background-clip:text
+   doesn't survive across split child spans otherwise). */
+.hb-gradient .hb-word {
+  background: linear-gradient(100deg, var(--mint), var(--violet));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.hb-caret-done { animation: hb-blink 0.9s step-end 5; opacity: 0; }
-@keyframes hb-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .hb-sub {
   max-width: 620px; color: var(--muted); font-size: clamp(1rem, 2vw, 1.15rem);
   line-height: 1.65; margin: 1.6rem 0 0;
