@@ -1,30 +1,34 @@
 "use client";
 
-// MarketingHome — Human Bloom animated marketing homepage (Phase 4, "It Pays").
+// MarketingHome — Human Bloom animated marketing homepage.
 // Rendered by src/app/page.tsx when there is no session.
 // Uses a full-viewport fixed scroll container so it escapes the 640px
 // body constraint in layout.tsx without touching the dashboard's layout.
 //
 // Design standard (locked):
-// - Particle network canvas background (mouse-reactive)
+// - Particle network canvas background (mouse-reactive), concentrated on the hero
 // - Custom glowing cursor (desktop only, >= 900px, fine pointer)
-// - Typed headline on load
+// - Hero: SplitText word reveal + brief scroll-pin (GSAP)
+// - Goo/metaball pill hover on the nav
 // - Magnetic CTA buttons
-// - 3D tilt department cards with mouse-following glow
-// - Scroll-triggered reveals
+// - 3D tilt department cards, per-department accent, hover chips, locked states
 // - 4-stage pinned scroll narrative: Capture -> Approve -> Connect -> Deliver
-// - Dark theme: near-black, mint #00f0a8, violet #8b6ef7, Fraunces + Inter
+// - Pricing: horizontal pinned-scroll tier scrub
+// - Type: Space Grotesk (display) + Inter (UI), single ink, tight tracking
+// - Dark theme: near-black, mint #00f0a8, violet #8b6ef7
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Fraunces, Inter } from "next/font/google";
+import { Space_Grotesk, Inter } from "next/font/google";
 import "@/styles/hb-foundation.css"; // Phase 1: fluid clamp() grid + spacing tokens
 import { gsap, ScrollTrigger, SplitText } from "@/lib/gsap"; // Phase 2: hero
 
-const fraunces = Fraunces({
+// Phase 6: one expressive display face (geometric grotesque, non-serif) for
+// headlines + one plain UI face. Tight negative tracking on the display face.
+const display = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
-  variable: "--font-fraunces",
+  variable: "--font-display",
 });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -679,7 +683,7 @@ export default function MarketingHome() {
   return (
     <div
       ref={rootRef}
-      className={`${fraunces.variable} ${inter.variable} hb-root ${
+      className={`${display.variable} ${inter.variable} hb-root ${
         cursorOn ? "hb-nocursor" : ""
       }`}
     >
@@ -967,8 +971,8 @@ const CSS = `
   border-bottom-color: var(--line);
 }
 .hb-logo {
-  font-family: var(--font-fraunces), serif; font-size: 1.15rem; font-weight: 600;
-  color: var(--ink); text-decoration: none; letter-spacing: 0.01em;
+  font-family: var(--font-display), sans-serif; font-size: 1.15rem; font-weight: 600;
+  color: var(--ink); text-decoration: none; letter-spacing: -0.01em;
 }
 .hb-logo-mark { filter: drop-shadow(0 0 8px rgba(0, 240, 168, 0.5)); }
 .hb-nav-links { display: flex; gap: 0.35rem; }
@@ -1028,9 +1032,9 @@ const CSS = `
   text-transform: uppercase; margin: 0 0 1.4rem; font-weight: 600;
 }
 .hb-h1 {
-  font-family: var(--font-fraunces), serif; font-weight: 600;
-  font-size: var(--hb-fs-h1); line-height: 1.08; margin: 0;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display), sans-serif; font-weight: 600;
+  font-size: var(--hb-fs-h1); line-height: 1.06; margin: 0;
+  letter-spacing: -0.035em;
 }
 .hb-h1-line { display: block; }
 /* SplitText word wrappers — each word rises + fades in on load */
@@ -1086,8 +1090,8 @@ const CSS = `
 }
 .hb-stage-emoji { letter-spacing: 0; margin-left: 0.4rem; }
 .hb-stage-title {
-  font-family: var(--font-fraunces), serif; font-weight: 600;
-  font-size: clamp(2.2rem, 5.5vw, 3.6rem); margin: 0 0 1rem;
+  font-family: var(--font-display), sans-serif; font-weight: 600;
+  font-size: clamp(2.2rem, 5.5vw, 3.6rem); margin: 0 0 1rem; letter-spacing: -0.03em;
 }
 .hb-stage-desc { color: var(--muted); font-size: clamp(0.98rem, 2vw, 1.1rem); line-height: 1.65; max-width: 560px; margin: 0; }
 .hb-stage-dots { display: flex; gap: 0.6rem; margin-top: 2.2rem; }
@@ -1104,8 +1108,8 @@ const CSS = `
   max-width: 1180px; margin: 0 auto; text-align: center;
 }
 .hb-h2 {
-  font-family: var(--font-fraunces), serif; font-weight: 600;
-  font-size: clamp(1.9rem, 4.5vw, 3rem); margin: 0; letter-spacing: -0.01em;
+  font-family: var(--font-display), sans-serif; font-weight: 600;
+  font-size: clamp(1.9rem, 4.5vw, 3rem); margin: 0; letter-spacing: -0.025em;
 }
 .hb-section-sub { color: var(--muted); max-width: 640px; margin: 1.2rem auto 0; line-height: 1.65; }
 
@@ -1154,7 +1158,7 @@ const CSS = `
   padding: 0.2rem 0.6rem;
 }
 .hb-badge-live { color: #04110c; background: var(--mint); border-color: var(--mint); font-weight: 700; }
-.hb-card-name { font-family: var(--font-fraunces), serif; font-size: 1.25rem; font-weight: 600; margin: 0.9rem 0 0.4rem; }
+.hb-card-name { font-family: var(--font-display), sans-serif; font-size: 1.25rem; font-weight: 600; margin: 0.9rem 0 0.4rem; letter-spacing: -0.015em; }
 .hb-card-desc { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin: 0; }
 
 /* Locked (gated) departments: same structure, dimmed + desaturated at rest,
@@ -1229,14 +1233,14 @@ const CSS = `
 }
 .hb-tier-top { display: flex; justify-content: space-between; align-items: center; min-height: 1.6rem; }
 .hb-tier-index {
-  font-family: var(--font-fraunces), serif; font-size: 0.9rem; letter-spacing: 0.12em;
+  font-family: var(--font-display), sans-serif; font-size: 0.9rem; letter-spacing: 0.12em;
   color: color-mix(in srgb, var(--accent) 70%, var(--muted));
 }
 .hb-tier-flag {
   font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
   color: #04110c; background: var(--accent); border-radius: 999px; padding: 0.24rem 0.6rem;
 }
-.hb-tier-name { font-family: var(--font-fraunces), serif; font-size: 1.5rem; font-weight: 600; margin: 0.7rem 0 0; }
+.hb-tier-name { font-family: var(--font-display), sans-serif; font-size: 1.5rem; font-weight: 600; margin: 0.7rem 0 0; letter-spacing: -0.02em; }
 .hb-tier-price { font-size: 2.3rem; font-weight: 700; margin: 0.3rem 0 0; letter-spacing: -0.02em; color: var(--ink); }
 .hb-tier-cadence { font-size: 0.92rem; font-weight: 500; color: var(--muted); margin-left: 0.35rem; }
 .hb-tier-tagline { color: var(--muted); margin: 0.5rem 0 1.2rem; font-size: 0.94rem; line-height: 1.5; }
