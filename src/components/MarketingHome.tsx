@@ -127,6 +127,87 @@ const STAGES = [
   },
 ];
 
+// Phase 5: pricing tiers, scrubbed horizontally in a pinned section.
+const TIERS: {
+  name: string;
+  price: string;
+  cadence: string;
+  tagline: string;
+  accent: string;
+  cta: string;
+  featured?: boolean;
+  unlocks: string[];
+}[] = [
+  {
+    name: "Free",
+    price: "$0",
+    cadence: "forever",
+    tagline: "Start building your knowledge web.",
+    accent: "#00f0a8",
+    cta: "Start Free",
+    unlocks: [
+      "Knowledge department",
+      "Capture, approve & connect",
+      "Framework drafting",
+    ],
+  },
+  {
+    name: "Professional",
+    price: "$49",
+    cadence: "/mo",
+    tagline: "Your first working departments.",
+    accent: "#6ea8fe",
+    cta: "Go Professional",
+    unlocks: [
+      "Everything in Free",
+      "Chief of Staff",
+      "Research",
+      "Communication",
+    ],
+  },
+  {
+    name: "Executive",
+    price: "$149",
+    cadence: "/mo",
+    tagline: "Ship it and sell it.",
+    accent: "#b586f7",
+    cta: "Go Executive",
+    featured: true,
+    unlocks: [
+      "Everything in Professional",
+      "Project Acceleration",
+      "Commercialization",
+    ],
+  },
+  {
+    name: "Legacy",
+    price: "$299",
+    cadence: "/mo",
+    tagline: "Manage your expertise as an asset.",
+    accent: "#f7b955",
+    cta: "Go Legacy",
+    unlocks: [
+      "Everything in Executive",
+      "Career Intelligence",
+      "Priority processing",
+    ],
+  },
+  {
+    name: "Enterprise",
+    price: "$499+",
+    cadence: "/mo",
+    tagline: "For teams and organizations.",
+    accent: "#f78fb3",
+    cta: "Talk to us",
+    unlocks: [
+      "Everything in Legacy",
+      "Team workspaces",
+      "Custom departments",
+      "Dedicated support",
+    ],
+  },
+];
+
 const HEADLINE_1 = "Your AI Company.";
 const HEADLINE_2 = "Built Around You.";
 
@@ -263,9 +344,12 @@ export default function MarketingHome() {
   const gooBlobARef = useRef<HTMLSpanElement>(null);
   const gooBlobBRef = useRef<HTMLSpanElement>(null);
   const gooShownRef = useRef(false);
+  const pricingRef = useRef<HTMLElement>(null);
+  const priceTrackRef = useRef<HTMLDivElement>(null);
   const mouse = useRef({ x: -9999, y: -9999 });
 
   const [stage, setStage] = useState(0);
+  const [priceStage, setPriceStage] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [cursorOn, setCursorOn] = useState(false);
 
@@ -508,6 +592,21 @@ export default function MarketingHome() {
             setStage(Math.floor(p * STAGES.length));
           }
         }
+
+        // Phase 5: scroll-driven horizontal scrub of the pricing tiers. Same
+        // sticky-section mechanic as #how, but we translate the track on X.
+        const price = pricingRef.current;
+        const track = priceTrackRef.current;
+        if (price && track) {
+          const r = price.getBoundingClientRect();
+          const total = r.height - window.innerHeight;
+          if (total > 0) {
+            const p = Math.min(1, Math.max(0, -r.top / total));
+            const maxX = track.scrollWidth - track.clientWidth;
+            track.style.transform = `translate3d(${-p * maxX}px, 0, 0)`;
+            setPriceStage(Math.round(p * (TIERS.length - 1)));
+          }
+        }
       });
     }
 
@@ -732,21 +831,66 @@ export default function MarketingHome() {
         </div>
       </section>
 
-      {/* ─── Pricing ─── */}
-      <section id="pricing" className="hb-section hb-pricing">
-        <p className="hb-kicker hb-reveal">Pricing</p>
-        <h2 className="hb-h2 hb-reveal">
-          Free while in <span className="hb-gradient">early access.</span>
-        </h2>
-        <p className="hb-section-sub hb-reveal">
-          Full access to the Knowledge department — capture, approve, connect,
-          and draft frameworks from your own expertise. No credit card. Paid
-          tiers arrive when the next departments do.
-        </p>
-        <div className="hb-reveal" style={{ marginTop: "2.2rem" }}>
-          <Magnetic href="/login?mode=signup" className="hb-btn hb-btn-lg">
-            Start Free Today →
-          </Magnetic>
+      {/* ─── Pricing: horizontal pinned scrub (Phase 5) ─── */}
+      <section id="pricing" ref={pricingRef} className="hb-hscroll">
+        <div className="hb-hscroll-sticky">
+          <div className="hb-hscroll-head">
+            <p className="hb-kicker">Pricing</p>
+            <h2 className="hb-h2">
+              Grow into it. <span className="hb-gradient">One tier at a time.</span>
+            </h2>
+            <p className="hb-hscroll-note">
+              Free while in early access — scroll to see how each tier compounds
+              what you unlock. Paid tiers arrive as new departments ship.
+            </p>
+          </div>
+
+          <div ref={priceTrackRef} className="hb-hscroll-track">
+            {TIERS.map((t, i) => (
+              <article
+                key={t.name}
+                className={`hb-tier ${t.featured ? "hb-tier-featured" : ""} ${
+                  i === priceStage ? "hb-tier-active" : ""
+                }`}
+                style={{ "--accent": t.accent } as React.CSSProperties}
+              >
+                <div className="hb-tier-top">
+                  <span className="hb-tier-index">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {t.featured && (
+                    <span className="hb-tier-flag">Most popular</span>
+                  )}
+                </div>
+                <h3 className="hb-tier-name">{t.name}</h3>
+                <p className="hb-tier-price">
+                  {t.price}
+                  <span className="hb-tier-cadence">{t.cadence}</span>
+                </p>
+                <p className="hb-tier-tagline">{t.tagline}</p>
+                <ul className="hb-tier-unlocks">
+                  {t.unlocks.map((u) => (
+                    <li key={u}>{u}</li>
+                  ))}
+                </ul>
+                <Magnetic
+                  href="/login?mode=signup"
+                  className="hb-btn hb-btn-sm hb-tier-cta"
+                >
+                  {t.cta}
+                </Magnetic>
+              </article>
+            ))}
+          </div>
+
+          <div className="hb-hscroll-progress" aria-hidden="true">
+            {TIERS.map((t, i) => (
+              <span
+                key={t.name}
+                className={i <= priceStage ? "hb-hdot hb-hdot-on" : "hb-hdot"}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
@@ -1048,8 +1192,66 @@ const CSS = `
 .hb-reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
 .hb-in { opacity: 1; transform: translateY(0); }
 
-/* Pricing + footer */
-.hb-pricing { padding-bottom: 8rem; }
+/* Pricing: horizontal pinned scrub (Phase 5) */
+.hb-hscroll { position: relative; z-index: 1; height: 340vh; }
+.hb-hscroll-sticky {
+  position: sticky; top: 0; height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.hb-hscroll-head {
+  text-align: center; padding: 0 clamp(1.2rem, 5vw, 3rem);
+  margin-bottom: clamp(1.4rem, 4vh, 2.6rem);
+}
+.hb-hscroll-note {
+  color: var(--muted); max-width: 560px; margin: 1rem auto 0;
+  font-size: 0.95rem; line-height: 1.6;
+}
+.hb-hscroll-track {
+  display: flex; gap: 1.5rem; align-items: stretch;
+  padding: 0 clamp(1.2rem, 12vw, 16rem);
+  will-change: transform;
+}
+.hb-tier {
+  flex: 0 0 auto; width: min(360px, 80vw);
+  display: flex; flex-direction: column; text-align: left;
+  border: 1px solid var(--line); border-radius: 20px;
+  background: var(--card); padding: 1.8rem;
+  --accent: var(--mint); opacity: 0.5;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.4s, box-shadow 0.4s, opacity 0.4s;
+}
+.hb-tier-featured { border-color: color-mix(in srgb, var(--accent) 38%, transparent); }
+.hb-tier-active {
+  opacity: 1; transform: translateY(-6px);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 40px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.hb-tier-top { display: flex; justify-content: space-between; align-items: center; min-height: 1.6rem; }
+.hb-tier-index {
+  font-family: var(--font-fraunces), serif; font-size: 0.9rem; letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
+.hb-tier-flag {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+  color: #04110c; background: var(--accent); border-radius: 999px; padding: 0.24rem 0.6rem;
+}
+.hb-tier-name { font-family: var(--font-fraunces), serif; font-size: 1.5rem; font-weight: 600; margin: 0.7rem 0 0; }
+.hb-tier-price { font-size: 2.3rem; font-weight: 700; margin: 0.3rem 0 0; letter-spacing: -0.02em; color: var(--ink); }
+.hb-tier-cadence { font-size: 0.92rem; font-weight: 500; color: var(--muted); margin-left: 0.35rem; }
+.hb-tier-tagline { color: var(--muted); margin: 0.5rem 0 1.2rem; font-size: 0.94rem; line-height: 1.5; }
+.hb-tier-unlocks {
+  list-style: none; padding: 0; margin: 0 0 1.6rem; flex: 1;
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+.hb-tier-unlocks li { position: relative; padding-left: 1.5rem; color: var(--ink); font-size: 0.92rem; line-height: 1.4; }
+.hb-tier-unlocks li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+.hb-tier-cta { display: block; text-align: center; }
+.hb-hscroll-progress { display: flex; justify-content: center; gap: 0.5rem; margin-top: clamp(1.4rem, 4vh, 2.6rem); }
+.hb-hdot { width: 8px; height: 8px; border-radius: 999px; background: var(--line); transition: background 0.3s, transform 0.3s; }
+.hb-hdot-on { background: var(--mint); transform: scale(1.15); }
+
+/* Footer */
 .hb-footer {
   position: relative; z-index: 1; border-top: 1px solid var(--line);
   padding: 2.2rem clamp(1.2rem, 5vw, 3rem); text-align: center;
