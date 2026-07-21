@@ -213,6 +213,10 @@ export default function MarketingHome() {
   const howRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
+  const gooLayerRef = useRef<HTMLDivElement>(null);
+  const gooBlobARef = useRef<HTMLSpanElement>(null);
+  const gooBlobBRef = useRef<HTMLSpanElement>(null);
+  const gooShownRef = useRef(false);
   const mouse = useRef({ x: -9999, y: -9999 });
 
   const [stage, setStage] = useState(0);
@@ -489,6 +493,44 @@ export default function MarketingHome() {
     return () => io.disconnect();
   }, []);
 
+  // ─── Nav goo/metaball pill hover (Phase 3) ───
+  // Two blobs behind the links, GSAP-tweened toward the hovered pill at
+  // different speeds. Under the #hb-goo filter (blur + alpha threshold) the
+  // lagging blob trails the leading one, so mid-transit they read as two lobes
+  // joined by a gooey neck, then merge into one pill at rest. Text lives in a
+  // separate, unfiltered layer, so it never blurs.
+  useEffect(() => {
+    if (gooLayerRef.current) gsap.set(gooLayerRef.current, { autoAlpha: 0 });
+  }, []);
+
+  const gooTo = (link: HTMLElement) => {
+    const a = gooBlobARef.current;
+    const b = gooBlobBRef.current;
+    const layer = gooLayerRef.current;
+    if (!a || !b || !layer) return;
+    const x = link.offsetLeft;
+    const width = link.offsetWidth;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!gooShownRef.current) {
+      // First reveal: snap both blobs under the target, then fade the layer in.
+      gsap.set([a, b], { x, width });
+      gsap.to(layer, { autoAlpha: 1, duration: 0.25, ease: "power2.out" });
+      gooShownRef.current = true;
+    } else if (reduce) {
+      gsap.to([a, b], { x, width, duration: 0.15, ease: "power2.out" });
+    } else {
+      gsap.to(a, { x, width, duration: 0.45, ease: "power3.out" });
+      gsap.to(b, { x, width, duration: 0.7, ease: "elastic.out(1, 0.55)" });
+    }
+  };
+
+  const gooHide = () => {
+    if (!gooLayerRef.current) return;
+    gsap.to(gooLayerRef.current, { autoAlpha: 0, duration: 0.3 });
+    gooShownRef.current = false;
+  };
+
   return (
     <div
       ref={rootRef}
@@ -499,6 +541,20 @@ export default function MarketingHome() {
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
 
       <canvas ref={canvasRef} className="hb-canvas" aria-hidden="true" />
+
+      {/* Goo/metaball filter for the nav pill hover (Phase 3) */}
+      <svg className="hb-goo-defs" aria-hidden="true" focusable="false">
+        <defs>
+          <filter id="hb-goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur" />
+            <feColorMatrix
+              in="blur"
+              mode="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -8"
+            />
+          </filter>
+        </defs>
+      </svg>
 
       {cursorOn && (
         <>
@@ -512,10 +568,38 @@ export default function MarketingHome() {
         <a href="#top" className="hb-logo">
           <span className="hb-logo-mark">🌸</span> Human&nbsp;Bloom
         </a>
-        <div className="hb-nav-links">
-          <a href="#how">How it works</a>
-          <a href="#departments">Platform</a>
-          <a href="#pricing">Pricing</a>
+        <div
+          className="hb-nav-links hb-goo-nav"
+          onMouseLeave={gooHide}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) gooHide();
+          }}
+        >
+          <div ref={gooLayerRef} className="hb-goo-layer" aria-hidden="true">
+            <span ref={gooBlobARef} className="hb-goo-blob" />
+            <span ref={gooBlobBRef} className="hb-goo-blob" />
+          </div>
+          <a
+            href="#how"
+            onMouseEnter={(e) => gooTo(e.currentTarget)}
+            onFocus={(e) => gooTo(e.currentTarget)}
+          >
+            How it works
+          </a>
+          <a
+            href="#departments"
+            onMouseEnter={(e) => gooTo(e.currentTarget)}
+            onFocus={(e) => gooTo(e.currentTarget)}
+          >
+            Platform
+          </a>
+          <a
+            href="#pricing"
+            onMouseEnter={(e) => gooTo(e.currentTarget)}
+            onFocus={(e) => gooTo(e.currentTarget)}
+          >
+            Pricing
+          </a>
         </div>
         <div className="hb-nav-cta">
           <Link href="/login" className="hb-signin">
@@ -697,12 +781,27 @@ const CSS = `
   color: var(--ink); text-decoration: none; letter-spacing: 0.01em;
 }
 .hb-logo-mark { filter: drop-shadow(0 0 8px rgba(0, 240, 168, 0.5)); }
-.hb-nav-links { display: flex; gap: 1.8rem; }
-.hb-nav-links a {
+.hb-nav-links { display: flex; gap: 0.35rem; }
+/* Goo/metaball pill hover (Phase 3) */
+.hb-goo-nav { position: relative; }
+.hb-goo-nav a {
+  position: relative; z-index: 2;
   color: var(--muted); text-decoration: none; font-size: 0.92rem;
+  padding: 0.5rem 1rem; border-radius: 999px;
   transition: color 0.25s;
 }
-.hb-nav-links a:hover { color: var(--mint); }
+.hb-goo-nav a:hover, .hb-goo-nav a:focus-visible { color: var(--ink); }
+.hb-goo-layer {
+  position: absolute; inset: 0; z-index: 1;
+  filter: url(#hb-goo); pointer-events: none;
+  mix-blend-mode: screen; opacity: 0;
+}
+.hb-goo-blob {
+  position: absolute; top: 0; left: 0; height: 100%; width: 0;
+  border-radius: 999px; background: #00f0a8;
+  will-change: transform, width;
+}
+.hb-goo-defs { position: absolute; width: 0; height: 0; pointer-events: none; }
 .hb-nav-cta { display: flex; align-items: center; gap: 1.1rem; }
 .hb-signin {
   color: var(--ink); text-decoration: none; font-size: 0.92rem;
