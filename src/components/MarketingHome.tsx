@@ -30,47 +30,72 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 // ─────────────────────────────── content ───────────────────────────────
 
+// Phase 4: one muted accent per department (distinct hue, used only for the
+// glow / emoji halo / hover border / chips — base card stays neutral so the
+// grid reads as a system, not a rainbow), plus the tier that unlocks it and
+// capability chips revealed on hover.
 const DEPARTMENTS = [
   {
     emoji: "🧠",
     name: "Knowledge",
     desc: "Capture, approve, and connect your insights. The core loop — live today.",
+    accent: "#00f0a8",
+    tier: "Free",
+    chips: ["Capture", "Approve", "Connect", "Draft"],
     live: true,
   },
   {
     emoji: "🎯",
     name: "Chief of Staff",
     desc: "Your operational right hand. Priorities, follow-ups, decisions that stick.",
+    accent: "#f7b955",
+    tier: "Professional",
+    chips: ["Priorities", "Follow-ups", "Decisions"],
     live: false,
   },
   {
     emoji: "🔬",
     name: "Research",
     desc: "Deep dives and synthesis on demand, grounded in your own thinking.",
+    accent: "#6ea8fe",
+    tier: "Professional",
+    chips: ["Deep dives", "Synthesis", "Sources"],
     live: false,
   },
   {
     emoji: "🚀",
     name: "Project Acceleration",
     desc: "Move initiatives from stuck to shipped with your playbooks applied.",
+    accent: "#ff6b6b",
+    tier: "Executive",
+    chips: ["Playbooks", "Milestones", "Momentum"],
     live: false,
   },
   {
     emoji: "💼",
     name: "Commercialization",
     desc: "Turn frameworks into products, offers, and revenue.",
+    accent: "#b586f7",
+    tier: "Executive",
+    chips: ["Offers", "Pricing", "Revenue"],
     live: false,
   },
   {
     emoji: "🧭",
     name: "Career Intelligence",
     desc: "Positioning, trajectory, and legacy — managed like an asset.",
+    accent: "#4fd1c5",
+    tier: "Legacy",
+    chips: ["Positioning", "Trajectory", "Legacy"],
     live: false,
   },
   {
     emoji: "✉️",
     name: "Communication",
     desc: "Messaging, writing, and outreach in your voice, not a template's.",
+    accent: "#f78fb3",
+    tier: "Professional",
+    chips: ["Messaging", "Writing", "Outreach"],
     live: false,
   },
 ];
@@ -150,12 +175,18 @@ function TiltCard({
   emoji,
   name,
   desc,
+  accent,
+  tier,
+  chips,
   live,
   delay,
 }: {
   emoji: string;
   name: string;
   desc: string;
+  accent: string;
+  tier: string;
+  chips: string[];
   live: boolean;
   delay: number;
 }) {
@@ -184,8 +215,10 @@ function TiltCard({
   return (
     <div
       ref={ref}
-      className="hb-card hb-reveal"
-      style={{ transitionDelay: `${delay}ms` }}
+      className={`hb-card hb-reveal ${live ? "" : "hb-card-locked"}`}
+      style={
+        { transitionDelay: `${delay}ms`, "--accent": accent } as React.CSSProperties
+      }
       onMouseMove={onMove}
       onMouseLeave={onLeave}
     >
@@ -199,6 +232,19 @@ function TiltCard({
       </div>
       <p className="hb-card-name">{name}</p>
       <p className="hb-card-desc">{desc}</p>
+      {/* Phase 4: chips + unlock tier reveal on hover */}
+      <div className="hb-card-reveal">
+        <div className="hb-card-chips">
+          {chips.map((c) => (
+            <span key={c} className="hb-chip">
+              {c}
+            </span>
+          ))}
+        </div>
+        <p className="hb-card-unlock">
+          {live ? `✓ Live on ${tier}` : `🔒 Unlocks with ${tier}`}
+        </p>
+      </div>
     </div>
   );
 }
@@ -931,18 +977,33 @@ const CSS = `
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.35s,
     opacity 0.7s, box-shadow 0.35s;
   will-change: transform; transform-style: preserve-3d;
-  --gx: 50%; --gy: 50%;
+  --gx: 50%; --gy: 50%; --accent: var(--mint);
 }
 .hb-card::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
   background: radial-gradient(320px circle at var(--gx) var(--gy),
-    rgba(0, 240, 168, 0.14), rgba(139, 110, 247, 0.10) 45%, transparent 70%);
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    color-mix(in srgb, var(--accent) 7%, transparent) 45%, transparent 70%);
   opacity: 0; transition: opacity 0.35s; pointer-events: none;
 }
-.hb-card:hover { border-color: rgba(0, 240, 168, 0.35); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45); }
+.hb-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+}
 .hb-card:hover::before { opacity: 1; }
+/* Accent rail down the left edge, drawn on hover */
+.hb-card::after {
+  content: ""; position: absolute; left: 0; top: 18%; bottom: 18%; width: 3px;
+  border-radius: 999px; background: var(--accent);
+  opacity: 0; transform: scaleY(0.4); transform-origin: center;
+  transition: opacity 0.35s, transform 0.35s; pointer-events: none;
+}
+.hb-card:hover::after { opacity: 0.9; transform: scaleY(1); }
 .hb-card-top { display: flex; justify-content: space-between; align-items: center; }
-.hb-card-emoji { font-size: 1.7rem; filter: drop-shadow(0 0 10px rgba(0, 240, 168, 0.35)); }
+.hb-card-emoji {
+  font-size: 1.7rem;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 40%, transparent));
+}
 .hb-badge {
   font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
@@ -951,6 +1012,37 @@ const CSS = `
 .hb-badge-live { color: #04110c; background: var(--mint); border-color: var(--mint); font-weight: 700; }
 .hb-card-name { font-family: var(--font-fraunces), serif; font-size: 1.25rem; font-weight: 600; margin: 0.9rem 0 0.4rem; }
 .hb-card-desc { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin: 0; }
+
+/* Locked (gated) departments: same structure, dimmed + desaturated at rest,
+   lifting to full on hover so they stay explorable. */
+/* Scoped to .hb-in so the dim survives the scroll-reveal's opacity:1 (same
+   specificity would otherwise let .hb-in win by source order). */
+.hb-card-locked.hb-in { opacity: 0.68; }
+.hb-card-locked.hb-in:hover { opacity: 1; }
+.hb-card-locked .hb-card-emoji { filter: grayscale(0.4) drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 22%, transparent)); }
+.hb-card-locked:hover .hb-card-emoji { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 40%, transparent)); }
+
+/* Hover-revealed detail: capability chips + the tier that unlocks it */
+.hb-card-reveal {
+  max-height: 0; opacity: 0; overflow: hidden;
+  transform: translateY(6px);
+  transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s, transform 0.35s;
+}
+.hb-card:hover .hb-card-reveal,
+.hb-card:focus-within .hb-card-reveal {
+  max-height: 8rem; opacity: 1; transform: none;
+}
+.hb-card-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.9rem; }
+.hb-chip {
+  font-size: 0.72rem; line-height: 1; padding: 0.32rem 0.6rem; border-radius: 999px;
+  color: color-mix(in srgb, var(--accent) 80%, #ffffff);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.hb-card-unlock {
+  margin: 0.75rem 0 0; font-size: 0.76rem; letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
 
 /* Reveals */
 .hb-reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
