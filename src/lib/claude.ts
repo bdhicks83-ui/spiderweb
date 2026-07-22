@@ -129,6 +129,85 @@ function parseJson(text: string): unknown | null {
   }
 }
 
+// Tolerant JSON extraction. parseJson only handles a clean body or a fenced
+// one; real model output occasionally adds a preamble ("Here's the
+// framework:") or a trailing note. When the strict parse fails, slice out the
+// first balanced {...} / [...] span and parse that. This removes a whole class
+// of "valid JSON, wrong wrapper" first-attempt failures without a retry.
+function parseJsonLoose(text: string): unknown | null {
+  const direct = parseJson(text);
+  if (direct !== null) return direct;
+
+  const stripped = text.replace(/^```json?\n?|```$/g, "").trim();
+  const start = stripped.search(/[{[]/);
+  if (start === -1) return null;
+  const open = stripped[start];
+  const close = open === "{" ? "}" : "]";
+
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < stripped.length; i++) {
+    const ch = stripped[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(stripped.slice(start, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null; // never balanced → almost certainly a truncated body
+}
+
+// Retry a value-producing model call. Transient failures — API overload,
+// network blips, an occasional truncated or preamble-wrapped JSON body — are
+// common enough that a single shot flakes intermittently. Retry a few times
+// with exponential backoff + jitter, treating BOTH a thrown error and a null
+// result (parse/validation miss) as retryable. Returns null only when every
+// attempt fails, so callers keep their existing "null ⇒ fall back" contract.
+async function withRetries<T>(
+  label: string,
+  fn: () => Promise<T | null>,
+  attempts = 3,
+  baseDelayMs = 400
+): Promise<T | null> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const result = await fn();
+      if (result !== null) return result;
+      if (attempt < attempts) {
+        console.warn(`${label}: empty/invalid result, retry ${attempt}/${attempts - 1}`);
+      }
+    } catch (err) {
+      if (attempt === attempts) {
+        console.error(`${label}: failed after ${attempts} attempts:`, err);
+        return null;
+      }
+      console.warn(`${label}: error, retry ${attempt}/${attempts - 1}:`, err);
+    }
+    if (attempt < attempts) {
+      const delay = baseDelayMs * 2 ** (attempt - 1) + Math.floor(Math.random() * 150);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  return null;
+}
+
 // Phase 6: decide whether a follow-up question is genuinely needed before
 // recommending. Model-driven — no fixed script. Returns null on any failure
 // so callers can fall back to synthesizing immediately.
@@ -373,6 +452,153 @@ export async function simulateDecision(
     confidence: parsed.confidence,
     confidenceStatement: parsed.confidence_statement,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// P0 — Elicitation Engine Claude helpers.
+// Doctrine: elicitation, not ingestion. Fidelity, not accuracy.
+// ─────────────────────────────────────────────────────────────────────────
+
+import {
+  type PatternFields,
+  type ElicitQA,
+  type FrameworkArtifact,
+  EMPTY_FIELDS,
+  formatRecordState,
+  formatElicitQAPairs,
+  mergeFields,
+  isFrameworkArtifact,
+} from "@/lib/elicitation";
+
+// One elicitation turn: fold the latest answer into the record fields, then
+// either ask the next ladder question or declare the record complete.
+// Returns null on any model/parse failure so the route can fall back to the
+// deterministic ladder question instead of dead-ending the session.
+export type ElicitStep = {
+  fields: PatternFields;
+  done: boolean;
+  nextRung: number | null;
+  question: string | null;
+};
+
+export async function elicitNext(
+  currentFields: PatternFields,
+  qaPairs: ElicitQA[],
+  latestAnswer: string,
+  maxRemaining: number
+): Promise<ElicitStep | null> {
+  const prompt = await loadPrompt("elicit-next", {
+    record_state: formatRecordState(currentFields),
+    qa_pairs: formatElicitQAPairs(qaPairs),
+    latest_answer: latestAnswer,
+    max_remaining: String(maxRemaining),
+  });
+  // Retry + loose-parse: a flaked turn here can drop the latest answer from
+  // the record (elicitNext is what folds answers into fields), which on the
+  // final turn would stall completion. The deterministic ladder fallback in
+  // the route is the last-resort net; these retries keep the happy path clean.
+  return withRetries("elicitNext", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as {
+      fields?: unknown;
+      done?: unknown;
+      next_rung?: unknown;
+      question?: unknown;
+    } | null;
+    if (!parsed || typeof parsed.done !== "boolean") return null;
+
+    const rawFields =
+      parsed.fields && typeof parsed.fields === "object"
+        ? (parsed.fields as Partial<Record<keyof PatternFields, unknown>>)
+        : ({} as Partial<Record<keyof PatternFields, unknown>>);
+    // mergeFields guarantees a dropped key never erases captured content.
+    const fields = mergeFields(mergeFields(EMPTY_FIELDS, currentFields), rawFields);
+
+    if (parsed.done) {
+      return { fields, done: true, nextRung: null, question: null };
+    }
+    if (
+      typeof parsed.question !== "string" ||
+      !parsed.question.trim() ||
+      typeof parsed.next_rung !== "number" ||
+      parsed.next_rung < 1 ||
+      parsed.next_rung > 7
+    ) {
+      return null;
+    }
+    return {
+      fields,
+      done: false,
+      nextRung: Math.round(parsed.next_rung),
+      question: parsed.question.trim(),
+    };
+  });
+}
+
+// PII / name scrubbing at capture. Client and individual names are stripped
+// BEFORE anything is stored ("roles, not names"). Returns null on failure —
+// callers must FAIL CLOSED: never store an unscrubbed answer.
+export type ScrubResult = { scrubbed: string; changed: boolean };
+
+export async function scrubPII(text: string): Promise<ScrubResult | null> {
+  const prompt = await loadPrompt("scrub-pii", { text });
+  // Retrying is safe here: scrubPII is fail-closed, so a null after all
+  // attempts still blocks storage of an unscrubbed answer — the retries only
+  // reduce how often a transient hiccup forces the user to resubmit.
+  return withRetries("scrubPII", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const out = firstText(msg.content as { type: string; text?: string }[]);
+    if (!out) return null;
+    const parsed = parseJsonLoose(out) as {
+      scrubbed?: unknown;
+      changed?: unknown;
+    } | null;
+    if (
+      !parsed ||
+      typeof parsed.scrubbed !== "string" ||
+      !parsed.scrubbed.trim() ||
+      typeof parsed.changed !== "boolean"
+    ) {
+      return null;
+    }
+    return { scrubbed: parsed.scrubbed.trim(), changed: parsed.changed };
+  });
+}
+
+// Completed Pattern Record -> branded framework artifact (the first-session
+// "aha"). Returns null on model/parse failure so the caller can offer a
+// retry without losing the completed record.
+export async function framePattern(
+  fields: PatternFields
+): Promise<FrameworkArtifact | null> {
+  const prompt = await loadPrompt("frame-pattern", {
+    record: formatRecordState(fields),
+  });
+  // max_tokens raised from 1536 → 3072: a rich 7-field record with four-bullet
+  // arrays can exceed 1536, and a truncated body (stop_reason "max_tokens")
+  // is unparseable JSON — that was the dominant first-render flake. The
+  // retry+loose-parse below covers the residual transient cases.
+  return withRetries("framePattern", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 3072,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text);
+    return isFrameworkArtifact(parsed) ? parsed : null;
+  });
 }
 
 // Phase 5: question + matched insight excerpts -> grounded answer in the

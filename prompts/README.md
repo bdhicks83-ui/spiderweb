@@ -11,6 +11,9 @@ Doctrine: prompts live in the repo, reviewed and diffed like any other source fi
 | `ask-followup.md` | Decide if a follow-up question is needed | Phase 6 |
 | `ask-recommend.md` | Final recommendation + pros/cons | Phase 6 |
 | `synthesize-resume.md` | Approved insights → resume sections (summary/experience/frameworks/strengths) | Resume builder |
+| `elicit-next.md` | One elicitation turn: fold answer into Pattern Record fields, ask next ladder question | P0 |
+| `scrub-pii.md` | Strip client/individual names before storage (roles, not names) | P0 |
+| `frame-pattern.md` | Completed Pattern Record → branded framework artifact | P0 |
 
 Rules:
 - One prompt per file. Markdown. `{{variable}}` placeholders.

@@ -229,6 +229,17 @@ export default function DashboardPage() {
 
         <div style={styles.resumeBanner}>
           <div>
+            <h2 style={styles.resumeBannerTitle}>🕸️ Codify a pattern</h2>
+            <p style={styles.resumeBannerSub}>
+              A short interview about work you&apos;ve already done — walk out with a
+              branded framework you could put in a proposal.
+            </p>
+          </div>
+          <a href="/codify" style={styles.resumeBannerLink}>Start a session →</a>
+        </div>
+
+        <div style={styles.resumeBanner}>
+          <div>
             <h2 style={styles.resumeBannerTitle}>🌟 Build your resume</h2>
             <p style={styles.resumeBannerSub}>
               Turn your approved insights into a one-page executive resume — free on every plan.

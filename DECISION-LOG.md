@@ -4,6 +4,56 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-07-21 -- P0 build: Elicitation Engine (`/codify` → Pattern Record → branded framework)
+
+**What shipped (local code only -- migration + deploy pending):** the full P0
+loop from ELICITATION-ENGINE-SPEC.md: `pattern_records` schema, 7-rung
+question ladder driven by the Consultative Ask pattern, PII scrubbing at
+capture, and the first-session branded framework artifact (on-screen card +
+PDF). Scope fence held: no portal, no billing, no jogger, no scoring.
+
+**Non-obvious decisions:**
+
+- **One table = session + record.** `pattern_records` holds the elicitation
+  state (qa_pairs, pending_question/rung) AND the 7 fields, mirroring
+  `ask_sessions`. Refresh-safe mid-session; no join at artifact render.
+- **Completion is enforced three ways, model-trusted zero ways.** The model
+  may claim "done", but code checks all 6 required fields
+  (`isRecordComplete`), a deterministic fallback question targets the lowest
+  missing rung when the model stalls or the 12-question cap is hit, and a DB
+  check constraint makes `status='complete'` without rung 4 + rung 6
+  impossible even for buggy future code.
+- **Scrubbing fails CLOSED.** The scrub call runs before any write; if it
+  fails, nothing is stored and the user retries. Never "store now, scrub
+  later" -- an unscrubbed answer must never touch the database. Scrub runs
+  server-side per answer; `scrub_status` records whether anything was
+  actually replaced, and the UI tells the user when it happened (trust
+  feature, not fine print).
+- **The elicitation model call is never skipped, even past the cap** -- it's
+  the only mechanism folding answers into fields. Past the cap, only its
+  *question selection* is overridden by the scripted required-rung fallback,
+  so sessions converge instead of wandering.
+- **Artifact generation is detachable from completion.** If `framePattern`
+  or its save fails, the record still completes and `/api/codify/frame`
+  retries just the artifact -- 30 minutes of answers are never hostage to
+  the cheapest final call. The answer route only reports a framework the DB
+  actually persisted (otherwise the PDF route would 409 on an artifact the
+  UI is showing).
+- **No embeddings for pattern_records in P0.** Deliberate: the Voyage
+  rate-cap + silent-fail bug is an open loop; creating embeddable rows now
+  would silently produce partial coverage. Pattern records are therefore not
+  yet visible to `/ask` -- deferred until the Voyage billing fix.
+- **Fixed rung-1 opener, no model call at session start** -- starting must be
+  instant and free.
+
+**Needs Brian (customer-facing / brand voice -- not finalized):** the PDF
+attribution + footer wording ("A [Name] methodology", "codified with Human
+Bloom"), the framework-name style the prompt aims for, and all `/codify` UI
+copy. All shipped as placeholders consistent with the co-branded leaning in
+MASTER-STATE v2; wording is his call before anything customer-facing ships.
+
+---
+
 ## 2026-07-10 -- Fix: Phase 5 dashboard cards invisible because `/dashboard` was orphaned
 
 **Naming:** the prior Cowork session labeled the Credibility-v2 work "Phase 8"
@@ -333,3 +383,59 @@ admin queue (#4) and the dismissal loop (#6) when a second user makes them testa
   so `query_gaps` / `credibility_scores` get read-only user RLS policies.
 - **`credibility_scores` is its own table** (one row per user) rather than columns on
   `profiles`, keeping the score cache separate from identity/plan data.
+
+### July 11, 2026 â€” Marketing homepage built as 6 phased commits off the Floema research
+
+**Context:** Human Bloom had no marketing homepage â€” just the app dashboard. We had two verified research docs (floema.com mechanics + a phased application plan) and a locked motion-heavy dark/tech design standard. Needed a from-scratch homepage that borrows Floema's *mechanics* without its cream/serif/eco *brand*.
+
+**Decision:** Built the homepage in 6 reviewable, separately-committed phases: (1) fluid clamp() grid + GSAP/ScrollTrigger/SplitText setup, (2) hero SplitText reveal + brief scroll-pin + particle web concentrated on the headline, (3) goo/metaball nav pill hover, (4) departments showcase with per-department accents + hover chips + locked states, (5) horizontal pinned-scroll pricing scrub, (6) type/color pass.
+
+**Reasoning:** Ship-thin, gate-by-gate. One phase per commit so each is independently reviewable and revertable, rather than one giant unreviewable drop.
+
+**Result:** All 6 phases shipped and DOM-verified. Commits d5acc5e (P1) â†’ 49aa4dd (P6).
+
+### July 11, 2026 â€” Reused the existing native-sticky scroll mechanic for the pricing scrub instead of GSAP ScrollTrigger
+
+**Context:** The plan literally specified "ScrollTrigger horizontal scrub" for the pricing tiers. But the whole page scrolls inside a fixed `.hb-root` element (the window never scrolls), and the existing `#how` narrative already achieves pinned-scroll via native `position: sticky` + the one rAF scroll handler.
+
+**Options considered:** (a) GSAP ScrollTrigger pin + horizontal scrub with `scroller: .hb-root`; (b) mirror the proven native-sticky mechanic and translate the track on X from scroll progress.
+
+**Decision:** Chose (b) â€” native sticky + scroll-driven `translateX`, extending the existing scroll handler.
+
+**Reasoning:** A ScrollTrigger pin-spacer inside the custom scroller risked colliding with the existing sticky/scroll math for `#how`. The native mechanic was already proven to work in this exact scroller, is house-consistent, and lower-risk. Borrowing the *mechanic* (horizontal pinned scrub), not the specific library, satisfies the plan's intent.
+
+**Result:** Verified the scrub math â€” at scroll progress 1 the track translates âˆ’1083px and the last tier lands flush at the viewport edge. Swappable to literal GSAP later if desired.
+
+### July 11, 2026 â€” Swapped headline face from Fraunces (serif) to Space Grotesk
+
+**Context:** The homepage had been built through Phase 5 using Fraunces, a *serif* â€” directly conflicting with the locked "no serif type" rule. Phase 6 (type pass) forced the reckoning.
+
+**Options considered:** Space Grotesk (geometric display sans), Bricolage Grotesque (expressive grotesque), or keep Fraunces and override the no-serif rule. Surfaced as an explicit choice to Brian rather than decided unilaterally.
+
+**Decision:** Space Grotesk for all display headings; Inter stays for UI. One display face + one UI face.
+
+**Reasoning:** Honors the no-serif rule and reads tech-forward for an AI product. A typeface change reshapes the whole visual identity â€” that's a brand call for Brian, not a default to assume.
+
+**Result:** Every heading now Space Grotesk with tight negative tracking (hero âˆ’0.035em). Also kept `--muted` for secondary body copy â€” a reasoned deviation from Floema's "single ink only," since this page is content-dense and full-ink body text would cost readability without adding hierarchy.
+
+### July 11, 2026 â€” Flagged leftover 640px body style in layout.tsx (out of scope, spun off)
+
+**Context:** Browser console showed a hydration mismatch on every load, traced to leftover Next.js starter inline styles on `<body>` in layout.tsx (max-width 640px, system-ui, padding) â€” which also constrains the dashboard/login pages to a narrow column.
+
+**Decision:** Did not fix mid-phase; spun it off as a separate background task to avoid changing app-wide layout during the homepage build.
+
+**Reasoning:** Ship-thin â€” keep the homepage phases clean; app-wide layout changes need their own verification against the dashboard/login pages.
+
+### July 22, 2026 — P-0 hardening: framework first-render flake root-caused and fixed (10/10 done test)
+
+**Context:** After a /codify session completed, the framework card sometimes failed on the first render and needed the /api/codify/frame retry path. P-0 could not close with the first-session "aha" moment flaking.
+
+**Decision:** Fix the render pipeline in `src/lib/claude.ts` itself rather than papering over it in the UI: (1) raise `framePattern` max_tokens 1536 → 3072, (2) add `parseJsonLoose` — balanced-brace JSON extraction that survives model preambles/trailing notes, (3) add `withRetries` — 3 attempts, exponential backoff + jitter, applied to `framePattern`, `elicitNext`, and `scrubPII`. All existing null-contract fallbacks (deterministic ladder, fail-closed scrub, /frame retry route) stay as last-resort nets.
+
+**Options considered:** Client-side auto-retry of /api/codify/frame (hides the flake, doubles latency on every flake); polling the DB for the framework row (wrong diagnosis — there is no save/fetch race: the answer route generates and saves the framework server-side before responding, and only reports what the DB holds).
+
+**Reasoning:** Evidence, not guesswork. The done-test harness ran the OLD pipeline alongside the NEW one on the same 10 records: the OLD path failed record #9 with `stop_reason=max_tokens` at exactly 1536 output tokens — a truncated, unparseable JSON body. Root cause: rich 6-field records legitimately need >1536 tokens of framework JSON, and strict `parseJson` also rejected any preamble-wrapped output. Both were single-shot with no retry, so any transient miss surfaced to the user.
+
+**Result:** Done test PASSED — `scripts/codify-smoke.mjs` against the live Anthropic API: **NEW path 10/10 first-try renders, zero retries; OLD path 9/10** (reproduced the flake). Deterministic parser proof: preamble-wrapped JSON fails old strict parse, passes new loose parse. Also confirmed the P0 migration IS applied on the LIVE Supabase instance (`ekjhwyeipzmmncfedeqm`): all 22 `pattern_records` columns select cleanly over REST, and Brian's real completed record (with saved framework) is in the table. `tsc --noEmit` clean. Local and live hit the same hosted Supabase; the Claude calls in the test were live.
+
+**Next:** P-0.5 (methodology router, entity map) — next session.
