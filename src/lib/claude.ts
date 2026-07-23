@@ -1114,3 +1114,100 @@ export async function scoreConflictResolution(
     note: typeof parsed.note === "string" && parsed.note.trim() ? parsed.note.trim() : null,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// P-4A — Prescription Engine Claude helpers.
+// Doctrine: conservative bias — when torn between two rungs, choose the
+// LOWER; a wrong prescription wastes real people's time, so every helper
+// here fails open (model hiccup ⇒ no prescription, never a spurious one).
+// ─────────────────────────────────────────────────────────────────────────
+
+// Triage: size one detection onto the severity-matched intervention ladder.
+// Returns the chosen rung (1-4) plus a one-line rationale a human can read.
+// Returns null on any model/parse failure so the caller SKIPS the detection
+// (it stays open for the next run) rather than guessing a rung.
+export type PrescriptionTriage = {
+  rung: 1 | 2 | 3 | 4;
+  rationale: string;
+};
+
+export async function triagePrescriptionGap(
+  sourceType: string,
+  detectionSummary: string,
+  evidence: string
+): Promise<PrescriptionTriage | null> {
+  const prompt = await loadPrompt("prescription-triage", {
+    source_type: sourceType,
+    detection_summary: detectionSummary,
+    evidence,
+  });
+  return withRetries("triagePrescriptionGap", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as {
+      rung?: unknown;
+      rationale?: unknown;
+    } | null;
+    if (
+      !parsed ||
+      typeof parsed.rung !== "number" ||
+      ![1, 2, 3, 4].includes(parsed.rung) ||
+      typeof parsed.rationale !== "string" ||
+      !parsed.rationale.trim()
+    ) {
+      return null;
+    }
+    // One line, always — collapse any stray newlines and cap the length so
+    // the stored rationale stays scannable in the queue.
+    const rationale = parsed.rationale.trim().replace(/\s*\n+\s*/g, " ").slice(0, 300);
+    return { rung: parsed.rung as 1 | 2 | 3 | 4, rationale };
+  });
+}
+
+// Coverage tiebreak: a semantic near-match cleared the similarity threshold —
+// does that framework actually COVER the department's own territory, or just
+// sit near it? Doubt resolves to covers=true (suppress the prescription);
+// null (model failure) is treated by the caller the same way — fail open,
+// no prescription.
+export type CoverageJudgement = {
+  covers: boolean;
+  reason: string | null;
+};
+
+export async function checkCoverageGap(
+  department: string,
+  evidence: string,
+  frameworkText: string
+): Promise<CoverageJudgement | null> {
+  const prompt = await loadPrompt("coverage-check", {
+    department,
+    evidence,
+    framework: frameworkText,
+  });
+  return withRetries("checkCoverageGap", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 384,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as {
+      covers?: unknown;
+      reason?: unknown;
+    } | null;
+    if (!parsed || typeof parsed.covers !== "boolean") return null;
+    return {
+      covers: parsed.covers,
+      reason:
+        typeof parsed.reason === "string" && parsed.reason.trim()
+          ? parsed.reason.trim()
+          : null,
+    };
+  });
+}

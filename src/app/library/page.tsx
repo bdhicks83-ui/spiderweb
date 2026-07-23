@@ -107,6 +107,9 @@ export default function LibraryPage() {
             <a href="/conflicts" style={styles.conflictsLink}>
               ⚠️ Conflict X-ray
             </a>
+            <a href="/prescriptions" style={styles.newLink}>
+              💊 Prescriptions
+            </a>
             <a href="/codify" style={styles.newLink}>
               + Codify a pattern
             </a>
