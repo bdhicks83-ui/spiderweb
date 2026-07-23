@@ -13,12 +13,18 @@ import { embedText } from "@/lib/voyage";
 import type { FrameworkArtifact } from "@/lib/elicitation";
 
 // Below this cosine similarity a "match" is noise. A wrong framework is worse
-// than an empty result (a confident wrong answer erodes trust in the brain),
-// so this is set deliberately conservative for pattern-record retrieval — a
-// notch above Ask Your Spiderweb's 0.5 insight floor. Tuned initial value;
-// DECISION-LOG 2026-07-23 records the rationale. The noMatch response echoes
-// the top near-miss similarity so it can be re-tuned against live demo data.
-const SIMILARITY_THRESHOLD = 0.55;
+// than an empty result (a confident wrong answer erodes trust in the brain).
+//
+// TUNED against live demo data (DECISION-LOG 2026-07-23): voyage-large-2
+// compresses cosine similarity into a high band, so an absolute floor must sit
+// well up. Empirically, on-target frameworks for the seeded changeover/QC
+// situation scored ~0.85, while an unrelated cross-domain query (SaaS pricing)
+// topped out at ~0.69. 0.75 clears the bullseye frameworks with ~0.10 margin
+// and rejects the cross-domain query with ~0.06 margin. (An earlier 0.55 —
+// borrowed from Ask Your Spiderweb's insight floor — was far too low and let
+// unrelated queries through.) The noMatch response echoes the top near-miss so
+// this stays re-tunable as the library grows.
+const SIMILARITY_THRESHOLD = 0.75;
 const MATCH_COUNT = 5;
 
 const RESULT_COLUMNS =

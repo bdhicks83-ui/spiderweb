@@ -53,8 +53,10 @@ const PERSONA_LABEL: Record<string, string> = {
 };
 
 function matchLabel(similarity: number): string {
-  if (similarity >= 0.72) return "Strong match";
-  if (similarity >= 0.62) return "Good match";
+  // Everything shown already clears the 0.75 retrieval floor; these grade
+  // within the band voyage-large-2 actually produces for on-topic matches.
+  if (similarity >= 0.82) return "Strong match";
+  if (similarity >= 0.78) return "Good match";
   return "Possible match";
 }
 
