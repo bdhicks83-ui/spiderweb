@@ -101,6 +101,9 @@ export default function LibraryPage() {
         <div style={styles.headerRow}>
           <h1 style={styles.title}>🕸️ Team Library</h1>
           <div style={styles.headerLinks}>
+            <a href="/retrieve" style={styles.newLink}>
+              🔍 Ask the brain
+            </a>
             <a href="/conflicts" style={styles.conflictsLink}>
               ⚠️ Conflict X-ray
             </a>

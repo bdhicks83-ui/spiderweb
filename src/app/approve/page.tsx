@@ -27,6 +27,10 @@ export default function ApprovePage() {
   // First-ever-approval badge state
   const [priorApprovedCount, setPriorApprovedCount] = useState<number | null>(null);
   const [showFirstBadge, setShowFirstBadge] = useState(false);
+  // P-3 (Build 1) — embedding failures used to be swallowed here (fire-and-
+  // forget). Approval still succeeds immediately, but if the follow-on embed
+  // fails we now SAY so instead of pretending it worked.
+  const [embedWarning, setEmbedWarning] = useState<string | null>(null);
 
   useEffect(() => {
     loadInsights();
@@ -64,14 +68,29 @@ export default function ApprovePage() {
     setLoading(false);
   }
 
-  function fireEmbed(insightId: string) {
+  async function fireEmbed(insightId: string) {
     // This kicks off embedding, connection-building, the non-blocking
-    // consistency flag, and the quality score lock — all server-side.
-    fetch('/api/embed-insights', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ insight_id: insightId }),
-    }).catch(() => {});
+    // consistency flag, and the quality score lock — all server-side. Approval
+    // has already been saved; this runs after. It is no longer fire-and-forget:
+    // if the embed fails (e.g. a Voyage rate limit the server couldn't retry
+    // past), we surface a non-blocking notice so the insight can be re-embedded
+    // instead of silently never getting a vector.
+    try {
+      const res = await fetch('/api/embed-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insight_id: insightId }),
+      });
+      if (!res.ok) {
+        setEmbedWarning(
+          "Approved and saved — but search indexing for the last insight didn't complete. It'll be picked up on the next re-embed; nothing was lost."
+        );
+      }
+    } catch {
+      setEmbedWarning(
+        "Approved and saved — but search indexing for the last insight didn't complete (network hiccup). Nothing was lost."
+      );
+    }
   }
 
   // Shared post-approval: first-insight badge + advance to the next card.
@@ -92,6 +111,7 @@ export default function ApprovePage() {
     if (processing) return;
     setProcessing(true);
     setActionError(null);
+    setEmbedWarning(null);
     const current = insights[index];
     const { error } = await supabase
       .from('insights')
@@ -165,6 +185,7 @@ export default function ApprovePage() {
         <p>
           You reviewed {insights.length} insight{insights.length === 1 ? '' : 's'}.
         </p>
+        {embedWarning && <p style={styles.embedWarning}>{embedWarning}</p>}
         <button style={styles.secondaryButton} onClick={loadInsights}>
           Check for more
         </button>
@@ -187,6 +208,7 @@ export default function ApprovePage() {
       </div>
 
       {actionError && <p style={styles.errorText}>{actionError}</p>}
+      {embedWarning && <p style={styles.embedWarning}>{embedWarning}</p>}
 
       <div style={styles.buttonRow}>
         <button
@@ -266,6 +288,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#ef4444',
     fontSize: '14px',
     margin: 0,
+  },
+  embedWarning: {
+    color: '#92400e',
+    background: '#fffbeb',
+    border: '1px solid #fde68a',
+    borderRadius: '8px',
+    padding: '8px 12px',
+    fontSize: '13px',
+    margin: 0,
+    maxWidth: '600px',
+    textAlign: 'center',
+    lineHeight: 1.4,
   },
   buttonRow: {
     display: 'flex',

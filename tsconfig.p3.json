@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "src/lib/voyage.ts",
+    "src/lib/pattern-embedding.ts",
+    "src/lib/elicitation.ts",
+    "src/lib/claude.ts",
+    "src/lib/ask.ts",
+    "src/app/api/embed-insights/route.ts",
+    "src/app/api/embeddings/verify/route.ts",
+    "src/app/api/retrieve/route.ts",
+    "src/app/api/codify/answer/route.ts",
+    "src/app/api/codify/frame/route.ts",
+    "src/app/api/library/route.ts",
+    "src/app/retrieve/page.tsx",
+    "src/app/library/page.tsx",
+    "src/app/approve/page.tsx",
+    "src/app/dashboard/page.tsx"
+  ]
+}

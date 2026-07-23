@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { framePattern } from "@/lib/claude";
 import { EMPTY_FIELDS, isRecordComplete, mergeFields } from "@/lib/elicitation";
+import { embedPatternRecord } from "@/lib/pattern-embedding";
 
 export async function POST(req: NextRequest) {
   try {
@@ -84,7 +85,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ recordId: record.id, framework });
+    // P-3 (Build 2) — same auto-embed as the happy path in /api/codify/answer,
+    // so a framework generated via this retry route is retrievable too.
+    // Best-effort and non-blocking; reported honestly, never faked.
+    let embedded = false;
+    try {
+      const embedResult = await embedPatternRecord(supabase, record.id);
+      embedded = embedResult.ok;
+      if (!embedResult.ok) {
+        console.error(`codify/frame: embedding record ${record.id} failed:`, embedResult.error);
+      }
+    } catch (e) {
+      console.error(`codify/frame: embedding record ${record.id} threw:`, e);
+    }
+
+    return NextResponse.json({ recordId: record.id, framework, embedded });
   } catch (err) {
     console.error("Unexpected error in codify/frame route:", err);
     return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });

@@ -4,6 +4,7 @@ import { resolveGapsForInsight } from '@/lib/ask';
 import { maybeRebuildVoiceProfile } from '@/lib/voice';
 import { detectContradiction } from '@/lib/consistency';
 import { scoreInsightAtApproval } from '@/lib/insight-score';
+import { embedText } from '@/lib/voyage';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,26 +30,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Insight not found' }, { status: 404 });
     }
 
-    const voyageRes = await fetch('https://api.voyageai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        input: [insight.content],
-        model: 'voyage-large-2',
-      }),
-    });
-
-    if (!voyageRes.ok) {
-      const errText = await voyageRes.text();
-      return NextResponse.json({ error: `Voyage API failed: ${errText}` }, { status: 500 });
+    // Embed via the hardened Voyage client: 429-aware retry + backoff, and an
+    // explicit typed failure. This is the silent-fail fix — a rate-limited or
+    // transient failure now surfaces as an error the caller can see, and this
+    // route NEVER falls through to a success response without a real vector.
+    const embed = await embedText(insight.content);
+    if (!embed.ok) {
+      return NextResponse.json(
+        {
+          error: `Embedding failed: ${embed.error}`,
+          embedded: false,
+          rateLimited: embed.rateLimited,
+        },
+        // Retry-exhausted 429 / 5xx → 502 (upstream); a real 4xx passes through.
+        { status: embed.status && embed.status >= 400 && embed.status < 500 ? embed.status : 502 }
+      );
     }
-
-    const voyageData = await voyageRes.json();
-    const embedding = voyageData.data[0].embedding as number[];
-    const embeddingString = `[${embedding.join(',')}]`;
+    const embeddingString = embed.vector;
 
     const { error: updateError } = await supabase
       .from('insights')

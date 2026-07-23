@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { elicitNext, framePattern } from "@/lib/claude";
+import { embedPatternRecord } from "@/lib/pattern-embedding";
 import {
   EMPTY_FIELDS,
   MAX_QUESTIONS,
@@ -253,11 +254,32 @@ async function completeRecord(
     if (!frameworkError) savedFramework = framework;
   }
 
+  // P-3 (Build 2) — auto-embed on codify completion so a new framework is
+  // retrievable immediately and never silently left unembedded. Best-effort
+  // and non-blocking: a failure NEVER undoes completion (the answers are
+  // safe) — it just leaves embedding null, which the /api/embeddings/verify
+  // path + the backfill script will catch. We report `embedded` honestly so a
+  // failure is never dressed up as success. Requires the P-3 migration; if it
+  // hasn't run yet this simply returns embedded:false.
+  let embedded = false;
+  if (savedFramework) {
+    try {
+      const embedResult = await embedPatternRecord(supabase, recordId);
+      embedded = embedResult.ok;
+      if (!embedResult.ok) {
+        console.error(`codify/answer: embedding record ${recordId} failed:`, embedResult.error);
+      }
+    } catch (e) {
+      console.error(`codify/answer: embedding record ${recordId} threw:`, e);
+    }
+  }
+
   return NextResponse.json({
     done: true,
     recordId,
     record: fields,
     rungsReached: rungsReached(fields),
     framework: savedFramework, // null → UI shows a "generate framework" retry
+    embedded,
   });
 }

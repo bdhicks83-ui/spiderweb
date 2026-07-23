@@ -241,6 +241,19 @@ export default function DashboardPage() {
           <a href="/codify" style={styles.resumeBannerLink}>Start a session →</a>
         </div>
 
+        {/* P-3 — Contextual retrieval (the Copilot moment). Describe a
+            situation, get the org's matching framework(s). */}
+        <div style={styles.resumeBanner}>
+          <div>
+            <h2 style={styles.resumeBannerTitle}>🔍 Ask your team&apos;s brain</h2>
+            <p style={styles.resumeBannerSub}>
+              Describe a situation in plain language — the right codified framework surfaces,
+              in your team&apos;s own words.
+            </p>
+          </div>
+          <a href="/retrieve" style={styles.resumeBannerLink}>Find a framework →</a>
+        </div>
+
         {/* P-1 Build 2 — shared org library. Solo users with no org yet still
             see their own completed frameworks here (RLS falls back to
             own-rows-only), so this is additive, not a behavior change. */}
