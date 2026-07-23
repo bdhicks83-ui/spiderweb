@@ -1,9 +1,16 @@
 "use client";
 // Phase 6 Slice 1 — "It Grows": onboarding for brand-new users.
-// Step 0: goal fork (which track?) → steps 1-5: tailored questions →
-// answers POST to /api/onboarding (saves goal_track + creates the first
-// source, which flows through the existing extract-insights pipeline) →
-// then on to /upload as normal.
+// P-1 Build 3 adds a persona step BEFORE the goal fork: "Which best
+// describes you?" (exec | technical_director | sr_manager). This is the
+// expert-tier categorization the P-0.5 Methodology Router uses to shade
+// question wording in /codify (persona never changes which method gets
+// suggested — see ELICITATION-ENGINE-SPEC-ADDENDUM-2026-07-22 §1). It's a
+// one-time step: once profiles.persona is set, returning users skip straight
+// to the fork (or /upload, if they've also finished the fork already).
+// Step 0: persona → step 1: goal fork (which track?) → steps 2-6: tailored
+// questions → answers POST to /api/onboarding (saves goal_track + creates
+// the first source, which flows through the existing extract-insights
+// pipeline) → then on to /upload as normal.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -11,10 +18,32 @@ import { createClient } from "@/lib/supabase/client";
 const supabase = createClient();
 
 type Track = "content" | "career" | "licensing" | "recruiter";
+type Persona = "exec" | "technical_director" | "sr_manager";
 
 type Question =
   | { kind: "text"; prompt: string; placeholder?: string }
   | { kind: "multi"; prompt: string; hint: string; options: string[]; min: number; max?: number };
+
+const PERSONAS: { id: Persona; emoji: string; label: string; help: string }[] = [
+  {
+    id: "exec",
+    emoji: "\u{1F3AF}",
+    label: "Executive",
+    help: "Judgment-heavy — the call and the stakes, not the mechanics.",
+  },
+  {
+    id: "technical_director",
+    emoji: "\u{1F527}",
+    label: "Technical Director",
+    help: "Equipment / error-class / 5-Whys-heavy — the concrete detail.",
+  },
+  {
+    id: "sr_manager",
+    emoji: "\u{1F465}",
+    label: "Senior Manager",
+    help: "A blend of judgment and operational detail.",
+  },
+];
 
 const GOALS: { track: Track; emoji: string; label: string }[] = [
   { track: "content", emoji: "🎥", label: "Turn my knowledge into content (YouTube/blog/social)" },
@@ -146,7 +175,7 @@ const QUESTIONS: Record<Track, Question[]> = {
   ],
 };
 
-type Phase = "checking" | "fork" | "questions" | "submitting";
+type Phase = "checking" | "persona" | "fork" | "questions" | "submitting";
 
 export default function OnboardingPage() {
   const [phase, setPhase] = useState<Phase>("checking");
@@ -155,9 +184,12 @@ export default function OnboardingPage() {
   const [textAnswers, setTextAnswers] = useState<string[]>(Array(5).fill(""));
   const [multiAnswers, setMultiAnswers] = useState<Record<number, string[]>>({});
   const [error, setError] = useState("");
+  const [savingPersona, setSavingPersona] = useState(false);
   const router = useRouter();
 
   // Gate: must be logged in; already-onboarded users go straight to /upload.
+  // Users who've set a persona but not yet done the goal fork land on "fork";
+  // brand-new users land on "persona" first.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -169,7 +201,7 @@ export default function OnboardingPage() {
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("goal_track")
+        .select("goal_track, persona")
         .eq("id", user.id)
         .single();
       if (cancelled) return;
@@ -177,12 +209,34 @@ export default function OnboardingPage() {
         router.replace("/upload");
         return;
       }
-      setPhase("fork");
+      setPhase(profile?.persona ? "fork" : "persona");
     })();
     return () => {
       cancelled = true;
     };
   }, [router]);
+
+  async function choosePersona(persona: Persona) {
+    setSavingPersona(true);
+    setError("");
+    try {
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ persona }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error || "Something went wrong saving that. Try again.");
+        return;
+      }
+      setPhase("fork");
+    } catch {
+      setError("Something went wrong saving that. Try again.");
+    } finally {
+      setSavingPersona(false);
+    }
+  }
 
   const questions = track ? QUESTIONS[track] : [];
   const question = questions[step];
@@ -277,11 +331,36 @@ export default function OnboardingPage() {
     );
   }
 
-  if (phase === "fork") {
+  if (phase === "persona") {
     return (
       <div style={styles.page}>
         <h1 style={styles.h1}>Welcome to Human Bloom 🌸</h1>
-        <p style={styles.subtitle}>What are you hoping to get out of Human Bloom?</p>
+        <p style={styles.subtitle}>Which best describes you?</p>
+        <div style={styles.goalGrid}>
+          {PERSONAS.map((p) => (
+            <button
+              key={p.id}
+              style={styles.goalCard}
+              disabled={savingPersona}
+              onClick={() => choosePersona(p.id)}
+            >
+              <span style={styles.goalEmoji}>{p.emoji}</span>
+              <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={styles.goalLabel}>{p.label}</span>
+                <span style={styles.personaHelp}>{p.help}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        {error && <p style={styles.errorText}>{error}</p>}
+      </div>
+    );
+  }
+
+  if (phase === "fork") {
+    return (
+      <div style={styles.page}>
+        <h1 style={styles.h1}>What are you hoping to get out of Human Bloom?</h1>
         <div style={styles.goalGrid}>
           {GOALS.map((goal) => (
             <button
@@ -411,6 +490,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   goalLabel: {
     fontWeight: 600,
+  },
+  personaHelp: {
+    fontSize: "13px",
+    color: "#888",
+    fontWeight: 400,
   },
   trackBadge: {
     display: "inline-block",

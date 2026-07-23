@@ -225,7 +225,10 @@ export default function DashboardPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
-        <h1 style={styles.title}>Your Dashboard</h1>
+        <div style={styles.titleRow}>
+          <h1 style={styles.title}>Your Dashboard</h1>
+          <a href="/settings" style={styles.settingsLink}>Settings</a>
+        </div>
 
         <div style={styles.resumeBanner}>
           <div>
@@ -236,6 +239,19 @@ export default function DashboardPage() {
             </p>
           </div>
           <a href="/codify" style={styles.resumeBannerLink}>Start a session →</a>
+        </div>
+
+        {/* P-1 Build 2 — shared org library. Solo users with no org yet still
+            see their own completed frameworks here (RLS falls back to
+            own-rows-only), so this is additive, not a behavior change. */}
+        <div style={styles.resumeBanner}>
+          <div>
+            <h2 style={styles.resumeBannerTitle}>📚 Team Library</h2>
+            <p style={styles.resumeBannerSub}>
+              Every completed framework your org has captured, with attribution.
+            </p>
+          </div>
+          <a href="/library" style={styles.resumeBannerLink}>Browse library →</a>
         </div>
 
         <div style={styles.resumeBanner}>
@@ -608,6 +624,8 @@ const styles: Record<string, React.CSSProperties> = {
   container: { width: '100%', maxWidth: '640px', display: 'flex', flexDirection: 'column', gap: '20px' },
   center: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif' },
   title: { fontSize: '28px', fontWeight: 700, margin: 0 },
+  titleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' },
+  settingsLink: { fontSize: '13px', fontWeight: 600, color: '#666', textDecoration: 'none' },
   card: { padding: '24px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' },
   resumeBanner: { padding: '20px 24px', backgroundColor: '#111', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' },
   resumeBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: '#fff' },
