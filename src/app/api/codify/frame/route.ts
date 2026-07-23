@@ -1,15 +1,13 @@
-// P0 — Elicitation Engine: (re)generate the branded framework artifact for a
-// completed Pattern Record. POST { recordId }. Used when the artifact call
-// failed at completion time — the record (30 minutes of answers) is already
-// safe; this retries only the cheap final step.
+// P0 / P-0.5 — Elicitation Engine: (re)generate the branded framework artifact
+// for a completed Pattern Record. POST { recordId }. Used when the artifact
+// call failed at completion time — the record (the session's answers) is
+// already safe; this retries only the cheap final step. Also stamps
+// time-to-first-value on the FIRST successful render, same as the happy path
+// in /api/codify/answer, so a retried render still gets measured.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { framePattern } from "@/lib/claude";
-import {
-  EMPTY_FIELDS,
-  isRecordComplete,
-  mergeFields,
-} from "@/lib/elicitation";
+import { EMPTY_FIELDS, isRecordComplete, mergeFields } from "@/lib/elicitation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,7 +27,7 @@ export async function POST(req: NextRequest) {
     const { data: record, error: loadError } = await supabase
       .from("pattern_records")
       .select(
-        "id, status, context_summary, context_org_size, context_industry, context_function, situation_type, intervention_type, trigger_signal, signal_detail, judgment, rationale, boundaries"
+        "id, status, session_start, framework_rendered_at, context_summary, context_org_size, context_industry, context_function, situation_type, intervention_type, trigger_signal, signal_detail, judgment, rationale, boundaries, entity_map"
       )
       .eq("id", recordId)
       .single();
@@ -60,9 +58,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const updates: Record<string, unknown> = {
+      framework,
+      updated_at: new Date().toISOString(),
+    };
+    // Only stamp TTFV once — the first time a framework ever renders for this
+    // record, whether that happens on the happy path or on a retry here.
+    if (!record.framework_rendered_at) {
+      const renderedAt = new Date();
+      updates.framework_rendered_at = renderedAt.toISOString();
+      updates.time_to_first_value_seconds = Math.max(
+        0,
+        Math.round((renderedAt.getTime() - new Date(record.session_start).getTime()) / 1000)
+      );
+    }
+
     const { error: saveError } = await supabase
       .from("pattern_records")
-      .update({ framework, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq("id", record.id);
     if (saveError) {
       return NextResponse.json(

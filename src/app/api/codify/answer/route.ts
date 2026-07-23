@@ -1,27 +1,41 @@
-// P0 — Elicitation Engine, step 2: answer the pending ladder question.
+// P0 / P-0.5 — Elicitation Engine, step 2: answer the pending ladder question.
 // POST { recordId, answer }.
 //
 // Order of operations (the order IS the compliance story):
-//   1. Scrub the answer — client/individual names stripped BEFORE anything
-//      is stored. Scrub failure = FAIL CLOSED: nothing is saved, the user
-//      retries. An unscrubbed answer never touches the database.
-//   2. One elicitation turn — fold the scrubbed answer into the record
-//      fields, get the next ladder question or "done". Model failure falls
-//      back to the deterministic ladder question — a session can always
-//      converge.
-//   3. Completion gate — the model may claim done, but code enforces it:
-//      all 6 required fields, which by construction means rung 4 (Signal
-//      Detail) AND rung 6 (Boundaries) were reached.
-//   4. On completion, generate the branded framework artifact. If that one
-//      call fails, the record still completes — /api/codify/frame retries.
+//   1. Store the answer AS GIVEN. P-0.5 change (DECISION-LOG 2026-07-22):
+//      capture-time PII scrubbing is OFF. This system now captures INTERNAL
+//      organizational judgment (Track B pivot), and the entity map (field #8)
+//      exists specifically to keep named team members under org-scoped RLS —
+//      scrubbing the answer before storage would silently strip the very
+//      names the entity map is supposed to capture. The PII scrub still
+//      exists (`scrubForExport`) but only runs at export time (the PDF
+//      route), never at capture.
+//   2. One elicitation turn — fold the answer into the record fields
+//      (including the entity map), get the next ladder question or "done".
+//      Model failure falls back to the deterministic ladder question — a
+//      session can always converge. The method + persona (from the expert's
+//      profile) shade HOW the question is asked; router logic never changes.
+//   3. Completion gate — the model may claim done, but code enforces it: all
+//      6 original required fields AND a non-empty entity map (field #8),
+//      which by construction means rung 4 (Signal), rung 6 (Entities), and
+//      rung 7 (Boundaries) were reached.
+//   4. On completion, generate the branded framework artifact and stamp
+//      time-to-first-value (session_start -> framework_rendered_at). If the
+//      framework call fails, the record still completes — /api/codify/frame
+//      retries and stamps TTFV then instead.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { elicitNext, scrubPII, framePattern } from "@/lib/claude";
+import { elicitNext, framePattern } from "@/lib/claude";
 import {
   EMPTY_FIELDS,
   MAX_QUESTIONS,
+  isMethodId,
+  isTriggerType,
+  isPersona,
   type ElicitQA,
   type PatternFields,
+  type MethodId,
+  type TriggerType,
   fallbackQuestion,
   isRecordComplete,
   mergeFields,
@@ -35,12 +49,15 @@ type RecordRow = {
   pending_rung: number | null;
   status: string;
   scrub_status: string;
+  trigger_type: string | null;
+  method: string | null;
+  session_start: string;
 } & PatternFields;
 
 const FIELD_COLUMNS =
   "context_summary, context_org_size, context_industry, context_function, " +
   "situation_type, intervention_type, trigger_signal, signal_detail, " +
-  "judgment, rationale, boundaries";
+  "judgment, rationale, boundaries, entity_map";
 
 export async function POST(req: NextRequest) {
   try {
@@ -64,7 +81,7 @@ export async function POST(req: NextRequest) {
     const { data: record, error: loadError } = await supabase
       .from("pattern_records")
       .select(
-        `id, qa_pairs, pending_question, pending_rung, status, scrub_status, ${FIELD_COLUMNS}`
+        `id, qa_pairs, pending_question, pending_rung, status, scrub_status, trigger_type, method, session_start, ${FIELD_COLUMNS}`
       )
       .eq("id", recordId)
       .single();
@@ -79,65 +96,72 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
     }
-
-    // 1. Scrub BEFORE storage. Fail closed: a scrubber hiccup means nothing
-    //    is saved and the user simply retries — never "store now, scrub later".
-    const scrub = await scrubPII(answer.trim());
-    if (!scrub) {
+    if (!isMethodId(row.method) || !isTriggerType(row.trigger_type)) {
       return NextResponse.json(
         {
           error:
-            "Couldn't process that answer safely — nothing was saved. Please try again.",
+            "This session predates the methodology router and can't continue — please start a new one.",
         },
-        { status: 502 }
+        { status: 409 }
       );
     }
+    const method: MethodId = row.method;
+    const triggerType: TriggerType = row.trigger_type;
 
+    // Persona shades wording only — never routing/ladder logic. Best-effort:
+    // a lookup failure just falls back to neutral phrasing.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("persona")
+      .eq("id", user.id)
+      .maybeSingle();
+    const persona = isPersona(profile?.persona) ? profile.persona : null;
+
+    const trimmedAnswer = answer.trim();
     const currentFields = mergeFields(EMPTY_FIELDS, row);
     const qaPairs: ElicitQA[] = [
       ...(row.qa_pairs || []),
       {
         rung: row.pending_rung ?? 1,
         question: row.pending_question,
-        answer: scrub.scrubbed,
+        answer: trimmedAnswer,
       },
     ];
-    const scrubStatus =
-      scrub.changed || row.scrub_status === "scrubbed" ? "scrubbed" : "clean";
 
-    // 2. One elicitation turn. Model failure → deterministic ladder fallback.
+    // 2. One elicitation turn. Model failure -> deterministic ladder fallback.
     //    The model is ALWAYS called (it's the only thing that folds answers
-    //    into fields) — but past MAX_QUESTIONS its choice of question is
-    //    overridden by the scripted fallback below, so late questions target
-    //    only the still-missing required rungs and the session converges.
+    //    into fields, including the entity map) — but past MAX_QUESTIONS its
+    //    choice of question is overridden by the scripted fallback below, so
+    //    late questions target only the still-missing required rungs and the
+    //    session converges.
     const maxRemaining = Math.max(0, MAX_QUESTIONS - qaPairs.length);
     const atCap = qaPairs.length >= MAX_QUESTIONS;
     const step = await elicitNext(
       currentFields,
       qaPairs,
-      scrub.scrubbed,
-      maxRemaining
+      trimmedAnswer,
+      maxRemaining,
+      method,
+      triggerType,
+      persona
     );
     const fields = step ? step.fields : currentFields;
 
     // 3. Completion gate — code-enforced, never model-trusted. All 6 required
-    //    fields ⇒ rung 4 (signal_detail) and rung 6 (boundaries) were reached.
+    //    string fields + a non-empty entity map (field #8) ⇒ rungs 4, 6, and
+    //    7 (signal_detail, entity_map, boundaries) were reached.
     const complete = isRecordComplete(fields) && (step?.done ?? false);
 
     if (!complete) {
-      // Next question: the model's, or the scripted question for the lowest
-      // missing rung when the model stalled, claimed done too early, or the
-      // question cap has been reached (cap ⇒ deterministic required-field
-      // questions only — no more exploratory rungs).
       const next =
         !atCap && step && !step.done && step.question && step.nextRung
           ? { rung: step.nextRung, question: step.question }
-          : fallbackQuestion(fields);
+          : fallbackQuestion(fields, method);
 
       if (!next) {
         // Every required field is filled but the model didn't say done —
         // treat as complete rather than asking a question we can't pick.
-        return completeRecord(supabase, row.id, fields, qaPairs, scrubStatus);
+        return completeRecord(supabase, row.id, fields, qaPairs, row.session_start);
       }
 
       const { error: updateError } = await supabase
@@ -147,7 +171,6 @@ export async function POST(req: NextRequest) {
           qa_pairs: qaPairs,
           pending_question: next.question,
           pending_rung: next.rung,
-          scrub_status: scrubStatus,
           updated_at: new Date().toISOString(),
         })
         .eq("id", row.id);
@@ -167,26 +190,26 @@ export async function POST(req: NextRequest) {
         questionNumber: qaPairs.length + 1,
         maxQuestions: MAX_QUESTIONS,
         rungsReached: rungsReached(fields),
-        scrubbed: scrub.changed,
       });
     }
 
-    return completeRecord(supabase, row.id, fields, qaPairs, scrubStatus);
+    return completeRecord(supabase, row.id, fields, qaPairs, row.session_start);
   } catch (err) {
     console.error("Unexpected error in codify/answer route:", err);
     return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });
   }
 }
 
-// 4. Mark the record complete, then generate the branded framework artifact.
-//    Artifact failure does NOT undo completion — the UI offers a retry via
-//    /api/codify/frame, so the 30 minutes of answers are never at risk.
+// 4. Mark the record complete, then generate the branded framework artifact
+//    and stamp time-to-first-value. Artifact failure does NOT undo
+//    completion — the UI offers a retry via /api/codify/frame, so the
+//    session's answers are never at risk.
 async function completeRecord(
   supabase: Awaited<ReturnType<typeof createClient>>,
   recordId: string,
   fields: PatternFields,
   qaPairs: ElicitQA[],
-  scrubStatus: string
+  sessionStart: string
 ) {
   const { error: completeError } = await supabase
     .from("pattern_records")
@@ -196,7 +219,6 @@ async function completeRecord(
       pending_question: null,
       pending_rung: null,
       status: "complete",
-      scrub_status: scrubStatus,
       updated_at: new Date().toISOString(),
     })
     .eq("id", recordId);
@@ -214,9 +236,19 @@ async function completeRecord(
   let savedFramework = null;
   const framework = await framePattern(fields);
   if (framework) {
+    const renderedAt = new Date();
+    const ttfvSeconds = Math.max(
+      0,
+      Math.round((renderedAt.getTime() - new Date(sessionStart).getTime()) / 1000)
+    );
     const { error: frameworkError } = await supabase
       .from("pattern_records")
-      .update({ framework, updated_at: new Date().toISOString() })
+      .update({
+        framework,
+        framework_rendered_at: renderedAt.toISOString(),
+        time_to_first_value_seconds: ttfvSeconds,
+        updated_at: renderedAt.toISOString(),
+      })
       .eq("id", recordId);
     if (!frameworkError) savedFramework = framework;
   }

@@ -1,11 +1,21 @@
 'use client';
 
-// P0 — Codify a Pattern: the 30-minute elicitation session. Answer ladder
-// questions about work you already did; walk out with one branded framework
-// you'd put in a client proposal. Mirrors the Ask page's chat pattern.
-// Auth is enforced by the API routes (401 → friendly message).
+// P0 / P-0.5 — Codify a Pattern: the elicitation session. Opens with the
+// Methodology Router ("What are we capturing?"), suggests a method, then
+// runs an 8-rung ladder (rung 6 is the new Entity Map) ending in one branded
+// framework you'd put in a proposal or team playbook. Mirrors the Ask page's
+// chat pattern. Auth is enforced by the API routes (401 → friendly message).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import {
+  TRIGGER_TYPES,
+  METHODS,
+  RUNG_LABELS,
+  suggestedMethodFor,
+  type TriggerType,
+  type MethodId,
+  type EntityType,
+} from '@/lib/elicitation';
 
 type Framework = {
   name: string;
@@ -17,6 +27,8 @@ type Framework = {
   boundaries: string[];
 };
 
+type EntityMapEntry = { type: EntityType; name: string; detail: string | null };
+
 type PatternRecord = {
   context_summary: string | null;
   trigger_signal: string | null;
@@ -24,12 +36,31 @@ type PatternRecord = {
   judgment: string | null;
   rationale: string | null;
   boundaries: string | null;
+  entity_map: EntityMapEntry[];
 };
 
 type Turn = { role: 'you' | 'engine'; text: string };
 
+type ResumableSession = {
+  recordId: string;
+  question: string;
+  rung: number;
+  questionNumber: number;
+  rungsReached: number[];
+  triggerType: TriggerType;
+  method: MethodId;
+  sessionStart: string;
+};
+
 type CodifyState =
-  | { phase: 'idle' }
+  | { phase: 'loading' }
+  | { phase: 'trigger-select'; resumable: ResumableSession | null }
+  | {
+      phase: 'method-select';
+      trigger: TriggerType;
+      method: MethodId;
+      resumable: ResumableSession | null;
+    }
   | { phase: 'starting' }
   | {
       phase: 'interview';
@@ -39,6 +70,9 @@ type CodifyState =
       questionNumber: number;
       rungsReached: number[];
       sending: boolean;
+      triggerType: TriggerType;
+      method: MethodId;
+      sessionStart: string;
     }
   | { phase: 'error'; message: string }
   | {
@@ -49,45 +83,119 @@ type CodifyState =
       framework: Framework | null;
       framing: boolean;
       frameError: string | null;
+      triggerType: TriggerType;
+      method: MethodId;
     };
 
-const RUNGS: { n: number; label: string }[] = [
-  { n: 1, label: 'Situate' },
-  { n: 2, label: 'Classify' },
-  { n: 3, label: 'The call' },
-  { n: 4, label: 'The signal' },
-  { n: 5, label: 'Reasoning' },
-  { n: 6, label: 'Boundaries' },
-  { n: 7, label: 'Generalize' },
-];
+const RUNGS = Object.entries(RUNG_LABELS).map(([n, label]) => ({ n: Number(n), label }));
+
+const ENTITY_META: Record<EntityType, { emoji: string; label: string }> = {
+  equipment_asset: { emoji: '\u{1F3ED}', label: 'Equipment/asset' },
+  process: { emoji: '⚙️', label: 'Process' },
+  error_class: { emoji: '❌', label: 'Error class' },
+  role_person: { emoji: '\u{1F464}', label: 'Role/person' },
+  department: { emoji: '\u{1F3E2}', label: 'Department' },
+};
+
+const SOFT_WARNING_MIN = 15;
+const HARD_CAP_MIN = 20;
+
+function minutesSince(iso: string, nowMs: number): number {
+  return (nowMs - new Date(iso).getTime()) / 60000;
+}
 
 export default function CodifyPage() {
   const [input, setInput] = useState('');
   const [transcript, setTranscript] = useState<Turn[]>([]);
-  const [state, setState] = useState<CodifyState>({ phase: 'idle' });
-  const [scrubNotice, setScrubNotice] = useState(false);
+  const [state, setState] = useState<CodifyState>({ phase: 'loading' });
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [now, setNow] = useState<number>(0);
+  const [pausedNotice, setPausedNotice] = useState(false);
 
   const busy =
     state.phase === 'starting' ||
     (state.phase === 'interview' && state.sending);
 
+  // Check once for an in-progress session so the router screen can offer
+  // "resume where you left off" (P-0.5 session guardrails).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/codify');
+        const data = await res.json();
+        if (cancelled) return;
+        setState({ phase: 'trigger-select', resumable: data?.active ?? null });
+      } catch {
+        if (!cancelled) setState({ phase: 'trigger-select', resumable: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Session timer tick — only matters during an interview. 20s resolution is
+  // plenty for a 15/20-minute cap and keeps re-renders cheap.
+  useEffect(() => {
+    if (state.phase !== 'interview') return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 20000);
+    return () => clearInterval(id);
+  }, [state.phase]);
+
   function fail(message: string) {
     setState({ phase: 'error', message });
   }
 
-  async function start() {
+  function pickTrigger(trigger: TriggerType) {
+    if (state.phase !== 'trigger-select') return;
+    setState({
+      phase: 'method-select',
+      trigger,
+      method: suggestedMethodFor(trigger),
+      resumable: state.resumable,
+    });
+  }
+
+  async function resumeSession(r: ResumableSession) {
+    setTranscript([
+      {
+        role: 'engine',
+        text: `▶ Resumed — picking up at rung ${r.rung} (${RUNG_LABELS[r.rung] ?? ''}).`,
+      },
+      { role: 'engine', text: r.question },
+    ]);
+    setState({
+      phase: 'interview',
+      recordId: r.recordId,
+      question: r.question,
+      rung: r.rung,
+      questionNumber: r.questionNumber,
+      rungsReached: r.rungsReached,
+      sending: false,
+      triggerType: r.triggerType,
+      method: r.method,
+      sessionStart: r.sessionStart,
+    });
+  }
+
+  async function start(triggerType: TriggerType, method: MethodId) {
     if (busy) return;
     setTranscript([]);
-    setScrubNotice(false);
     setPdfError(null);
     setAnswerError(null);
+    setPausedNotice(false);
     setState({ phase: 'starting' });
 
     try {
-      const res = await fetch('/api/codify', { method: 'POST' });
+      const res = await fetch('/api/codify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ triggerType, method }),
+      });
       const data = await res.json();
       if (res.status === 401) return fail('Please log in to codify a pattern.');
       if (!res.ok) return fail(data.error || 'Something went wrong. Try again.');
@@ -101,6 +209,9 @@ export default function CodifyPage() {
         questionNumber: data.questionNumber,
         rungsReached: [],
         sending: false,
+        triggerType: data.triggerType,
+        method: data.method,
+        sessionStart: data.sessionStart,
       });
     } catch {
       fail('Something went wrong. Try again.');
@@ -126,8 +237,8 @@ export default function CodifyPage() {
 
       if (res.status === 401) return fail('Please log in to codify a pattern.');
       if (!res.ok) {
-        // Scrub/model hiccup: nothing was saved — put the answer back so one
-        // click retries it, and drop the optimistic transcript turn.
+        // Model hiccup: nothing was saved — put the answer back so one click
+        // retries it, and drop the optimistic transcript turn.
         setTranscript((t) => t.slice(0, -1));
         setInput(a);
         setState({ ...state, sending: false });
@@ -137,8 +248,6 @@ export default function CodifyPage() {
         return;
       }
       setAnswerError(null);
-
-      if (data.scrubbed) setScrubNotice(true);
 
       if (!data.done) {
         setTranscript((t) => [...t, { role: 'engine', text: data.question }]);
@@ -150,6 +259,9 @@ export default function CodifyPage() {
           questionNumber: data.questionNumber,
           rungsReached: data.rungsReached || [],
           sending: false,
+          triggerType: state.triggerType,
+          method: state.method,
+          sessionStart: state.sessionStart,
         });
         return;
       }
@@ -164,10 +276,30 @@ export default function CodifyPage() {
         frameError: data.framework
           ? null
           : 'The framework didn’t render on the first try — your record is saved. Generate it below.',
+        triggerType: state.triggerType,
+        method: state.method,
       });
     } catch {
       fail('Something went wrong. Try again.');
     }
+  }
+
+  function pauseSession() {
+    if (state.phase !== 'interview') return;
+    setPausedNotice(true);
+    setState({
+      phase: 'trigger-select',
+      resumable: {
+        recordId: state.recordId,
+        question: state.question,
+        rung: state.rung,
+        questionNumber: state.questionNumber,
+        rungsReached: state.rungsReached,
+        triggerType: state.triggerType,
+        method: state.method,
+        sessionStart: state.sessionStart,
+      },
+    });
   }
 
   async function generateFramework() {
@@ -239,62 +371,180 @@ export default function CodifyPage() {
     state.phase === 'interview' || state.phase === 'done' ? state.rungsReached : [];
   const currentRung = state.phase === 'interview' ? state.rung : null;
 
+  const elapsedMin =
+    state.phase === 'interview' && now ? minutesSince(state.sessionStart, now) : 0;
+  const showSoftWarning = interviewing && elapsedMin >= SOFT_WARNING_MIN && elapsedMin < HARD_CAP_MIN;
+  const showHardCap = interviewing && elapsedMin >= HARD_CAP_MIN;
+
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
         <h1 style={styles.title}>Codify a pattern</h1>
         <p style={styles.subtitle}>
-          A short interview about work you&apos;ve already done. Answer in your own
-          words — at the end you get a branded framework you could put in a
-          proposal.
+          A short interview about a situation worth capturing. Answer in your own
+          words — at the end you get a branded framework you could reuse or hand
+          to your team.
         </p>
 
-        {state.phase === 'idle' && (
-          <div style={styles.introCard}>
-            <p style={styles.introText}>
-              Think of one engagement where you made a judgment call you&apos;d stand
-              behind. The interview digs for what you <em>saw</em> — the read that
-              others would have missed — and where that call would <em>not</em> apply.
-              Usually 5–7 questions.
-            </p>
-            <p style={styles.nudge}>
-              🔒 Roles, not names — say &ldquo;the AP clerk,&rdquo; not her name.
-              Client and personal names are stripped automatically before anything
-              is stored.
-            </p>
-            <button style={styles.primary} onClick={start}>
-              Start a session
-            </button>
-          </div>
+        {state.phase === 'loading' && <p style={styles.loadingText}>Loading…</p>}
+
+        {pausedNotice && (
+          <p style={styles.scrubNotice}>
+            {'\u{1F4BE}'} Saved — your progress is right where you left it. Resume anytime below.
+          </p>
         )}
 
-        {(interviewing || state.phase === 'done') && (
-          <div style={styles.ladder}>
-            {RUNGS.map((r) => {
-              const isReached = reached.includes(r.n);
-              const isCurrent = currentRung === r.n;
+        {state.phase === 'trigger-select' && (
+          <>
+            {(() => {
+              const resumable = state.resumable;
+              if (!resumable) return null;
               return (
-                <div key={r.n} style={styles.ladderStep}>
-                  <span
-                    style={{
-                      ...styles.ladderDot,
-                      ...(isReached ? styles.ladderDotReached : {}),
-                      ...(isCurrent ? styles.ladderDotCurrent : {}),
-                    }}
-                  >
-                    {isReached ? '✓' : r.n}
-                  </span>
-                  <span
-                    style={{
-                      ...styles.ladderLabel,
-                      ...(isReached || isCurrent ? styles.ladderLabelActive : {}),
-                    }}
-                  >
-                    {r.label}
-                  </span>
+                <div style={styles.resumeCard}>
+                  <p style={styles.introText}>
+                    You have a session in progress — started {Math.round(
+                      minutesSince(resumable.sessionStart, Date.now())
+                    )} min ago, at rung {resumable.rung} ({RUNG_LABELS[resumable.rung]}).
+                  </p>
+                  <div style={styles.actionRow}>
+                    <button style={styles.primary} onClick={() => resumeSession(resumable)}>
+                      Resume where you left off
+                    </button>
+                    <button
+                      style={styles.ghost}
+                      onClick={() => setState({ phase: 'trigger-select', resumable: null })}
+                    >
+                      Start fresh instead
+                    </button>
+                  </div>
                 </div>
               );
-            })}
+            })()}
+
+            <div style={styles.introCard}>
+              <p style={styles.introText}>What are we capturing?</p>
+              <div style={styles.triggerGrid}>
+                {TRIGGER_TYPES.map((t) => (
+                  <button key={t.id} style={styles.triggerCard} onClick={() => pickTrigger(t.id)}>
+                    <span style={styles.triggerEmoji}>{t.emoji}</span>
+                    <span style={styles.triggerLabel}>{t.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p style={styles.nudge}>
+                {'\u{1F512}'} Names of people on your own team are fine to use — they stay
+                private inside your organization, and are only stripped from
+                anything you export outside it.
+              </p>
+            </div>
+          </>
+        )}
+
+        {state.phase === 'method-select' && (() => {
+          const { trigger, method, resumable } = state;
+          const triggerMeta = TRIGGER_TYPES.find((t) => t.id === trigger);
+          return (
+            <div style={styles.introCard}>
+              <p style={styles.introText}>
+                {triggerMeta?.emoji} {triggerMeta?.label}
+              </p>
+              <div style={styles.methodCard}>
+                <span style={styles.frameworkKicker}>Suggested method</span>
+                <h2 style={styles.methodName}>{METHODS[method].name}</h2>
+                <p style={styles.frameworkTagline}>
+                  {METHODS[method].origin} · outputs a {METHODS[method].outputLabel.toLowerCase()}
+                </p>
+                <p style={styles.introText}>
+                  {method === suggestedMethodFor(trigger)
+                    ? triggerMeta?.why
+                    : 'You’ve swapped off the suggested method — that’s fine, use whatever fits.'}
+                </p>
+              </div>
+
+              <div style={styles.actionRow}>
+                <button style={styles.primary} onClick={() => start(trigger, method)}>
+                  Use this method
+                </button>
+              </div>
+
+              <details style={styles.swapDetails}>
+                <summary style={styles.swapSummary}>Choose a different method</summary>
+                <div style={styles.methodList}>
+                  {(Object.keys(METHODS) as MethodId[]).map((m) => (
+                    <button
+                      key={m}
+                      style={{
+                        ...styles.methodListItem,
+                        ...(m === method ? styles.methodListItemActive : {}),
+                      }}
+                      onClick={() => setState({ phase: 'method-select', trigger, method: m, resumable })}
+                    >
+                      <strong>{METHODS[m].name}</strong>
+                      <span style={styles.methodListMeta}>
+                        {METHODS[m].origin} · {METHODS[m].outputLabel}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            </div>
+          );
+        })()}
+
+        {(interviewing || state.phase === 'done') && (
+          <>
+            <div style={styles.ladder}>
+              {RUNGS.map((r) => {
+                const isReached = reached.includes(r.n);
+                const isCurrent = currentRung === r.n;
+                return (
+                  <div key={r.n} style={styles.ladderStep}>
+                    <span
+                      style={{
+                        ...styles.ladderDot,
+                        ...(isReached ? styles.ladderDotReached : {}),
+                        ...(isCurrent ? styles.ladderDotCurrent : {}),
+                      }}
+                    >
+                      {isReached ? '✓' : r.n}
+                    </span>
+                    <span
+                      style={{
+                        ...styles.ladderLabel,
+                        ...(isReached || isCurrent ? styles.ladderLabelActive : {}),
+                      }}
+                    >
+                      {r.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {(state.phase === 'interview' || state.phase === 'done') && (
+              <p style={styles.methodBadgeRow}>
+                {TRIGGER_TYPES.find((t) => t.id === state.triggerType)?.emoji}{' '}
+                {TRIGGER_TYPES.find((t) => t.id === state.triggerType)?.label} · {METHODS[state.method].name}
+              </p>
+            )}
+          </>
+        )}
+
+        {showSoftWarning && (
+          <p style={styles.softWarning}>
+            ⏱ {Math.round(elapsedMin)} min in — most sessions wrap by 20. Keep
+            going, or wrap up whenever feels right.
+          </p>
+        )}
+        {showHardCap && (
+          <div style={styles.hardCapCard}>
+            <p style={styles.hardCapText}>
+              ⏱ {Math.round(elapsedMin)} min — your answers are already saved
+              after every question. Keep going, or pause and pick up right where
+              you left off later.
+            </p>
+            <button style={styles.ghost} onClick={pauseSession}>
+              Pause for now
+            </button>
           </div>
         )}
 
@@ -332,7 +582,7 @@ export default function CodifyPage() {
                 disabled={busy}
               />
               <div style={styles.inputMetaRow}>
-                <span style={styles.nudgeInline}>🔒 Roles, not names</span>
+                <span style={styles.nudgeInline}>{'\u{1F512}'} Team names OK — kept internal</span>
                 <button
                   style={{
                     ...styles.primary,
@@ -351,12 +601,6 @@ export default function CodifyPage() {
             {answerError && !state.sending && (
               <p style={styles.errorText}>{answerError}</p>
             )}
-            {scrubNotice && (
-              <p style={styles.scrubNotice}>
-                🔒 A name was replaced with a role before saving — only the
-                anonymized version is stored.
-              </p>
-            )}
           </>
         )}
 
@@ -368,7 +612,19 @@ export default function CodifyPage() {
 
         {state.phase === 'done' && (
           <>
-            <p style={styles.doneBadge}>✅ Pattern captured — all six fields, boundaries included.</p>
+            <p style={styles.doneBadge}>
+              ✅ Pattern captured — {METHODS[state.method].name}, all eight fields including entities and boundaries.
+            </p>
+
+            {state.record.entity_map.length > 0 && (
+              <div style={styles.entityRow}>
+                {state.record.entity_map.map((e, i) => (
+                  <span key={i} style={styles.entityChip}>
+                    {ENTITY_META[e.type].emoji} {e.name}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {state.framework ? (
               <>
@@ -423,7 +679,10 @@ export default function CodifyPage() {
                   >
                     {pdfLoading ? 'Building PDF…' : 'Download as branded PDF'}
                   </button>
-                  <button style={styles.ghost} onClick={start}>
+                  <button
+                    style={styles.ghost}
+                    onClick={() => setState({ phase: 'trigger-select', resumable: null })}
+                  >
                     Codify another pattern
                   </button>
                 </div>
@@ -484,6 +743,62 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '12px',
   },
   introText: { margin: 0, fontSize: '15px', lineHeight: 1.6, color: '#333' },
+  resumeCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    padding: '16px 20px',
+    backgroundColor: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    borderRadius: '12px',
+  },
+  triggerGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+    gap: '10px',
+  },
+  triggerCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '18px 12px',
+    backgroundColor: '#fafafa',
+    border: '1px solid #e5e5e5',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  triggerEmoji: { fontSize: '26px' },
+  triggerLabel: { fontSize: '13px', fontWeight: 600, color: '#222', textAlign: 'center' },
+  methodCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '16px 18px',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
+  },
+  methodName: { fontSize: '20px', fontWeight: 700, margin: 0 },
+  swapDetails: { marginTop: '2px' },
+  swapSummary: { fontSize: '13px', color: '#666', cursor: 'pointer' },
+  methodList: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' },
+  methodListItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    textAlign: 'left',
+    padding: '10px 14px',
+    backgroundColor: '#fff',
+    border: '1px solid #e0e0e0',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  methodListItemActive: { borderColor: '#111', backgroundColor: '#f5f5f5' },
+  methodListMeta: { fontSize: '12px', color: '#888' },
+  methodBadgeRow: { fontSize: '13px', color: '#888', margin: 0 },
   nudge: {
     margin: 0,
     fontSize: '13px',
@@ -529,6 +844,27 @@ const styles: Record<string, React.CSSProperties> = {
   },
   ladderLabel: { fontSize: '12px', color: '#aaa' },
   ladderLabelActive: { color: '#333', fontWeight: 600 },
+  softWarning: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#92400e',
+    backgroundColor: '#fffbeb',
+    border: '1px solid #fde68a',
+    borderRadius: '8px',
+    padding: '10px 12px',
+  },
+  hardCapCard: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '10px',
+    flexWrap: 'wrap',
+    padding: '12px 16px',
+    backgroundColor: '#fff7ed',
+    border: '1px solid #fed7aa',
+    borderRadius: '10px',
+  },
+  hardCapText: { margin: 0, fontSize: '13px', color: '#9a3412', flex: '1 1 260px' },
   transcript: { display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' },
   bubble: {
     display: 'flex',
@@ -613,6 +949,16 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 16px',
     margin: 0,
     alignSelf: 'flex-start',
+  },
+  entityRow: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+  entityChip: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#334155',
+    backgroundColor: '#f1f5f9',
+    border: '1px solid #e2e8f0',
+    borderRadius: '9999px',
+    padding: '5px 10px',
   },
   frameworkCard: {
     padding: '28px',

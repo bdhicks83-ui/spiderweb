@@ -463,7 +463,14 @@ import {
   type PatternFields,
   type ElicitQA,
   type FrameworkArtifact,
+  type MethodId,
+  type TriggerType,
+  type Persona,
   EMPTY_FIELDS,
+  TRIGGER_TYPES,
+  METHODS,
+  methodPromptFile,
+  personaPromptFile,
   formatRecordState,
   formatElicitQAPairs,
   mergeFields,
@@ -485,9 +492,23 @@ export async function elicitNext(
   currentFields: PatternFields,
   qaPairs: ElicitQA[],
   latestAnswer: string,
-  maxRemaining: number
+  maxRemaining: number,
+  method: MethodId,
+  triggerType: TriggerType,
+  persona: Persona | null
 ): Promise<ElicitStep | null> {
+  const methodMeta = METHODS[method];
+  const triggerMeta = TRIGGER_TYPES.find((t) => t.id === triggerType);
+  const [methodGuidance, personaGuidance] = await Promise.all([
+    loadPrompt(methodPromptFile(method)),
+    loadPrompt(personaPromptFile(persona)),
+  ]);
   const prompt = await loadPrompt("elicit-next", {
+    trigger_label: triggerMeta ? `${triggerMeta.emoji} ${triggerMeta.label}` : "a captured situation",
+    method_name: methodMeta.name,
+    method_origin: methodMeta.origin,
+    method_guidance: methodGuidance,
+    persona_guidance: personaGuidance,
     record_state: formatRecordState(currentFields),
     qa_pairs: formatElicitQAPairs(qaPairs),
     latest_answer: latestAnswer,
@@ -517,7 +538,8 @@ export async function elicitNext(
       parsed.fields && typeof parsed.fields === "object"
         ? (parsed.fields as Partial<Record<keyof PatternFields, unknown>>)
         : ({} as Partial<Record<keyof PatternFields, unknown>>);
-    // mergeFields guarantees a dropped key never erases captured content.
+    // mergeFields guarantees a dropped key never erases captured content, and
+    // unions the entity map instead of overwriting it.
     const fields = mergeFields(mergeFields(EMPTY_FIELDS, currentFields), rawFields);
 
     if (parsed.done) {
@@ -528,7 +550,7 @@ export async function elicitNext(
       !parsed.question.trim() ||
       typeof parsed.next_rung !== "number" ||
       parsed.next_rung < 1 ||
-      parsed.next_rung > 7
+      parsed.next_rung > 8
     ) {
       return null;
     }
@@ -552,6 +574,40 @@ export async function scrubPII(text: string): Promise<ScrubResult | null> {
   // attempts still blocks storage of an unscrubbed answer — the retries only
   // reduce how often a transient hiccup forces the user to resubmit.
   return withRetries("scrubPII", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const out = firstText(msg.content as { type: string; text?: string }[]);
+    if (!out) return null;
+    const parsed = parseJsonLoose(out) as {
+      scrubbed?: unknown;
+      changed?: unknown;
+    } | null;
+    if (
+      !parsed ||
+      typeof parsed.scrubbed !== "string" ||
+      !parsed.scrubbed.trim() ||
+      typeof parsed.changed !== "boolean"
+    ) {
+      return null;
+    }
+    return { scrubbed: parsed.scrubbed.trim(), changed: parsed.changed };
+  });
+}
+
+// P-0.5 — export-time PII scrub. DECISION-LOG 2026-07-22: capture-time
+// scrubbing of the entity map (and, by extension, of names an expert offers
+// in any field) is deliberately OFF for internal storage — the entity map
+// exists specifically to keep names, under org-scoped RLS, so pairing/Win
+// Column features (P-1/P-4.5) can use them. Scrubbing only happens here, at
+// the moment content is about to leave the org (currently: the framework PDF
+// export in /api/codify/pdf). Returns null on failure — callers should FAIL
+// CLOSED for export (better to block an export than ship an unscrubbed one).
+export async function scrubForExport(text: string): Promise<ScrubResult | null> {
+  const prompt = await loadPrompt("scrub-for-export", { text });
+  return withRetries("scrubForExport", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 2048,

@@ -6,7 +6,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { FrameworkDocument, type FrameworkPdfData } from "@/lib/framework-pdf";
-import { isFrameworkArtifact } from "@/lib/elicitation";
+import { isFrameworkArtifact, type FrameworkArtifact } from "@/lib/elicitation";
+import { scrubForExport } from "@/lib/claude";
+
+// P-0.5 — export-time PII scrub (DECISION-LOG 2026-07-22). The framework is
+// stored with full fidelity (names, if any, kept). The instant it's about to
+// leave the org as a PDF, run it through the export scrubber. Best-effort:
+// framePattern's own prompt already forbids naming a client or individual in
+// the framework, so this is defense-in-depth — a scrub failure logs a
+// warning and exports the framework as stored rather than blocking the
+// consultant's download.
+async function scrubFrameworkForExport(framework: FrameworkArtifact): Promise<FrameworkArtifact> {
+  const scrub = await scrubForExport(JSON.stringify(framework));
+  if (!scrub) {
+    console.warn("scrubForExport: model call failed — exporting framework as stored");
+    return framework;
+  }
+  try {
+    const parsed = JSON.parse(scrub.scrubbed);
+    if (isFrameworkArtifact(parsed)) return parsed;
+  } catch {
+    // fall through to the warning below
+  }
+  console.warn("scrubForExport: returned an unusable shape — exporting framework as stored");
+  return framework;
+}
 
 function slugify(text: string): string {
   return (
@@ -77,10 +101,12 @@ export async function POST(req: NextRequest) {
       record.context_org_size ? `${record.context_org_size} people` : null,
     ].filter(Boolean) as string[];
 
+    const exportFramework = await scrubFrameworkForExport(record.framework);
+
     const data: FrameworkPdfData = {
       consultantName: nameOverride || titleCaseFromEmail(user.email || ""),
       consultantTitle: profile?.claimed_title || null,
-      framework: record.framework,
+      framework: exportFramework,
       contextLine: contextParts.length > 0 ? contextParts.join(" · ") : null,
     };
 
