@@ -10,3 +10,4 @@ build/
 next-env.d.ts
 .DS_Store
 memory/
+_to_delete/

@@ -1,1 +1,0 @@
-PERSONA — Not yet set on this expert's profile. Use plain, neutral professional language — neither heavy executive trade-off framing nor heavy technical/mechanical framing. Ask direct, concrete questions and let the expert's own vocabulary guide how technical or how strategic the follow-ups get.
