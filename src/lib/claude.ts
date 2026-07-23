@@ -991,3 +991,126 @@ export async function checkBackgroundMatch(
   if (!text) return null;
   return parseMatchJudgement(text);
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// P-2 — Conflict X-ray Claude helpers.
+// Doctrine: surface-with-warning (never hold), flag-never-block family.
+// False positives are the failure mode — the prompt and the two-condition
+// AND below are both tuned conservative on purpose.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Cross-user conflict judgment for ONE candidate pair. This is the P-2
+// extension of checkConsistency: instead of "does a new insight contradict
+// the SAME user's approved insights", it asks "do two DIFFERENT experts'
+// frameworks claim the same territory AND prescribe opposing plays". A pair
+// only counts as a conflict when BOTH booleans come back true — the caller
+// must AND them; similar-topic-but-compatible must never flag. Returns null
+// on any model/parse failure so detection fails open (no flag).
+export type ConflictJudgement = {
+  overlappingBoundaries: boolean;
+  opposingJudgment: boolean;
+  territory: string | null;
+  rationale: string | null;
+};
+
+export async function checkFrameworkConflict(
+  frameworkA: string,
+  frameworkB: string
+): Promise<ConflictJudgement | null> {
+  const prompt = await loadPrompt("conflict-xray", {
+    framework_a: frameworkA,
+    framework_b: frameworkB,
+  });
+  return withRetries("checkFrameworkConflict", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 768,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as {
+      overlapping_boundaries?: unknown;
+      opposing_judgment?: unknown;
+      territory?: unknown;
+      rationale?: unknown;
+    } | null;
+    if (
+      !parsed ||
+      typeof parsed.overlapping_boundaries !== "boolean" ||
+      typeof parsed.opposing_judgment !== "boolean"
+    ) {
+      return null;
+    }
+    const str = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() ? v.trim() : null;
+    return {
+      overlappingBoundaries: parsed.overlapping_boundaries,
+      opposingJudgment: parsed.opposing_judgment,
+      territory: str(parsed.territory),
+      rationale: str(parsed.rationale),
+    };
+  });
+}
+
+// Depth gate for conflict RESOLUTIONS — the belief-revision gate pattern
+// reapplied where a resolution changes a framework (sharpen_boundaries /
+// reconcile / supersede; escalate is a handoff and skips the gate). A
+// resolution only clears the contested badge when the note names both
+// positions, the dividing line, the resolved guidance, and real reasoning.
+// Returns null on model/parse failure — the caller treats that as "not yet
+// passed" (conflict stays open), mirroring /api/explain-revision.
+export type ConflictResolutionScore = {
+  depthOk: boolean;
+  present: {
+    both_positions: boolean;
+    dividing_line: boolean;
+    resolved_guidance: boolean;
+    reasoning: boolean;
+  };
+  note: string | null;
+};
+
+export async function scoreConflictResolution(
+  frameworkA: string,
+  frameworkB: string,
+  resolutionType: string,
+  explanation: string
+): Promise<ConflictResolutionScore | null> {
+  const prompt = await loadPrompt("conflict-resolution-depth", {
+    framework_a: frameworkA,
+    framework_b: frameworkB,
+    resolution_type: resolutionType,
+    explanation,
+  });
+  const msg = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 512,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = firstText(msg.content as { type: string; text?: string }[]);
+  if (!text) return null;
+  const parsed = parseJson(text) as {
+    depth_ok?: unknown;
+    present?: {
+      both_positions?: unknown;
+      dividing_line?: unknown;
+      resolved_guidance?: unknown;
+      reasoning?: unknown;
+    };
+    note?: unknown;
+  } | null;
+  if (!parsed || typeof parsed.depth_ok !== "boolean") return null;
+  const p = parsed.present ?? {};
+  const b = (v: unknown): boolean => v === true;
+  return {
+    depthOk: parsed.depth_ok,
+    present: {
+      both_positions: b(p.both_positions),
+      dividing_line: b(p.dividing_line),
+      resolved_guidance: b(p.resolved_guidance),
+      reasoning: b(p.reasoning),
+    },
+    note: typeof parsed.note === "string" && parsed.note.trim() ? parsed.note.trim() : null,
+  };
+}

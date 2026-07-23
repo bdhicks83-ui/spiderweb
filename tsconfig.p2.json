@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "src/lib/claude.ts",
+    "src/lib/conflict.ts",
+    "src/lib/elicitation.ts",
+    "src/app/api/conflicts/route.ts",
+    "src/app/api/conflicts/detect/route.ts",
+    "src/app/api/conflicts/[id]/route.ts",
+    "src/app/api/conflicts/[id]/resolve/route.ts",
+    "src/app/api/library/route.ts",
+    "src/app/api/library/[id]/route.ts",
+    "src/app/library/page.tsx",
+    "src/app/library/[id]/page.tsx",
+    "src/app/conflicts/page.tsx",
+    "src/app/conflicts/[id]/page.tsx"
+  ]
+}

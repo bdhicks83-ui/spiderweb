@@ -29,6 +29,9 @@ type LibraryRecord = {
   } | null;
   is_mine: boolean;
   author: { display_name: string | null; persona: string | null } | null;
+  // P-2: open conflicts annotating this record (surface-with-warning — the
+  // record renders normally either way, it just wears the badge).
+  contested: { conflict_id: string; other_record_id: string }[];
 };
 
 const TRIGGER_EMOJI: Record<string, string> = {
@@ -97,9 +100,14 @@ export default function LibraryPage() {
       <div style={styles.container}>
         <div style={styles.headerRow}>
           <h1 style={styles.title}>🕸️ Team Library</h1>
-          <a href="/codify" style={styles.newLink}>
-            + Codify a pattern
-          </a>
+          <div style={styles.headerLinks}>
+            <a href="/conflicts" style={styles.conflictsLink}>
+              ⚠️ Conflict X-ray
+            </a>
+            <a href="/codify" style={styles.newLink}>
+              + Codify a pattern
+            </a>
+          </div>
         </div>
         <p style={styles.subtitle}>
           Every completed framework your org has captured, with attribution.
@@ -123,7 +131,14 @@ export default function LibraryPage() {
                 <span style={styles.emoji}>
                   {r.trigger_type ? TRIGGER_EMOJI[r.trigger_type] ?? "" : ""}
                 </span>
-                {r.is_mine && <span style={styles.mineBadge}>Yours</span>}
+                <span style={styles.badgeRow}>
+                  {r.contested && r.contested.length > 0 && (
+                    <span style={styles.contestedBadge} title="Another expert sees this differently — open the framework for both sides.">
+                      ⚠️ Contested
+                    </span>
+                  )}
+                  {r.is_mine && <span style={styles.mineBadge}>Yours</span>}
+                </span>
               </div>
               <h2 style={styles.cardTitle}>
                 {r.framework?.name ?? "(framework pending)"}
@@ -177,11 +192,28 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: { fontSize: "26px", margin: 0 },
   subtitle: { color: "#666", fontSize: "14px", margin: "6px 0 28px" },
+  headerLinks: { display: "flex", alignItems: "center", gap: 16 },
+  conflictsLink: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#b45309",
+    textDecoration: "none",
+  },
   newLink: {
     fontSize: "14px",
     fontWeight: 600,
     color: "#4338ca",
     textDecoration: "none",
+  },
+  badgeRow: { display: "flex", alignItems: "center", gap: 6 },
+  contestedBadge: {
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "#b45309",
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    borderRadius: 999,
+    padding: "2px 8px",
   },
   grid: {
     display: "grid",

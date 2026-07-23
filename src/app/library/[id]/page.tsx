@@ -41,6 +41,15 @@ type DetailRecord = {
   } | null;
   is_mine: boolean;
   author: { display_name: string | null; persona: string | null } | null;
+  // P-2: open conflicts on this record. Surface-with-warning: the framework
+  // below renders fully and stays usable — the banner only adds the warning
+  // and the two links (other side + resolution thread).
+  contested: {
+    conflict_id: string;
+    other_record_id: string;
+    other_name: string | null;
+    other_author: string | null;
+  }[];
 };
 
 const METHOD_LABEL: Record<string, string> = {
@@ -126,6 +135,28 @@ export default function LibraryDetailPage() {
           {record.is_mine && <span style={styles.mineBadge}>Yours</span>}
           <span style={styles.date}>{new Date(record.created_at).toLocaleDateString()}</span>
         </div>
+
+        {record.contested && record.contested.length > 0 &&
+          record.contested.map((c) => (
+            <div key={c.conflict_id} style={styles.contestedBanner}>
+              <div style={styles.contestedTitle}>
+                ⚠️ Contested — another expert sees this differently
+              </div>
+              <div style={styles.contestedBody}>
+                {c.other_author || "An org peer"}&apos;s framework
+                {c.other_name ? ` “${c.other_name}”` : ""} claims the same territory with an
+                opposing play. This framework stays fully usable while contested.
+              </div>
+              <div style={styles.contestedLinks}>
+                <a href={`/library/${c.other_record_id}`} style={styles.contestedLink}>
+                  See the other side →
+                </a>
+                <a href={`/conflicts/${c.conflict_id}`} style={styles.contestedLink}>
+                  Open the resolution thread →
+                </a>
+              </div>
+            </div>
+          ))}
 
         {f ? (
           <>
@@ -239,6 +270,32 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "2px 8px",
   },
   date: { marginLeft: "auto" },
+  contestedBanner: {
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    borderRadius: 12,
+    padding: "14px 16px",
+    margin: "12px 0 20px",
+  },
+  contestedTitle: {
+    fontSize: "14px",
+    fontWeight: 700,
+    color: "#b45309",
+    marginBottom: 6,
+  },
+  contestedBody: {
+    fontSize: "13px",
+    color: "#78350f",
+    lineHeight: 1.5,
+    marginBottom: 10,
+  },
+  contestedLinks: { display: "flex", gap: 18, flexWrap: "wrap" },
+  contestedLink: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#b45309",
+    textDecoration: "none",
+  },
   title: { fontSize: "30px", margin: "4px 0 4px" },
   tagline: { fontSize: "16px", color: "#555", margin: "0 0 28px" },
   section: { marginBottom: 24 },

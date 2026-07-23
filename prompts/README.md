@@ -21,6 +21,8 @@ Doctrine: prompts live in the repo, reviewed and diffed like any other source fi
 | `method-cdm.md` | Method character for 🧠 A judgment call → Critical Decision Method | P-0.5 |
 | `persona-exec.md` / `persona-technical-director.md` / `persona-sr-manager.md` / `persona-neutral.md` | Persona-aware wording shading for `elicit-next.md` — shades wording only, never router/ladder logic | P-0.5 |
 | `scrub-for-export.md` | Strip identifying names ONLY at export time (PDF) — capture-time storage keeps names per the P-0.5 entity map decision | P-0.5 |
+| `conflict-xray.md` | Cross-user conflict judgment for one candidate pair: flags ONLY overlapping-boundaries AND opposing-judgment, tuned hard against false positives | P-2 |
+| `conflict-resolution-depth.md` | Depth gate for conflict resolutions (sharpen/reconcile/supersede) — belief-revision gate pattern reapplied; escalate skips it | P-2 |
 
 Rules:
 - One prompt per file. Markdown. `{{variable}}` placeholders.

@@ -80,11 +80,62 @@ export async function GET(
       .eq("id", record.user_id)
       .maybeSingle();
 
+    // P-2 Build 2 — contested badge (surface-with-warning): any OPEN
+    // conflict on this record annotates it with a link to the other side +
+    // the resolution thread. The record itself renders fully either way.
+    const { data: conflictsRaw } = await supabase
+      .from("framework_conflicts")
+      .select("id, record_a_id, record_b_id")
+      .eq("status", "open")
+      .or(`record_a_id.eq.${id},record_b_id.eq.${id}`);
+    const openConflicts = (conflictsRaw || []) as {
+      id: string;
+      record_a_id: string;
+      record_b_id: string;
+    }[];
+
+    const contested: {
+      conflict_id: string;
+      other_record_id: string;
+      other_name: string | null;
+      other_author: string | null;
+    }[] = [];
+    for (const c of openConflicts) {
+      const otherId = c.record_a_id === id ? c.record_b_id : c.record_a_id;
+      // Session client again: RLS guarantees this is a visible org record.
+      const { data: otherRaw } = await supabase
+        .from("pattern_records")
+        .select("id, user_id, framework")
+        .eq("id", otherId)
+        .maybeSingle();
+      const other = otherRaw as unknown as {
+        id: string;
+        user_id: string;
+        framework: FrameworkArtifact | null;
+      } | null;
+      let otherAuthor: string | null = null;
+      if (other) {
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", other.user_id)
+          .maybeSingle();
+        otherAuthor = p?.display_name ?? null;
+      }
+      contested.push({
+        conflict_id: c.id,
+        other_record_id: otherId,
+        other_name: other?.framework?.name ?? null,
+        other_author: otherAuthor,
+      });
+    }
+
     return NextResponse.json({
       record: {
         ...record,
         is_mine: record.user_id === user.id,
         author: author ?? null,
+        contested,
       },
     });
   } catch (err) {

@@ -89,10 +89,39 @@ export async function GET() {
       );
     }
 
+    // P-2 Build 2 — contested badges (surface-with-warning). OPEN conflicts
+    // annotate their two records; the records themselves stay fully visible
+    // and usable — nothing here filters the list. RLS ("org conflicts read")
+    // scopes the conflict rows to the caller's org on its own.
+    const contestedBy: Record<string, { conflict_id: string; other_record_id: string }[]> = {};
+    if (rows.length > 0) {
+      const idList = rows.map((r) => r.id).join(",");
+      const { data: conflicts } = await supabase
+        .from("framework_conflicts")
+        .select("id, record_a_id, record_b_id")
+        .eq("status", "open")
+        .or(`record_a_id.in.(${idList}),record_b_id.in.(${idList})`);
+      for (const c of (conflicts || []) as {
+        id: string;
+        record_a_id: string;
+        record_b_id: string;
+      }[]) {
+        (contestedBy[c.record_a_id] ??= []).push({
+          conflict_id: c.id,
+          other_record_id: c.record_b_id,
+        });
+        (contestedBy[c.record_b_id] ??= []).push({
+          conflict_id: c.id,
+          other_record_id: c.record_a_id,
+        });
+      }
+    }
+
     const enriched = rows.map((r) => ({
       ...r,
       is_mine: r.user_id === user.id,
       author: authors[r.user_id] ?? null,
+      contested: contestedBy[r.id] ?? [],
     }));
 
     return NextResponse.json({ records: enriched });
