@@ -504,8 +504,12 @@ async function runEfficacyLoop(orgId) {
       (detection.subject_entities || []).map((e) => e.name).join(" · ") || "the detected subject";
     const checkedAt = new Date().toISOString();
 
+    // Always log founding-vs-matched, on every delivered prescription this
+    // loop checks — not just the ones that escalate. This is what makes a
+    // false-escalation OR a silently-stale-recurrence bug visible without a
+    // separate diagnostic run: the distinction is right here in the output.
+    console.log(`  · [${rx.id}] founding=${JSON.stringify([...foundingIds])} matched=${JSON.stringify(recurrences.map((r) => r.id))}`);
     if (recurrences.length > 0) {
-      console.log(`  · [${rx.id}] founding=${JSON.stringify([...foundingIds])} matched=${JSON.stringify(recurrences.map((r) => r.id))}`);
       const fromRung = rx.rung;
       const capped = fromRung >= 4;
       const toRung = capped ? 4 : Math.min(4, fromRung + 1);
@@ -762,7 +766,7 @@ async function generateAndStore(orgId, rx, sourceType, nameById, regen) {
 // ═══ main ═══════════════════════════════════════════════════════════════════
 
 async function main() {
-  console.log(`═══ seed-p4b.mjs build: founding-exclusion-v2 ═══`);
+  console.log(`═══ seed-p4b.mjs build: founding-exclusion-v2 + recurrence-freshness-v1 ═══`);
   const { data: org } = await supabase
     .from("orgs").select("id").eq("name", DEMO_ORG_NAME).maybeSingle();
   if (!org) throw new Error(`Demo org "${DEMO_ORG_NAME}" not found — run scripts/seed-p1-demo.mjs first.`);
@@ -837,7 +841,7 @@ async function main() {
   // ─── locate the four P-4A prescriptions ───
   const { data: detections } = await supabase
     .from("prescription_detections")
-    .select("id, dedupe_key, source_type, conflict_id, subject_entities")
+    .select("id, dedupe_key, source_type, conflict_id, subject_entities, evidence_record_ids")
     .eq("org_id", orgId);
   const { data: rxAll } = await supabase
     .from("prescriptions").select("*").eq("org_id", orgId);
@@ -1057,10 +1061,30 @@ async function main() {
 
   // ═══ Plant the post-delivery recurrence record (real pipeline) ═══
   console.log(`\n─── Planting the post-delivery recurrence (Tom, 4 days ago, 💥) ───`);
+  // FRESHNESS GUARD (the actual bug this fix closes): step 1f recomputes
+  // entRx.delivered_at to "now − 10 days" on EVERY run, force or not — but
+  // planting below was only ever gated on "does a record with this
+  // context_summary already exist," so a record planted on an earlier day
+  // kept its ORIGINAL created_at forever. Delivered_at then slides forward
+  // every run while the planted record's timestamp stands still; once
+  // delivered_at catches up past it, the record silently stops counting as
+  // "after delivery" and the escalation case becomes unsatisfiable — exactly
+  // what diag-efficacy.mjs caught (only the founding records were matching).
+  // Fix: check freshness relative to THIS run's delivered_at, not just
+  // existence, and replant if it's gone stale.
   const { data: existingRec } = await supabase
-    .from("pattern_records").select("id")
+    .from("pattern_records").select("id, created_at")
     .eq("org_id", orgId).eq("context_summary", RECURRENCE.context_summary).maybeSingle();
-  if (!existingRec) {
+  const staleRec =
+    existingRec && new Date(existingRec.created_at).getTime() <= new Date(entDelivered).getTime();
+  if (staleRec) {
+    await supabase.from("pattern_records").delete().eq("id", existingRec.id);
+    console.log(
+      `  ⚠ existing planted record (${existingRec.id}, created_at ${existingRec.created_at}) is ` +
+      `no longer after delivered_at (${entDelivered}) — deleted, replanting fresh.`
+    );
+  }
+  if (!existingRec || staleRec) {
     const fields = {
       context_summary: RECURRENCE.context_summary,
       context_org_size: RECURRENCE.context_org_size,
@@ -1107,7 +1131,7 @@ async function main() {
     if (error) throw new Error(`recurrence insert failed: ${error.message}`);
     console.log(`  ✓ "${framework.name}" → ${inserted.id}${embedding ? " (embedded)" : ""}`);
   } else {
-    console.log(`  (already planted: ${existingRec.id})`);
+    console.log(`  (already planted and fresh: ${existingRec.id}, created_at ${existingRec.created_at} > delivered_at ${entDelivered})`);
   }
 
   // ═══ Run the efficacy loop ═══
@@ -1183,6 +1207,18 @@ async function main() {
     fail(`escalation stored no evidence records`);
   else ok(`escalation evidence stored (${entRx.efficacy_evidence_record_ids.length} post-delivery record)`);
 
+  // 5b. Founding-exclusion anti-leak guard: the escalation evidence must be
+  // disjoint from the prescription's OWN founding records. This is the
+  // explicit, always-run proof that the founding-exclusion fix holds — not
+  // just "something escalated" but "the thing that escalated it was never
+  // one of the records that justified the prescription in the first place."
+  {
+    const foundingIds = new Set(entDet.evidence_record_ids || []);
+    const leaked = (entRx.efficacy_evidence_record_ids || []).filter((id) => foundingIds.has(id));
+    if (leaked.length > 0) fail(`founding record(s) leaked into escalation evidence: ${leaked.join(", ")}`);
+    else ok(`founding-exclusion holds: none of ${foundingIds.size} founding record(s) appear in the escalation evidence`);
+  }
+
   // 6. Wins-only: the efficacy note names entities, never a person.
   const noteNames = EXPERT_NAMES.filter((n) => (entRx.efficacy_note || "").includes(n));
   if (noteNames.length > 0) fail(`escalation note attributes failure to a person: ${noteNames.join(", ")}`);
@@ -1196,6 +1232,10 @@ async function main() {
   if ((conflictRx.efficacy_evidence_record_ids || []).length !== 0)
     fail(`quiet prescription has recurrence evidence — false escalation risk`);
   else ok(`no false escalation: quiet prescription carries zero recurrence evidence`);
+  {
+    const foundingIds = new Set(conflictDet.evidence_record_ids || []);
+    ok(`quiet prescription founding=${JSON.stringify([...foundingIds])} — none of these fired as recurrence (confirmed above)`);
+  }
 
   // 8. Snooze defers, never deletes.
   if (!finRx) console.log(`  ⚠️ snooze-defers guardrail skipped (no second coverage gap on this org)`);
