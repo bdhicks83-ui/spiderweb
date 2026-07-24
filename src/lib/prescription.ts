@@ -33,9 +33,11 @@
 // model hiccup on triage or the coverage tiebreak means NO prescription
 // (the detection stays open for the next run), never a guessed one.
 //
-// P-4B (next session) consumes these rows: manager gate, expert fidelity
-// check, training generation, teach-back, efficacy loop, regenerate. Nothing
-// in this module reaches past creating 'open' prescriptions.
+// P-4B (this file's second half) consumes these rows: manager gate, expert
+// fidelity check, training generation, teach-back, efficacy loop,
+// regenerate. The P-4A engine above still only ever creates 'open'
+// prescriptions; everything after 'open' is driven by the P-4B routes and
+// the efficacy loop at the bottom of this module.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { triagePrescriptionGap, checkCoverageGap } from "@/lib/claude";
 import { embedText } from "@/lib/voyage";
@@ -864,6 +866,329 @@ export async function runPrescriptionEngine(
       .update({ status: "prescribed" })
       .eq("id", d.id);
     summary.prescriptionsNew++;
+  }
+
+  return summary;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P-4B — Prescription Engine, part 2: the lifecycle after 'open'.
+//
+//   MANAGER GATE   approve (who + when recorded) / snooze (wake date —
+//                  defers, never deletes; flag-never-block family).
+//   FIDELITY       the authoring expert(s) confirm "yes, that's how I
+//                  think" before anything ships in their name. Capture-
+//                  first prescriptions SKIP fidelity entirely — nothing
+//                  authored yet to confirm. Doctrine: fidelity enforced at
+//                  the transfer layer.
+//   TRAINING       generated at the prescribed rung in three audience
+//                  altitudes, grounded ONLY in the paired expert's
+//                  framework(s). Versioned: regenerate inserts, never
+//                  overwrites.
+//   TEACH-BACK     fresh scenario + scored answer (retrieval practice).
+//   EFFICACY LOOP  detection never stops watching. Post-delivery recurrence
+//                  of the same signal ⇒ auto-escalate one rung + flag.
+//                  Quiet across the window ⇒ effective, logged as proof —
+//                  Kirkpatrick Level 4, measured automatically.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Teach-back pass line: signal read (40) + play applied (40) + boundaries
+// (20); 70 means the play and most of the signal transferred.
+export const TEACHBACK_PASS_SCORE = 70;
+
+// The efficacy quiet window: a delivered prescription whose subject stays
+// out of new failure/friction records for this many days is marked
+// EFFECTIVE and closed. Chosen to match the demo's evidence cadence (the
+// P-4A signals recur weekly); tune only on real-world misses, same
+// discipline as the 0.75 retrieval threshold.
+export const EFFICACY_QUIET_WINDOW_DAYS = 14;
+
+// How the rung shapes the generated artifact. The `instructions` text goes
+// verbatim into the training prompts.
+export const RUNG_FORMAT: Record<number, { name: string; instructions: string }> = {
+  1: {
+    name: "Clarification card",
+    instructions:
+      "A clarification card: a 2-minute read that fixes a definition/understanding mismatch. Each altitude is ONE card, at most ~300 words: name the two readings that are colliding (or the settled guidance), state the aligned rule, and say exactly when each side applies. No exercises, no sessions — this is a read, not a meeting.",
+  },
+  2: {
+    name: "Micro-training",
+    instructions:
+      "A micro-training: a focused 15-minute session transferring a fix that already exists. Include: the objective in one line; the signal to recognize; the play, step by step; the boundaries (where this fix does NOT apply); and 2-3 quick practice checks a facilitator can run in the room. Keep it runnable in 15 minutes.",
+  },
+  3: {
+    name: "Designed session",
+    instructions:
+      "A designed session: a facilitator guide for a working session on a real capability gap. Include: session objectives; an agenda with rough timings; 2-3 concrete scenarios drawn from the framework material for the room to work; discussion questions; and what the facilitator should watch for to know it landed. The floor altitude is the participant-facing version; supervisor is the facilitator guide proper; exec is the sponsor briefing.",
+  },
+  4: {
+    name: "Full curriculum",
+    instructions:
+      "A curriculum outline: a sequenced multi-session program for a systemic blind spot. Include: the arc (what order and why); for each session an objective, a content outline grounded in the framework material, who facilitates, and how completion is assessed; and how the program verifies transfer at the end. Outline depth — this is the design, not every worksheet.",
+  },
+};
+
+// ─── Training grounding text ────────────────────────────────────────────────
+
+export type TrainingSourceRecord = PrescriptionSourceRecord;
+
+// The FULL framework surface for training generation — richer than the
+// triage formatter on purpose: the artifact fields (when_to_apply, signals,
+// the_play, why_it_works, boundaries) plus the record's own reasoning are
+// the entire permitted substance of the training. Names stay in
+// (org-internal surface; attribution to the author is a feature).
+export function formatFrameworksForTraining(
+  records: PrescriptionSourceRecord[],
+  authorName: (userId: string) => string
+): string {
+  return records
+    .map((r, i) => {
+      const f = r.framework;
+      const entities = (r.entity_map || [])
+        .map((e) => `${e.type}: ${e.name}${e.detail ? ` (${e.detail})` : ""}`)
+        .join("; ");
+      const lines = [
+        `═══ Framework ${i + 1} — authored by ${authorName(r.user_id)} (${new Date(
+          r.created_at
+        ).toLocaleDateString("en-US")}) ═══`,
+      ];
+      if (f) {
+        lines.push(
+          `Name: ${f.name}`,
+          `Tagline: ${f.tagline}`,
+          `When to apply: ${f.when_to_apply.join(" · ")}`,
+          `Signals: ${f.signals.join(" · ")}`,
+          `The play: ${f.the_play}`,
+          `Why it works: ${f.why_it_works}`,
+          `Boundaries: ${f.boundaries.join(" · ")}`
+        );
+      } else {
+        lines.push("(no rendered framework artifact — record fields only)");
+      }
+      lines.push(
+        `Situation it came from: ${r.context_summary ?? "(none)"}`,
+        `The signal read: ${r.trigger_signal ?? "(none)"}`,
+        `Signal detail: ${r.signal_detail ?? "(none)"}`,
+        `The judgment: ${r.judgment ?? "(none)"}`,
+        `The reasoning: ${r.rationale ?? "(none)"}`,
+        `Boundaries (in the expert's words): ${r.boundaries ?? "(none)"}`,
+        `Entities: ${entities || "(none)"}`
+      );
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
+// ─── The efficacy loop ──────────────────────────────────────────────────────
+
+type EfficacyPrescriptionRow = {
+  id: string;
+  detection_id: string;
+  rung: number;
+  status: string;
+  delivered_at: string | null;
+  efficacy_status: string | null;
+  gap_summary: string;
+};
+
+type EfficacyDetectionRow = {
+  id: string;
+  source_type: PrescriptionSourceType;
+  subject_entities: EntityMapEntry[];
+  evidence_record_ids: string[] | null;
+};
+
+export type EfficacyOutcome = {
+  prescriptionId: string;
+  outcome: "escalated" | "effective" | "watching";
+  note: string;
+};
+
+export type EfficacySummary = {
+  checked: number;
+  escalated: number;
+  effective: number;
+  watching: number;
+  outcomes: EfficacyOutcome[];
+};
+
+function efficacyEntityKeys(entities: EntityMapEntry[]): Set<string> {
+  return new Set(
+    (entities || []).map((e) => `${e.type}|${normalizeEntityName(e.name)}`)
+  );
+}
+
+// Run the efficacy loop for ONE org. Reuses P-4A's detection logic — the
+// recurrence check is the same entity-key/trouble-trigger matching the
+// detectors use, scoped to records dated AFTER delivered_at. `service` must
+// be a service-role client (same write lockdown as the P-4A engine).
+//
+// Transitions (only prescriptions in status 'delivered', watching):
+//   • subject entities recur in ≥1 post-delivery broke/friction record ⇒
+//     ESCALATED: rung bumps one (capped at 4 — a failed rung-4 curriculum
+//     stays 4 and flags), evidence stored, flagged for a redesigned attempt.
+//   • no recurrence and the quiet window has fully elapsed ⇒ EFFECTIVE:
+//     logged as proof, status → 'closed'.
+//   • no recurrence, window still open ⇒ stays WATCHING (checked_at moves).
+//
+// A prescription already 'escalated' is NOT re-escalated on re-runs — the
+// escalation is a one-way flag that a redesigned delivery (which resets the
+// watch) must clear. False escalation wastes trust: only an explicit
+// trouble-trigger record carrying the SAME subject entity can escalate,
+// never a win, never an adjacent entity (same conservative bias as P-4A's
+// non-gaps).
+//
+// Wins-only doctrine: the stored note names entities and counts, NEVER a
+// person. No failure attribution ever rolls up to an individual.
+export async function runEfficacyLoop(
+  service: SupabaseClient,
+  orgId: string
+): Promise<EfficacySummary> {
+  const summary: EfficacySummary = {
+    checked: 0,
+    escalated: 0,
+    effective: 0,
+    watching: 0,
+    outcomes: [],
+  };
+
+  const { data: rxRaw, error: rxError } = await service
+    .from("prescriptions")
+    .select("id, detection_id, rung, status, delivered_at, efficacy_status, gap_summary")
+    .eq("org_id", orgId)
+    .eq("status", "delivered");
+  if (rxError) throw new Error(`Could not load delivered prescriptions: ${rxError.message}`);
+  const delivered = ((rxRaw || []) as unknown as EfficacyPrescriptionRow[]).filter(
+    (r) => r.delivered_at && (r.efficacy_status === "watching" || r.efficacy_status === null)
+  );
+  if (delivered.length === 0) return summary;
+
+  const { data: detRaw, error: detError } = await service
+    .from("prescription_detections")
+    .select("id, source_type, subject_entities, evidence_record_ids")
+    .in("id", delivered.map((r) => r.detection_id));
+  if (detError) throw new Error(`Could not load detections: ${detError.message}`);
+  const detById = new Map(
+    ((detRaw || []) as unknown as EfficacyDetectionRow[]).map((d) => [d.id, d])
+  );
+
+  // One record load covers every prescription: everything complete in the
+  // org after the EARLIEST delivery; per-prescription filtering below.
+  const earliest = delivered
+    .map((r) => r.delivered_at!)
+    .sort()[0];
+  const { data: recRaw, error: recError } = await service
+    .from("pattern_records")
+    .select("id, created_at, trigger_type, entity_map")
+    .eq("org_id", orgId)
+    .eq("status", "complete")
+    .gt("created_at", earliest);
+  if (recError) throw new Error(`Could not load post-delivery records: ${recError.message}`);
+  const newRecords = (recRaw || []) as unknown as {
+    id: string;
+    created_at: string;
+    trigger_type: string | null;
+    entity_map: EntityMapEntry[];
+  }[];
+
+  const now = Date.now();
+  const windowMs = EFFICACY_QUIET_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  for (const rx of delivered) {
+    const detection = detById.get(rx.detection_id);
+    if (!detection) continue;
+    summary.checked++;
+
+    const subjectKeys = efficacyEntityKeys(detection.subject_entities);
+    const deliveredMs = new Date(rx.delivered_at!).getTime();
+    // The prescription's own founding records are NOT recurrences — a record
+    // that triggered the detection is the reason the prescription exists, not
+    // evidence the intervention failed. In production these always predate
+    // delivery, so created_at > delivered_at already excludes them; but demo
+    // data seeded "now" with a backdated delivered_at would otherwise let a
+    // founding record masquerade as a post-delivery recurrence. Guard here.
+    const foundingIds = new Set(detection.evidence_record_ids || []);
+
+    // Same trouble-trigger + entity-key matching the P-4A detectors use,
+    // scoped post-delivery. Wins never escalate (a win record mentioning
+    // the subject is the opposite of recurrence).
+    const recurrences = newRecords.filter((r) => {
+      if (foundingIds.has(r.id)) return false;
+      if (new Date(r.created_at).getTime() <= deliveredMs) return false;
+      if (r.trigger_type !== "broke" && r.trigger_type !== "friction") return false;
+      return (r.entity_map || []).some((e) =>
+        subjectKeys.has(`${e.type}|${normalizeEntityName(e.name)}`)
+      );
+    });
+
+    const subjectNames =
+      (detection.subject_entities || []).map((e) => e.name).join(" · ") ||
+      "the detected subject";
+    const checkedAt = new Date().toISOString();
+
+    if (recurrences.length > 0) {
+      // ── ESCALATE: the intervention didn't transfer. One rung up, capped. ──
+      const fromRung = rx.rung;
+      let toRung: number = Math.min(4, fromRung + 1);
+      const capped = fromRung >= 4;
+      if (capped) toRung = 4;
+      const note =
+        `Recurred after delivery: ${recurrences.length} new failure/friction record` +
+        `${recurrences.length === 1 ? "" : "s"} carrying "${subjectNames}" dated after ` +
+        `${new Date(rx.delivered_at!).toLocaleDateString("en-US")}. ` +
+        (capped
+          ? `Already at rung 4 — flagged for redesign at the same rung.`
+          : `Auto-escalated rung ${fromRung} → ${toRung} (${RUNGS[toRung].label}) — the intervention didn't transfer; regenerate at the bigger rung and redeliver.`);
+      const { error } = await service
+        .from("prescriptions")
+        .update({
+          rung: toRung,
+          severity: toRung,
+          escalated_from_rung: fromRung,
+          efficacy_status: "escalated",
+          efficacy_note: note,
+          efficacy_evidence_record_ids: recurrences.map((r) => r.id),
+          efficacy_checked_at: checkedAt,
+        })
+        .eq("id", rx.id);
+      if (error) throw new Error(`Could not escalate prescription ${rx.id}: ${error.message}`);
+      summary.escalated++;
+      summary.outcomes.push({ prescriptionId: rx.id, outcome: "escalated", note });
+    } else if (now - deliveredMs >= windowMs) {
+      // ── EFFECTIVE: quiet across the whole window. Proof, logged. ──
+      const quietDays = Math.floor((now - deliveredMs) / (24 * 60 * 60 * 1000));
+      const note =
+        `Quiet for ${quietDays} days post-delivery (window: ${EFFICACY_QUIET_WINDOW_DAYS}) — ` +
+        `no new failure/friction records carrying "${subjectNames}". ` +
+        `Marked effective: the intervention held on live evidence (Kirkpatrick Level 4, measured automatically).`;
+      const { error } = await service
+        .from("prescriptions")
+        .update({
+          status: "closed",
+          efficacy_status: "effective",
+          efficacy_note: note,
+          efficacy_checked_at: checkedAt,
+        })
+        .eq("id", rx.id);
+      if (error) throw new Error(`Could not close prescription ${rx.id}: ${error.message}`);
+      summary.effective++;
+      summary.outcomes.push({ prescriptionId: rx.id, outcome: "effective", note });
+    } else {
+      // ── Still WATCHING — quiet, but the window hasn't elapsed. ──
+      const daysIn = Math.floor((now - deliveredMs) / (24 * 60 * 60 * 1000));
+      const note = `Watching — quiet ${daysIn}/${EFFICACY_QUIET_WINDOW_DAYS} days since delivery, no recurrence of "${subjectNames}".`;
+      const { error } = await service
+        .from("prescriptions")
+        .update({
+          efficacy_status: "watching",
+          efficacy_note: note,
+          efficacy_checked_at: checkedAt,
+        })
+        .eq("id", rx.id);
+      if (error) throw new Error(`Could not update prescription ${rx.id}: ${error.message}`);
+      summary.watching++;
+      summary.outcomes.push({ prescriptionId: rx.id, outcome: "watching", note });
+    }
   }
 
   return summary;

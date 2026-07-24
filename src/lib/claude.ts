@@ -5,7 +5,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile } from "fs/promises";
 import path from "path";
 
-const anthropic = new Anthropic(); // reads ANTHROPIC_API_KEY from env
+// timeout + maxRetries:0 — a stalled connection fails in 60s instead of
+// hanging silently for up to the SDK's 10-minute default; withRetries()
+// above handles our own retries with backoff.
+const anthropic = new Anthropic({ timeout: 60_000, maxRetries: 0 }); // reads ANTHROPIC_API_KEY from env
 
 // Claude can return a "thinking" block before the actual "text" block.
 // Always find the first text block instead of assuming content[0] is it.
@@ -120,12 +123,44 @@ function formatQAPairs(qaPairs: QAPair[]): string {
     .join("\n");
 }
 
+// Models occasionally emit a literal newline/tab inside a JSON string value
+// (e.g. a "feedback" field formatted with a paragraph break) instead of the
+// escaped \n — that's invalid JSON and JSON.parse throws even though the
+// braces are perfectly balanced. Repair pass: walk the string, and only
+// while inside a quoted string literal, escape raw control characters.
+function repairJsonControlChars(s: string): string {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === "\\") { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      if (ch === "\n") { out += "\\n"; continue; }
+      if (ch === "\r") { continue; }
+      if (ch === "\t") { out += "\\t"; continue; }
+      out += ch;
+      continue;
+    }
+    if (ch === '"') { inStr = true; out += ch; continue; }
+    out += ch;
+  }
+  return out;
+}
+
 // Strip a ```json fence if the model wrapped its output in one.
 function parseJson(text: string): unknown | null {
+  const stripped = text.replace(/^```json?\n?|```$/g, "").trim();
   try {
-    return JSON.parse(text.replace(/^```json?\n?|```$/g, "").trim());
+    return JSON.parse(stripped);
   } catch {
-    return null;
+    try {
+      return JSON.parse(repairJsonControlChars(stripped));
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -163,10 +198,15 @@ function parseJsonLoose(text: string): unknown | null {
     else if (ch === close) {
       depth--;
       if (depth === 0) {
+        const slice = stripped.slice(start, i + 1);
         try {
-          return JSON.parse(stripped.slice(start, i + 1));
+          return JSON.parse(slice);
         } catch {
-          return null;
+          try {
+            return JSON.parse(repairJsonControlChars(slice));
+          } catch {
+            return null;
+          }
         }
       }
     }
@@ -1210,4 +1250,246 @@ export async function checkCoverageGap(
           : null,
     };
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// P-4B — Prescription Engine part 2 Claude helpers: training generation
+// (3 audience altitudes), regenerate-on-request, and the teach-back check.
+// Doctrine: grounded ONLY in the paired expert's framework material (same
+// no-outside-knowledge rule as /retrieve and Ask Your Spiderweb); every
+// helper fails open (null ⇒ the route surfaces a retryable error, nothing
+// half-built is ever stored or shipped).
+// ─────────────────────────────────────────────────────────────────────────
+
+export type TrainingAltitude = { title: string; body: string };
+
+export type TrainingArtifact = {
+  strategy: string;
+  title: string;
+  altitudes: {
+    floor: TrainingAltitude;
+    supervisor: TrainingAltitude;
+    exec: TrainingAltitude;
+  };
+};
+
+function isTrainingAltitude(v: unknown): v is TrainingAltitude {
+  if (!v || typeof v !== "object") return false;
+  const a = v as Record<string, unknown>;
+  return (
+    typeof a.title === "string" &&
+    a.title.trim().length > 0 &&
+    typeof a.body === "string" &&
+    a.body.trim().length > 0
+  );
+}
+
+export function isTrainingArtifact(v: unknown): v is TrainingArtifact {
+  if (!v || typeof v !== "object") return false;
+  const t = v as Record<string, unknown>;
+  if (typeof t.strategy !== "string" || !t.strategy.trim()) return false;
+  if (typeof t.title !== "string" || !t.title.trim()) return false;
+  const alts = t.altitudes as Record<string, unknown> | undefined;
+  if (!alts || typeof alts !== "object") return false;
+  return (
+    isTrainingAltitude(alts.floor) &&
+    isTrainingAltitude(alts.supervisor) &&
+    isTrainingAltitude(alts.exec)
+  );
+}
+
+export type TrainingGenerationInput = {
+  rung: number;
+  formatName: string;
+  formatInstructions: string;
+  sourceType: string;
+  gapSummary: string;
+  pairingSummary: string;
+  audience: string;
+  /** The expert framework material — the ONLY permitted source of substance. */
+  frameworks: string;
+};
+
+// Generate the intervention at the prescribed rung in three altitudes.
+// One call for all three so the substance stays aligned across framings.
+export async function generateTraining(
+  input: TrainingGenerationInput
+): Promise<TrainingArtifact | null> {
+  const prompt = await loadPrompt("training-generate", {
+    rung: String(input.rung),
+    format_name: input.formatName,
+    format_instructions: input.formatInstructions,
+    source_type: input.sourceType,
+    gap_summary: input.gapSummary,
+    pairing_summary: input.pairingSummary,
+    audience: input.audience,
+    frameworks: input.frameworks,
+    strategy_instruction:
+      "This is the FIRST version. Choose the instructional-design strategy that best fits the material and the audience, and name it in the strategy field.",
+  });
+  return withRetries("generateTraining", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 6000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text);
+    return isTrainingArtifact(parsed) ? parsed : null;
+  });
+}
+
+// Regenerate-on-request: a VISIBLY different strategy, never a re-roll. The
+// prompt receives every prior version's strategy + title and must avoid them
+// all; the route additionally rejects a result whose strategy label matches
+// a prior one (belt and braces — the history is the product).
+export async function regenerateTraining(
+  input: TrainingGenerationInput & {
+    priorVersions: { version: number; strategy: string; title: string }[];
+    regenerateNote: string | null;
+  }
+): Promise<TrainingArtifact | null> {
+  const prompt = await loadPrompt("training-regenerate", {
+    rung: String(input.rung),
+    format_name: input.formatName,
+    format_instructions: input.formatInstructions,
+    source_type: input.sourceType,
+    gap_summary: input.gapSummary,
+    pairing_summary: input.pairingSummary,
+    audience: input.audience,
+    frameworks: input.frameworks,
+    prior_versions: input.priorVersions
+      .map((p) => `- v${p.version}: strategy "${p.strategy}" — "${p.title}"`)
+      .join("\n"),
+    regenerate_note:
+      input.regenerateNote?.trim() ||
+      "(no specific note — the requester wants a structurally different design)",
+  });
+  return withRetries("regenerateTraining", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 6000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text);
+    if (!isTrainingArtifact(parsed)) return null;
+    // A "different" strategy that string-matches a prior one is a re-roll —
+    // treat as a failed attempt so withRetries asks again.
+    const norm = (s: string) => s.trim().toLowerCase();
+    if (input.priorVersions.some((p) => norm(p.strategy) === norm(parsed.strategy))) {
+      return null;
+    }
+    return parsed;
+  });
+}
+
+export type TeachbackScenario = { scenario: string; question: string };
+
+// Fresh scenario from the framework's signal/play/boundaries — retrieval
+// practice, never a restatement of the training's own examples.
+export async function generateTeachbackScenario(
+  frameworks: string,
+  audience: string,
+  trainingTitle: string,
+  trainingStrategy: string
+): Promise<TeachbackScenario | null> {
+  const prompt = await loadPrompt("teachback-scenario", {
+    frameworks,
+    audience,
+    training_title: trainingTitle,
+    training_strategy: trainingStrategy,
+  });
+  return withRetries("generateTeachbackScenario", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as {
+      scenario?: unknown;
+      question?: unknown;
+    } | null;
+    if (
+      !parsed ||
+      typeof parsed.scenario !== "string" ||
+      !parsed.scenario.trim() ||
+      typeof parsed.question !== "string" ||
+      !parsed.question.trim()
+    ) {
+      return null;
+    }
+    return { scenario: parsed.scenario.trim(), question: parsed.question.trim() };
+  });
+}
+
+export type TeachbackScore = {
+  score: number;
+  feedback: string;
+  missed: string[];
+};
+
+// Score the learner's answer against the framework: signal read (40) + play
+// applied (40) + boundaries respected (20). The route derives passed from
+// TEACHBACK_PASS_SCORE — the threshold lives in prescription.ts, not here.
+export async function scoreTeachback(
+  frameworks: string,
+  scenario: string,
+  question: string,
+  answer: string
+): Promise<TeachbackScore | null> {
+  const prompt = await loadPrompt("teachback-score", {
+    frameworks,
+    scenario,
+    question,
+    answer,
+  });
+  return withRetries("scoreTeachback", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      // Scoring is reasoning-heavy (grading against a 3-part rubric).
+      // claude-sonnet-5 reasons in a thinking channel and can burn the whole
+      // budget before emitting the JSON — 8000 leaves room for both. See the
+      // seed's scoreTeachback for the diagnosis.
+      max_tokens: 8000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as {
+      score?: unknown;
+      feedback?: unknown;
+      missed?: unknown;
+    } | null;
+    // Tolerate a numeric string ("85") or an arithmetic total the model
+    // occasionally emits ("40 + 35 + 15") — parseFloat on the first number
+    // after collapsing whitespace-separated sums keeps a stray format from
+    // wasting a whole retry. A non-numeric score is still rejected.
+    const rawScore =
+      typeof parsed?.score === "number"
+        ? parsed.score
+        : typeof parsed?.score === "string"
+          ? (parsed.score as string)
+              .split(/[+]/)
+              .reduce((sum, part) => sum + (parseFloat(part) || 0), 0)
+          : NaN;
+    if (
+      !parsed ||
+      !Number.isFinite(rawScore) ||
+      typeof parsed.feedback !== "string" ||
+      !parsed.feedback.trim()
+    ) {
+      return null;
+    }
+    const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+    return {
+      score,
+      feedback: parsed.feedback.trim(),
+      missed: isStringArray(parsed.missed) ? parsed.missed : [],
+    };
+  }, 5);
 }

@@ -1,9 +1,11 @@
 "use client";
 // P-4A Build 4 — the ROI-ranked prescription queue.
-// Org-scoped list of open prescriptions, ranked recurrence × severity —
-// a prioritized list, never a firehose. Each row: the gap, the evidence
-// behind it, the proposed rung, the pairing, and the rank rationale.
-// "Run detection" re-runs the engine for the caller's own org only.
+// P-4B Build 1 — the manager gate lives here: one-click approve / snooze on
+// every open row, an "Approved / in-flight" section for rows past the gate,
+// snoozed rows dropping out until their wake date (defers, never deletes),
+// and the efficacy state (watching / escalated / effective) surfaced on
+// every delivered row. "Check efficacy" re-runs the post-delivery watch for
+// the caller's own org.
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -27,6 +29,13 @@ type QueueRow = {
   rank_rationale: string;
   status: string;
   created_at: string;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  snoozed_until: string | null;
+  delivered_at: string | null;
+  efficacy_status: string | null;
+  efficacy_note: string | null;
+  escalated_from_rung: number | null;
 };
 
 const RUNG_LABEL: Record<number, string> = {
@@ -49,9 +58,17 @@ const SOURCE_LABEL: Record<string, string> = {
   entity_signal: "📈 Entity signal",
 };
 
+const EFFICACY_CHIP: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  watching: { label: "👁 watching", color: "#1e40af", bg: "#eff6ff", border: "#bfdbfe" },
+  escalated: { label: "🔺 escalated", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+  effective: { label: "✅ effective — proven", color: "#166534", bg: "#f0fdf4", border: "#bbf7d0" },
+};
+
 export default function PrescriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [checkingEfficacy, setCheckingEfficacy] = useState(false);
+  const [actingOn, setActingOn] = useState<string | null>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<QueueRow[]>([]);
@@ -111,6 +128,40 @@ export default function PrescriptionsPage() {
     }
   };
 
+  const checkEfficacy = async () => {
+    setCheckingEfficacy(true);
+    setRunMessage(null);
+    try {
+      const res = await fetch("/api/prescriptions/efficacy", { method: "POST" });
+      const data = await res.json();
+      setRunMessage(res.ok ? data.message : data.error || "Efficacy check failed.");
+      if (res.ok) await load();
+    } catch {
+      setRunMessage("Efficacy check failed.");
+    } finally {
+      setCheckingEfficacy(false);
+    }
+  };
+
+  const act = async (id: string, kind: "approve" | "snooze") => {
+    setActingOn(id);
+    setRunMessage(null);
+    try {
+      const res = await fetch(`/api/prescriptions/${id}/${kind}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: kind === "snooze" ? JSON.stringify({ days: 7 }) : "{}",
+      });
+      const data = await res.json();
+      setRunMessage(res.ok ? data.message : data.error || `${kind} failed.`);
+      if (res.ok) await load();
+    } catch {
+      setRunMessage(`${kind} failed.`);
+    } finally {
+      setActingOn(null);
+    }
+  };
+
   if (loading) {
     return (
       <div style={styles.center}>
@@ -120,28 +171,39 @@ export default function PrescriptionsPage() {
   }
 
   const open = rows.filter((r) => r.status === "open");
-  const other = rows.filter((r) => r.status !== "open");
+  const inFlight = rows.filter((r) => r.status === "approved" || r.status === "delivered");
+  const snoozed = rows.filter((r) => r.status === "snoozed");
+  const closed = rows.filter((r) => r.status === "closed");
 
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
         <div style={styles.headerRow}>
           <h1 style={styles.title}>💊 Prescription Queue</h1>
-          <button onClick={runDetection} disabled={running} style={styles.runButton}>
-            {running ? "Detecting…" : "Run detection"}
-          </button>
+          <div style={styles.headerButtons}>
+            <button
+              onClick={checkEfficacy}
+              disabled={checkingEfficacy}
+              style={styles.efficacyButton}
+            >
+              {checkingEfficacy ? "Checking…" : "Check efficacy"}
+            </button>
+            <button onClick={runDetection} disabled={running} style={styles.runButton}>
+              {running ? "Detecting…" : "Run detection"}
+            </button>
+          </div>
         </div>
         <p style={styles.subtitle}>
-          The brain&apos;s open prescriptions, ranked by recurrence × severity. Each one
-          traces back to the records that caused it — click through for the full evidence
-          chain.
+          The brain&apos;s prescriptions, ranked by recurrence × severity. Approve or snooze
+          each open one; delivered ones stay under the efficacy loop&apos;s watch — recurrence
+          auto-escalates, quiet gets proven effective.
         </p>
         <a href="/library" style={styles.backLink}>← Back to library</a>
 
         {runMessage && <p style={styles.runMessage}>{runMessage}</p>}
         {error && <p style={styles.errorText}>{error}</p>}
 
-        <h2 style={styles.sectionTitle}>Open ({open.length})</h2>
+        <h2 style={styles.sectionTitle}>Open — awaiting the manager gate ({open.length})</h2>
         {open.length === 0 && (
           <p style={styles.empty}>
             No open prescriptions. Run detection after new frameworks or conflicts land.
@@ -162,32 +224,122 @@ export default function PrescriptionsPage() {
             </div>
             <p style={styles.gap}>{r.gap_summary}</p>
             <p style={styles.pairing}>{r.pairing_summary}</p>
-            <div style={styles.cardMeta}>
-              {r.rank_rationale} · {r.evidence_count} evidence record
-              {r.evidence_count === 1 ? "" : "s"} →
+            <div style={styles.cardActions}>
+              <button
+                style={styles.approveButton}
+                disabled={actingOn === r.id}
+                onClick={(e: React.MouseEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  act(r.id, "approve");
+                }}
+              >
+                ✓ Approve
+              </button>
+              <button
+                style={styles.snoozeButton}
+                disabled={actingOn === r.id}
+                onClick={(e: React.MouseEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  act(r.id, "snooze");
+                }}
+              >
+                😴 Snooze 7d
+              </button>
+              <span style={styles.cardMeta}>
+                {r.rank_rationale} · {r.evidence_count} evidence record
+                {r.evidence_count === 1 ? "" : "s"} →
+              </span>
             </div>
           </a>
         ))}
 
-        {other.length > 0 && (
+        {inFlight.length > 0 && (
           <>
-            <h2 style={styles.sectionTitle}>In flight ({other.length})</h2>
-            {other.map((r) => (
+            <h2 style={styles.sectionTitle}>Approved / in-flight ({inFlight.length})</h2>
+            {inFlight.map((r) => {
+              const chip = r.efficacy_status ? EFFICACY_CHIP[r.efficacy_status] : null;
+              return (
+                <a key={r.id} href={`/prescriptions/${r.id}`} style={styles.card}>
+                  <div style={styles.cardTop}>
+                    <span style={styles.rungChip}>
+                      Rung {r.rung} · {RUNG_LABEL[r.rung]}
+                      {r.escalated_from_rung ? ` (escalated from ${r.escalated_from_rung})` : ""}
+                    </span>
+                    <span style={styles.statusChip}>{r.status}</span>
+                    {chip && (
+                      <span
+                        style={{
+                          ...styles.efficacyChip,
+                          color: chip.color,
+                          background: chip.bg,
+                          borderColor: chip.border,
+                        }}
+                      >
+                        {chip.label}
+                      </span>
+                    )}
+                    {r.capture_first && <span style={styles.captureChip}>📝 Capture first</span>}
+                  </div>
+                  <p style={styles.gap}>{r.gap_summary}</p>
+                  {r.approved_by_name && (
+                    <p style={styles.approvalMeta}>
+                      Approved by {r.approved_by_name}
+                      {r.approved_at ? ` · ${new Date(r.approved_at).toLocaleDateString()}` : ""}
+                      {r.delivered_at
+                        ? ` · delivered ${new Date(r.delivered_at).toLocaleDateString()}`
+                        : ""}
+                    </p>
+                  )}
+                  {r.efficacy_note && <p style={styles.efficacyNote}>{r.efficacy_note}</p>}
+                </a>
+              );
+            })}
+          </>
+        )}
+
+        {closed.length > 0 && (
+          <>
+            <h2 style={styles.sectionTitle}>Proven effective — closed ({closed.length})</h2>
+            {closed.map((r) => (
               <a
                 key={r.id}
                 href={`/prescriptions/${r.id}`}
-                style={{ ...styles.card, opacity: 0.7 }}
+                style={{ ...styles.card, borderColor: "#bbf7d0", background: "#f6fef8" }}
               >
                 <div style={styles.cardTop}>
+                  <span
+                    style={{
+                      ...styles.efficacyChip,
+                      color: "#166534",
+                      background: "#f0fdf4",
+                      borderColor: "#bbf7d0",
+                    }}
+                  >
+                    ✅ effective — proven
+                  </span>
                   <span style={styles.rungChip}>
                     Rung {r.rung} · {RUNG_LABEL[r.rung]}
                   </span>
-                  <span style={styles.statusChip}>{r.status}</span>
                 </div>
                 <p style={styles.gap}>{r.gap_summary}</p>
+                {r.efficacy_note && <p style={styles.efficacyNote}>{r.efficacy_note}</p>}
               </a>
             ))}
           </>
+        )}
+
+        {snoozed.length > 0 && (
+          <p style={styles.snoozedLine}>
+            😴 {snoozed.length} snoozed — wakes{" "}
+            {snoozed
+              .map((r) =>
+                r.snoozed_until ? new Date(r.snoozed_until).toLocaleDateString() : "soon"
+              )
+              .join(" · ")}
+            . Snooze defers, never deletes.
+          </p>
         )}
       </div>
     </div>
@@ -203,6 +355,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     marginBottom: 4,
   },
+  headerButtons: { display: "flex", gap: 8 },
   title: { fontSize: "26px", margin: 0 },
   subtitle: { color: "#666", fontSize: "14px", margin: "6px 0 10px", lineHeight: 1.5 },
   backLink: { fontSize: "13px", color: "#666", textDecoration: "none" },
@@ -212,6 +365,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#fff",
     background: "#7c3aed",
     border: "none",
+    borderRadius: 8,
+    padding: "8px 14px",
+    cursor: "pointer",
+  },
+  efficacyButton: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#7c3aed",
+    background: "#f5f3ff",
+    border: "1px solid #ddd6fe",
     borderRadius: 8,
     padding: "8px 14px",
     cursor: "pointer",
@@ -242,6 +405,33 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     flexWrap: "wrap" as const,
     marginBottom: 8,
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap" as const,
+    marginTop: 4,
+  },
+  approveButton: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#fff",
+    background: "#16a34a",
+    border: "none",
+    borderRadius: 8,
+    padding: "6px 12px",
+    cursor: "pointer",
+  },
+  snoozeButton: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#57534e",
+    background: "#f5f5f4",
+    border: "1px solid #e7e5e4",
+    borderRadius: 8,
+    padding: "6px 12px",
+    cursor: "pointer",
   },
   rank: { fontSize: "13px", fontWeight: 700, color: "#7c3aed" },
   roi: {
@@ -287,9 +477,19 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "3px 9px",
     textTransform: "capitalize" as const,
   },
+  efficacyChip: {
+    fontSize: "11px",
+    fontWeight: 700,
+    border: "1px solid",
+    borderRadius: 999,
+    padding: "3px 9px",
+  },
   gap: { fontSize: "15px", fontWeight: 600, margin: "0 0 6px", lineHeight: 1.45 },
   pairing: { fontSize: "13px", color: "#555", margin: "0 0 8px", lineHeight: 1.5 },
+  approvalMeta: { fontSize: "12px", color: "#888", margin: "0 0 4px" },
+  efficacyNote: { fontSize: "12px", color: "#666", margin: 0, lineHeight: 1.5 },
   cardMeta: { fontSize: "12px", color: "#999" },
+  snoozedLine: { fontSize: "13px", color: "#888", marginTop: 24, lineHeight: 1.5 },
   center: {
     minHeight: "100vh",
     display: "flex",
