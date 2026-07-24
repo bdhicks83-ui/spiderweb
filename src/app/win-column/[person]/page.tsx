@@ -56,7 +56,18 @@ export default function WinColumnEvidencePage() {
         return;
       }
       try {
-        const res = await fetch(`/api/win-column/evidence?person=${encodeURIComponent(params.person)}`);
+        // Next.js's app-router useParams can hand back the RAW (still
+        // URL-encoded) path segment rather than a decoded one, depending on
+        // how the link was constructed — decode defensively before
+        // re-encoding for the fetch, or a name with a space ("marcus webb")
+        // round-trips as "marcus%2520webb" (double-encoded) and 404s.
+        let rawPerson = params.person;
+        try {
+          rawPerson = decodeURIComponent(rawPerson);
+        } catch {
+          // already decoded / not encoded — use as-is
+        }
+        const res = await fetch(`/api/win-column/evidence?person=${encodeURIComponent(rawPerson)}`);
         const data = await res.json();
         if (!res.ok) {
           setError(data.error || "Could not load the evidence packet.");
