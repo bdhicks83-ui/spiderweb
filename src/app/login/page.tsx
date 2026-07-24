@@ -42,63 +42,86 @@ export default function Login() {
 
   if (sent) {
     return (
-      <main>
-        <h1>Check your email 📬</h1>
-        <p>Magic link sent to {email}. Click it and you&apos;re in.</p>
-      </main>
+      <div style={styles.wrapper}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>Check your email 📬</h1>
+          <p style={styles.help}>Magic link sent to {email}. Click it and you&apos;re in.</p>
+        </div>
+      </div>
     );
   }
 
   if (signup) {
     return (
-      <main>
-        <h1>Start free today 🌸</h1>
-        <p>
-          Enter your email — we&apos;ll send you a magic link. No password, no
-          credit card.
-        </p>
-        <form onSubmit={sendLink}>
+      <div style={styles.wrapper}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>Start free today 🌸</h1>
+          <p style={styles.help}>
+            Enter your email — we&apos;ll send you a magic link. No password, no
+            credit card.
+          </p>
+          <form onSubmit={sendLink} style={styles.form}>
+            <input
+              style={styles.input}
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button style={styles.primary} type="submit">Send my magic link →</button>
+          </form>
+          <p style={styles.subtle}>
+            Already have an account? The same link signs you in.
+          </p>
+          {error && <p style={styles.error}>{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.wrapper}>
+      <div style={styles.card}>
+        <h1 style={styles.title}>Log in</h1>
+
+        <form onSubmit={signInPassword} style={styles.form}>
           <input
+            style={styles.input}
             type="email"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <button type="submit">Send my magic link →</button>
+          <input
+            style={styles.input}
+            type="password"
+            placeholder="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button style={styles.primary} type="submit">Log in with password</button>
         </form>
-        <p style={{ margin: "16px 0", color: "#888" }}>
-          Already have an account? The same link signs you in.
-        </p>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-      </main>
-    );
-  }
 
-  return (
-    <main>
-      <h1>Log in</h1>
+        <p style={styles.divider}>— or —</p>
 
-      <form onSubmit={signInPassword}>
-        <input
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button type="submit">Log in with password</button>
-      </form>
+        <button style={styles.ghost} onClick={sendLink}>Send magic link instead</button>
 
-      <p style={{ margin: "16px 0" }}>— or —</p>
-
-      <button onClick={sendLink}>Send magic link instead</button>
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
-    </main>
+        {error && <p style={styles.error}>{error}</p>}
+      </div>
+    </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  wrapper: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: 'system-ui, sans-serif' },
+  card: { width: '100%', maxWidth: '380px', padding: '32px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '16px' },
+  title: { fontSize: '24px', fontWeight: 700, margin: 0 },
+  form: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  input: { padding: '10px 12px', fontSize: '15px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
+  primary: { padding: '10px 16px', fontSize: '15px', fontWeight: 600, color: '#fff', background: '#111', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  ghost: { padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111', background: '#fff', border: '1px solid #ccc', borderRadius: '8px', cursor: 'pointer' },
+  divider: { fontSize: '13px', color: '#999', textAlign: 'center', margin: 0 },
+  subtle: { fontSize: '13px', color: '#888', margin: 0, lineHeight: 1.5 },
+  help: { fontSize: '14px', color: '#555', margin: 0, lineHeight: 1.5 },
+  error: { fontSize: '13px', color: '#b91c1c', margin: 0 },
+};
