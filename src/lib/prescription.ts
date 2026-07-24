@@ -989,6 +989,8 @@ type EfficacyPrescriptionRow = {
   delivered_at: string | null;
   efficacy_status: string | null;
   gap_summary: string;
+  pairing_summary: string;
+  recurrence: number;
 };
 
 type EfficacyDetectionRow = {
@@ -1054,7 +1056,9 @@ export async function runEfficacyLoop(
 
   const { data: rxRaw, error: rxError } = await service
     .from("prescriptions")
-    .select("id, detection_id, rung, status, delivered_at, efficacy_status, gap_summary")
+    .select(
+      "id, detection_id, rung, status, delivered_at, efficacy_status, gap_summary, pairing_summary, recurrence"
+    )
     .eq("org_id", orgId)
     .eq("status", "delivered");
   if (rxError) throw new Error(`Could not load delivered prescriptions: ${rxError.message}`);
@@ -1139,6 +1143,21 @@ export async function runEfficacyLoop(
         (capped
           ? `Already at rung 4 — flagged for redesign at the same rung.`
           : `Auto-escalated rung ${fromRung} → ${toRung} (${RUNGS[toRung].label}) — the intervention didn't transfer; regenerate at the bigger rung and redeliver.`);
+
+      // The stored pairing/ROI text is generated once at triage time and
+      // baked in the old rung's label ("Micro-training", "severity 2") — an
+      // escalation that only flips `rung`/`severity` leaves that text stale
+      // and a demo watcher WILL catch it. Recompute both here, same formula
+      // triage uses (P-5 fix).
+      const fromLabel = RUNGS[fromRung]?.label ?? `Rung ${fromRung}`;
+      const toLabel = RUNGS[toRung]?.label ?? `Rung ${toRung}`;
+      const refreshedPairingSummary = capped
+        ? rx.pairing_summary
+        : rx.pairing_summary.split(fromLabel).join(toLabel);
+      const recurrence = rx.recurrence;
+      const roi = recurrence * toRung;
+      const rankRationale = `${recurrence} evidence record${recurrence === 1 ? "" : "s"} × severity ${toRung} (${toLabel}) = ROI ${roi}`;
+
       const { error } = await service
         .from("prescriptions")
         .update({
@@ -1149,6 +1168,9 @@ export async function runEfficacyLoop(
           efficacy_note: note,
           efficacy_evidence_record_ids: recurrences.map((r) => r.id),
           efficacy_checked_at: checkedAt,
+          pairing_summary: refreshedPairingSummary,
+          roi_score: roi,
+          rank_rationale: rankRationale,
         })
         .eq("id", rx.id);
       if (error) throw new Error(`Could not escalate prescription ${rx.id}: ${error.message}`);

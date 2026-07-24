@@ -38,6 +38,11 @@ type PrescriptionRow = {
   efficacy_status: string | null;
   efficacy_note: string | null;
   escalated_from_rung: number | null;
+  efficacy_checked_at: string | null;
+  // P-5 — outcome-nudge (6-month one-click follow-up)
+  outcome_confirmed_at: string | null;
+  outcome_confirmed_status: string | null;
+  outcome_confirmed_by: string | null;
 };
 
 type DetectionRow = {
@@ -47,11 +52,38 @@ type DetectionRow = {
   conflict_id: string | null;
 };
 
+// P-5 fix — ROI ranking bias, logged in MASTER-STATE/DECISION-LOG: ROI =
+// recurrence × rung severity systematically buries conflict-sourced
+// prescriptions, because conflicts are rung-clamped to ≤2 (see RUNG_CEILING
+// in src/lib/prescription.ts) while entity/coverage gaps can reach 3-4 on
+// the same recurrence count. But a live contradiction is the most
+// TIME-SENSITIVE item on the queue — two teams are acting on opposing
+// guidance today, while "capture HR's knowledge" has no clock. Fix: an
+// urgency dimension, independent of effort/rung, ranks the queue FIRST —
+// ROI is the tiebreak within a tier, not the primary sort. Both numbers
+// ship to the UI so the exec can see the raw ROI too.
+const URGENCY_RANK: Record<string, number> = {
+  conflict: 3, // live contradiction — two teams acting on opposing guidance today
+  entity_signal: 2, // known recurrence, no active contradiction
+  coverage_gap: 1, // no clock — nobody's blocked, just uncovered
+};
+const URGENCY_LABEL: Record<string, string> = {
+  conflict: "High",
+  entity_signal: "Medium",
+  coverage_gap: "Low",
+};
+
 const PRESCRIPTION_COLUMNS =
   "id, detection_id, rung, rung_rationale, gap_summary, experts, capture_first, " +
   "audience, pairing_summary, recurrence, severity, roi_score, rank_rationale, " +
   "status, created_at, approved_by, approved_at, snoozed_until, delivered_at, " +
-  "efficacy_status, efficacy_note, escalated_from_rung";
+  "efficacy_status, efficacy_note, escalated_from_rung, efficacy_checked_at, " +
+  "outcome_confirmed_at, outcome_confirmed_status, outcome_confirmed_by";
+
+// P-5 — outcome-nudge cadence: a prescription's outcome is re-asked every 6
+// months after the last confirmation (or after the efficacy loop first
+// proved it effective, if never confirmed).
+const OUTCOME_NUDGE_MS = 1000 * 60 * 60 * 24 * 30 * 6;
 
 export async function GET() {
   try {
@@ -85,10 +117,12 @@ export async function GET() {
         .lte("snoozed_until", new Date().toISOString());
     }
 
+    // Fetched unsorted (small org-scale result set) — final rank is computed
+    // in JS below because urgency depends on source_type, which lives on
+    // the joined prescription_detections row, not this table.
     const { data: rxRaw, error } = await supabase
       .from("prescriptions")
       .select(PRESCRIPTION_COLUMNS)
-      .order("roi_score", { ascending: false })
       .order("created_at", { ascending: false });
     if (error) {
       return NextResponse.json(
@@ -114,6 +148,7 @@ export async function GET() {
       ...new Set([
         ...prescriptions.flatMap((p) => (p.experts || []).map((e) => e.user_id)),
         ...prescriptions.map((p) => p.approved_by).filter((v): v is string => !!v),
+        ...prescriptions.map((p) => p.outcome_confirmed_by).filter((v): v is string => !!v),
       ]),
     ];
     let names: Record<string, string | null> = {};
@@ -130,36 +165,65 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({
-      prescriptions: prescriptions.map((p) => {
-        const d = detById[p.detection_id];
-        return {
-          id: p.id,
-          source_type: d?.source_type ?? null,
-          evidence_count: d?.evidence_record_ids?.length ?? p.recurrence,
-          rung: p.rung,
-          rung_rationale: p.rung_rationale,
-          gap_summary: p.gap_summary,
-          expert_names: (p.experts || []).map((e) => names[e.user_id] ?? "Org expert"),
-          capture_first: p.capture_first,
-          audience: p.audience,
-          pairing_summary: p.pairing_summary,
-          recurrence: p.recurrence,
-          severity: p.severity,
-          roi_score: Number(p.roi_score),
-          rank_rationale: p.rank_rationale,
-          status: p.status,
-          created_at: p.created_at,
-          approved_by_name: p.approved_by ? (names[p.approved_by] ?? "Org member") : null,
-          approved_at: p.approved_at,
-          snoozed_until: p.snoozed_until,
-          delivered_at: p.delivered_at,
-          efficacy_status: p.efficacy_status,
-          efficacy_note: p.efficacy_note,
-          escalated_from_rung: p.escalated_from_rung,
-        };
-      }),
+    const mapped = prescriptions.map((p) => {
+      const d = detById[p.detection_id];
+      const sourceType = d?.source_type ?? null;
+      const urgencyRank = sourceType ? (URGENCY_RANK[sourceType] ?? 0) : 0;
+      return {
+        id: p.id,
+        source_type: sourceType,
+        evidence_count: d?.evidence_record_ids?.length ?? p.recurrence,
+        rung: p.rung,
+        rung_rationale: p.rung_rationale,
+        gap_summary: p.gap_summary,
+        expert_names: (p.experts || []).map((e) => names[e.user_id] ?? "Org expert"),
+        capture_first: p.capture_first,
+        audience: p.audience,
+        pairing_summary: p.pairing_summary,
+        recurrence: p.recurrence,
+        severity: p.severity,
+        roi_score: Number(p.roi_score),
+        rank_rationale: p.rank_rationale,
+        urgency: sourceType ? (URGENCY_LABEL[sourceType] ?? "—") : "—",
+        urgency_rank: urgencyRank,
+        status: p.status,
+        created_at: p.created_at,
+        approved_by_name: p.approved_by ? (names[p.approved_by] ?? "Org member") : null,
+        approved_at: p.approved_at,
+        snoozed_until: p.snoozed_until,
+        delivered_at: p.delivered_at,
+        efficacy_status: p.efficacy_status,
+        efficacy_note: p.efficacy_note,
+        escalated_from_rung: p.escalated_from_rung,
+        outcome_confirmed_at: p.outcome_confirmed_at,
+        outcome_confirmed_status: p.outcome_confirmed_status,
+        outcome_confirmed_by_name: p.outcome_confirmed_by
+          ? (names[p.outcome_confirmed_by] ?? "Org member")
+          : null,
+        // Due once 6 months have passed since the last confirmation, or
+        // since the efficacy loop first proved it effective if never
+        // confirmed. Only meaningful for closed/effective rows — the UI
+        // gates on that too, this is belt-and-suspenders.
+        outcome_nudge_due:
+          p.status === "closed" &&
+          p.efficacy_status === "effective" &&
+          (() => {
+            const since = p.outcome_confirmed_at ?? p.efficacy_checked_at;
+            if (!since) return false;
+            return Date.now() - new Date(since).getTime() >= OUTCOME_NUDGE_MS;
+          })(),
+      };
     });
+
+    // Rank: urgency first (a live conflict is time-sensitive regardless of
+    // its clamped rung), ROI as the tiebreak within a tier, newest last.
+    mapped.sort((a, b) => {
+      if (b.urgency_rank !== a.urgency_rank) return b.urgency_rank - a.urgency_rank;
+      if (b.roi_score !== a.roi_score) return b.roi_score - a.roi_score;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    return NextResponse.json({ prescriptions: mapped });
   } catch (err) {
     console.error("Unexpected error in prescriptions route:", err);
     return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });

@@ -52,6 +52,17 @@ const PERSONA_LABEL: Record<string, string> = {
   sr_manager: "Sr. Manager",
 };
 
+// P-5 punch list item 7 — a single hardcoded placeholder made every demo
+// search look pre-loaded/scripted. Rotate through a small pool so the
+// textarea reads differently each time the page loads.
+const SITUATION_PLACEHOLDERS = [
+  "e.g. We had a quality escape right after a die changeover on the press line — should we release the next run before first-piece inspection clears?",
+  "e.g. The second-shift crew keeps missing the same setup step on CNC Line 2 — is this a training gap or an equipment issue?",
+  "e.g. Maintenance and Quality disagree on when a fixture needs recalibration — who's right, and what's the actual trigger?",
+  "e.g. A new hire on the receiving dock flagged a part as out-of-spec that later shipped fine — was that the right call?",
+  "e.g. Scrap is climbing on the same line where we had a thermal drift issue months ago — is this the same root cause coming back?",
+];
+
 function matchLabel(similarity: number): string {
   // Everything shown already clears the 0.75 retrieval floor; these grade
   // within the band voyage-large-2 actually produces for on-topic matches.
@@ -69,6 +80,9 @@ export default function RetrievePage() {
   const [results, setResults] = useState<Result[] | null>(null);
   const [noMatch, setNoMatch] = useState<string | null>(null);
   const [askedFor, setAskedFor] = useState("");
+  const [placeholder] = useState(
+    () => SITUATION_PLACEHOLDERS[Math.floor(Math.random() * SITUATION_PLACEHOLDERS.length)]
+  );
 
   useEffect(() => {
     (async () => {
@@ -150,7 +164,7 @@ export default function RetrievePage() {
           <textarea
             style={styles.textarea}
             rows={3}
-            placeholder="e.g. We had a quality escape right after a die changeover on the press line — should we release the next run before first-piece inspection clears?"
+            placeholder={placeholder}
             value={situation}
             onChange={(e) => setSituation(e.target.value)}
             onKeyDown={onKeyDown}

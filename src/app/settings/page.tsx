@@ -39,7 +39,17 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const router = useRouter();
+
+  // P-5 punch list item 1 — no sign-out existed anywhere; incognito/relogin
+  // was the standing workaround for switching between the 5 demo personas.
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
 
   useEffect(() => {
     (async () => {
@@ -144,6 +154,16 @@ export default function SettingsPage() {
 
         {message && <p style={styles.message}>{message}</p>}
 
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>Session</h2>
+          <p style={styles.help}>
+            Sign out to switch to a different expert account.
+          </p>
+          <button style={styles.signOutButton} onClick={signOut} disabled={signingOut}>
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
+        </div>
+
         <a href="/dashboard" style={styles.backLink}>← Back to dashboard</a>
       </div>
     </div>
@@ -179,6 +199,16 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     background: "#4338ca",
     color: "#fff",
+    cursor: "pointer",
+  },
+  signOutButton: {
+    padding: "10px 18px",
+    fontSize: "14px",
+    fontWeight: 600,
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    background: "#fef2f2",
+    color: "#b91c1c",
     cursor: "pointer",
   },
   personaGrid: { display: "grid", gap: 10 },

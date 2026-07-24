@@ -27,6 +27,8 @@ type QueueRow = {
   severity: number;
   roi_score: number;
   rank_rationale: string;
+  urgency: string;
+  urgency_rank: number;
   status: string;
   created_at: string;
   approved_by_name: string | null;
@@ -36,6 +38,10 @@ type QueueRow = {
   efficacy_status: string | null;
   efficacy_note: string | null;
   escalated_from_rung: number | null;
+  outcome_confirmed_at: string | null;
+  outcome_confirmed_status: string | null;
+  outcome_confirmed_by_name: string | null;
+  outcome_nudge_due: boolean;
 };
 
 const RUNG_LABEL: Record<number, string> = {
@@ -56,6 +62,16 @@ const SOURCE_LABEL: Record<string, string> = {
   conflict: "⚠️ Conflict X-ray",
   coverage_gap: "🕳️ Coverage gap",
   entity_signal: "📈 Entity signal",
+};
+
+// P-5 fix — urgency now ranks the queue; ROI is the tiebreak within a tier.
+// A conflict is time-sensitive (two teams acting on opposing guidance
+// today) regardless of its clamped rung, so it no longer sinks below a
+// higher-rung coverage gap with no clock on it.
+const URGENCY_CHIP: Record<string, { color: string; bg: string; border: string }> = {
+  High: { color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+  Medium: { color: "#b45309", bg: "#fffbeb", border: "#fde68a" },
+  Low: { color: "#57534e", bg: "#f5f5f4", border: "#e7e5e4" },
 };
 
 const EFFICACY_CHIP: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -143,6 +159,25 @@ export default function PrescriptionsPage() {
     }
   };
 
+  const confirmOutcome = async (id: string, status: "holding" | "regressed") => {
+    setActingOn(id);
+    setRunMessage(null);
+    try {
+      const res = await fetch(`/api/prescriptions/${id}/outcome`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      setRunMessage(res.ok ? data.message : data.error || "Outcome check-in failed.");
+      if (res.ok) await load();
+    } catch {
+      setRunMessage("Outcome check-in failed.");
+    } finally {
+      setActingOn(null);
+    }
+  };
+
   const act = async (id: string, kind: "approve" | "snooze") => {
     setActingOn(id);
     setRunMessage(null);
@@ -194,7 +229,8 @@ export default function PrescriptionsPage() {
           </div>
         </div>
         <p style={styles.subtitle}>
-          The brain&apos;s prescriptions, ranked by recurrence × severity. Approve or snooze
+          Ranked by urgency first — a live conflict jumps the queue even at its capped
+          rung — then ROI (recurrence × severity) as the tiebreak. Approve or snooze
           each open one; delivered ones stay under the efficacy loop&apos;s watch — recurrence
           auto-escalates, quiet gets proven effective.
         </p>
@@ -214,6 +250,18 @@ export default function PrescriptionsPage() {
           <a key={r.id} href={`/prescriptions/${r.id}`} style={styles.card}>
             <div style={styles.cardTop}>
               <span style={styles.rank}>#{i + 1}</span>
+              {URGENCY_CHIP[r.urgency] && (
+                <span
+                  style={{
+                    ...styles.urgencyChip,
+                    color: URGENCY_CHIP[r.urgency].color,
+                    background: URGENCY_CHIP[r.urgency].bg,
+                    borderColor: URGENCY_CHIP[r.urgency].border,
+                  }}
+                >
+                  {r.urgency} urgency
+                </span>
+              )}
               <span style={styles.roi}>ROI {r.roi_score}</span>
               <span style={styles.rungChip}>
                 Rung {r.rung} · {RUNG_LABEL[r.rung]} ({RUNG_EFFORT[r.rung]})
@@ -304,29 +352,65 @@ export default function PrescriptionsPage() {
           <>
             <h2 style={styles.sectionTitle}>Proven effective — closed ({closed.length})</h2>
             {closed.map((r) => (
-              <a
+              <div
                 key={r.id}
-                href={`/prescriptions/${r.id}`}
                 style={{ ...styles.card, borderColor: "#bbf7d0", background: "#f6fef8" }}
               >
-                <div style={styles.cardTop}>
-                  <span
-                    style={{
-                      ...styles.efficacyChip,
-                      color: "#166534",
-                      background: "#f0fdf4",
-                      borderColor: "#bbf7d0",
-                    }}
-                  >
-                    ✅ effective — proven
-                  </span>
-                  <span style={styles.rungChip}>
-                    Rung {r.rung} · {RUNG_LABEL[r.rung]}
-                  </span>
-                </div>
-                <p style={styles.gap}>{r.gap_summary}</p>
-                {r.efficacy_note && <p style={styles.efficacyNote}>{r.efficacy_note}</p>}
-              </a>
+                <a href={`/prescriptions/${r.id}`} style={styles.cardLinkArea}>
+                  <div style={styles.cardTop}>
+                    <span
+                      style={{
+                        ...styles.efficacyChip,
+                        color: "#166534",
+                        background: "#f0fdf4",
+                        borderColor: "#bbf7d0",
+                      }}
+                    >
+                      ✅ effective — proven
+                    </span>
+                    <span style={styles.rungChip}>
+                      Rung {r.rung} · {RUNG_LABEL[r.rung]}
+                    </span>
+                  </div>
+                  <p style={styles.gap}>{r.gap_summary}</p>
+                  {r.efficacy_note && <p style={styles.efficacyNote}>{r.efficacy_note}</p>}
+                </a>
+
+                {/* P-5 — outcome-nudge: the 6-month one-click follow-up. The
+                    efficacy loop proves it effective once; this re-asks
+                    periodically for the things the loop can't see on its own. */}
+                {r.outcome_nudge_due && (
+                  <div style={styles.nudgeBanner}>
+                    <span style={styles.nudgeText}>
+                      🔔 6-month check-in — still holding?
+                    </span>
+                    <div style={styles.nudgeButtons}>
+                      <button
+                        style={styles.nudgeHoldButton}
+                        disabled={actingOn === r.id}
+                        onClick={() => confirmOutcome(r.id, "holding")}
+                      >
+                        ✓ Still holding
+                      </button>
+                      <button
+                        style={styles.nudgeRegressButton}
+                        disabled={actingOn === r.id}
+                        onClick={() => confirmOutcome(r.id, "regressed")}
+                      >
+                        No longer holding
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!r.outcome_nudge_due && r.outcome_confirmed_at && (
+                  <p style={styles.outcomeConfirmedNote}>
+                    {r.outcome_confirmed_status === "regressed" ? "⚠️" : "✓"} Outcome check-in
+                    {r.outcome_confirmed_by_name ? ` by ${r.outcome_confirmed_by_name}` : ""} on{" "}
+                    {new Date(r.outcome_confirmed_at).toLocaleDateString()} —{" "}
+                    {r.outcome_confirmed_status === "regressed" ? "no longer holding" : "still holding"}.
+                  </p>
+                )}
+              </div>
             ))}
           </>
         )}
@@ -444,6 +528,13 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     padding: "3px 9px",
   },
+  urgencyChip: {
+    fontSize: "11px",
+    fontWeight: 700,
+    border: "1px solid",
+    borderRadius: 999,
+    padding: "3px 9px",
+  },
   rungChip: {
     fontSize: "11px",
     fontWeight: 600,
@@ -485,6 +576,42 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     padding: "3px 9px",
   },
+  cardLinkArea: { display: "block", textDecoration: "none", color: "inherit" },
+  nudgeBanner: {
+    marginTop: 10,
+    padding: "10px 12px",
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    borderRadius: 10,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap" as const,
+    gap: 8,
+  },
+  nudgeText: { fontSize: "13px", fontWeight: 600, color: "#92400e" },
+  nudgeButtons: { display: "flex", gap: 8 },
+  nudgeHoldButton: {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: "#fff",
+    background: "#16a34a",
+    border: "none",
+    borderRadius: 8,
+    padding: "6px 12px",
+    cursor: "pointer",
+  },
+  nudgeRegressButton: {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: "#92400e",
+    background: "#fff",
+    border: "1px solid #fde68a",
+    borderRadius: 8,
+    padding: "6px 12px",
+    cursor: "pointer",
+  },
+  outcomeConfirmedNote: { fontSize: "12px", color: "#666", margin: "10px 0 0" },
   gap: { fontSize: "15px", fontWeight: 600, margin: "0 0 6px", lineHeight: 1.45 },
   pairing: { fontSize: "13px", color: "#555", margin: "0 0 8px", lineHeight: 1.5 },
   approvalMeta: { fontSize: "12px", color: "#888", margin: "0 0 4px" },

@@ -454,7 +454,9 @@ async function runEfficacyLoop(orgId) {
   const summary = { checked: 0, escalated: 0, effective: 0, watching: 0, outcomes: [] };
   const { data: rxRaw, error: rxError } = await supabase
     .from("prescriptions")
-    .select("id, detection_id, rung, status, delivered_at, efficacy_status, gap_summary")
+    .select(
+      "id, detection_id, rung, status, delivered_at, efficacy_status, gap_summary, pairing_summary, recurrence"
+    )
     .eq("org_id", orgId)
     .eq("status", "delivered");
   if (rxError) throw new Error(`Could not load delivered prescriptions: ${rxError.message}`);
@@ -520,6 +522,20 @@ async function runEfficacyLoop(orgId) {
         (capped
           ? `Already at rung 4 — flagged for redesign at the same rung.`
           : `Auto-escalated rung ${fromRung} → ${toRung} (${RUNGS[toRung].label}) — the intervention didn't transfer; regenerate at the bigger rung and redeliver.`);
+
+      // Mirror the P-5 fix in src/lib/prescription.ts: the stored
+      // pairing/ROI text is baked with the OLD rung's label at triage time
+      // ("Micro-training" / "severity 2") — escalation must refresh it or
+      // the demo shows stale rung language on an escalated card.
+      const fromLabel = RUNGS[fromRung]?.label ?? `Rung ${fromRung}`;
+      const toLabel = RUNGS[toRung]?.label ?? `Rung ${toRung}`;
+      const refreshedPairingSummary = capped
+        ? rx.pairing_summary
+        : rx.pairing_summary.split(fromLabel).join(toLabel);
+      const recurrence = rx.recurrence;
+      const roi = recurrence * toRung;
+      const rankRationale = `${recurrence} evidence record${recurrence === 1 ? "" : "s"} × severity ${toRung} (${toLabel}) = ROI ${roi}`;
+
       const { error } = await supabase
         .from("prescriptions")
         .update({
@@ -530,6 +546,9 @@ async function runEfficacyLoop(orgId) {
           efficacy_note: note,
           efficacy_evidence_record_ids: recurrences.map((r) => r.id),
           efficacy_checked_at: checkedAt,
+          pairing_summary: refreshedPairingSummary,
+          roi_score: roi,
+          rank_rationale: rankRationale,
         })
         .eq("id", rx.id);
       if (error) throw new Error(`Could not escalate ${rx.id}: ${error.message}`);

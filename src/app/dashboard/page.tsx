@@ -227,7 +227,18 @@ export default function DashboardPage() {
       <div style={styles.container}>
         <div style={styles.titleRow}>
           <h1 style={styles.title}>Your Dashboard</h1>
-          <a href="/settings" style={styles.settingsLink}>Settings</a>
+          <div style={styles.headerLinks}>
+            <a href="/settings" style={styles.settingsLink}>Settings</a>
+            <button
+              style={styles.signOutLink}
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.replace('/login');
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         <div style={styles.resumeBanner}>
@@ -638,7 +649,9 @@ const styles: Record<string, React.CSSProperties> = {
   center: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif' },
   title: { fontSize: '28px', fontWeight: 700, margin: 0 },
   titleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' },
+  headerLinks: { display: 'flex', alignItems: 'center', gap: '14px' },
   settingsLink: { fontSize: '13px', fontWeight: 600, color: '#666', textDecoration: 'none' },
+  signOutLink: { fontSize: '13px', fontWeight: 600, color: '#b91c1c', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' },
   card: { padding: '24px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' },
   resumeBanner: { padding: '20px 24px', backgroundColor: '#111', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' },
   resumeBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: '#fff' },
