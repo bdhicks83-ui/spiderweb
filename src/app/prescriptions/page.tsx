@@ -198,7 +198,8 @@ export default function PrescriptionsPage() {
           each open one; delivered ones stay under the efficacy loop&apos;s watch — recurrence
           auto-escalates, quiet gets proven effective.
         </p>
-        <a href="/library" style={styles.backLink}>← Back to library</a>
+        <a href="/library" style={styles.backLink}>← Back to library</a>{" "}
+        <a href="/win-column" style={styles.backLink}>🏆 Win Column</a>
 
         {runMessage && <p style={styles.runMessage}>{runMessage}</p>}
         {error && <p style={styles.errorText}>{error}</p>}

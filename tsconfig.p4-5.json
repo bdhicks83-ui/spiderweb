@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "src/lib/win-column.ts",
+    "src/lib/elicitation.ts",
+    "src/app/api/win-column/route.ts",
+    "src/app/api/win-column/evidence/route.ts",
+    "src/app/win-column/page.tsx",
+    "src/app/win-column/[person]/page.tsx",
+    "src/app/library/page.tsx",
+    "src/app/prescriptions/page.tsx"
+  ]
+}

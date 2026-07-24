@@ -110,6 +110,9 @@ export default function LibraryPage() {
             <a href="/prescriptions" style={styles.newLink}>
               💊 Prescriptions
             </a>
+            <a href="/win-column" style={styles.newLink}>
+              🏆 Win Column
+            </a>
             <a href="/codify" style={styles.newLink}>
               + Codify a pattern
             </a>
