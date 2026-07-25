@@ -216,12 +216,19 @@ export default function RetrievePage() {
   }, [router]);
 
   async function search() {
-    if (loading || !situation.trim()) return;
+    // Breadcrumbs on the SUBMIT path itself — a "dead button" report is only
+    // diagnosable if the console shows exactly how far the click got.
+    log("search() entered", { loading, situationLength: situation.length });
+    if (loading || !situation.trim()) {
+      log("search() bailed on guard", { loading, situationEmpty: !situation.trim() });
+      return;
+    }
     const askedFor = situation.trim();
     setLoading(true);
     setView({ kind: "loading" });
 
     try {
+      log("POSTing /api/retrieve");
       const res = await fetch("/api/retrieve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -355,6 +362,7 @@ export default function RetrievePage() {
             disabled={loading}
           />
           <button
+            type="button"
             style={styles.searchButton}
             onClick={search}
             disabled={loading || !situation.trim()}
