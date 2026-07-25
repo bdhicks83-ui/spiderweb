@@ -715,7 +715,7 @@ export default function MarketingHome() {
       {/* ─── Nav ─── */}
       <nav className={`hb-nav ${scrolled ? "hb-nav-scrolled" : ""}`}>
         <a href="#top" className="hb-logo">
-          <span className="hb-logo-mark">🌸</span> Human&nbsp;Bloom
+          <span className="hb-logo-mark">🌸</span> Humanbloom
         </a>
         <div
           className="hb-nav-links hb-goo-nav"
