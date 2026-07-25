@@ -1,7 +1,9 @@
 // Homepage — Human Bloom marketing page for visitors, Spiderweb dashboard when logged in.
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { HIDE_TRACK_A } from "@/lib/demo-scope";
 import {
   DEPARTMENTS,
   PLAN_LABELS,
@@ -26,6 +28,15 @@ export default async function Dashboard() {
   // Logged out → animated marketing homepage (Phase 4)
   if (!user) {
     return <MarketingHome />;
+  }
+
+  // hidden for Track B demo, recoverable — flip HIDE_TRACK_A in src/lib/demo-scope.ts.
+  // The logged-in homepage is a legacy Track A surface (pending-insights counter,
+  // Knowledge dept card → /upload, pricing-tier grid, Emerging patterns with
+  // draft/approve framework buttons). For the enterprise demo, logged-in users
+  // land on the clean /dashboard instead. Nothing below is deleted.
+  if (HIDE_TRACK_A) {
+    redirect("/dashboard");
   }
 
   // ─── Phase 4: plan → unlocked departments ───

@@ -513,3 +513,19 @@ The original P0 ladder was 1 Situate · 2 Classify · 3 Call · 4 Signal · 5 Re
 **Result:** Post-edit grep confirms every remaining "Human Bloom"/"Spiderweb" in `src/` is a code comment, none user-visible. `tsc --noEmit` clean. Committed and deployed same session.
 
 
+
+### July 25, 2026 — Demo-scope hide pass: six Track A surfaces hidden (not deleted) for the Track B enterprise demo
+
+**Context:** The enterprise demo must show only the core loop (Codify · Ask the brain/retrieve · Team Library · Coaching Watch, plus in-nav Conflict X-ray · Prescriptions · Win Column). Six Track A / consultant-legacy surfaces were still visible: (1) Build your resume, (2) Expert Credibility Score, (3) Your Knowledge Graph's Value (portfolio/value score), (4) Profile verification (LinkedIn compare), (5) the pending-insights counter (769), (6) the Upload/Approve insights flow.
+
+**Decision — HIDE, not delete, behind one flag:** New file `src/lib/demo-scope.ts` exports `HIDE_TRACK_A = true` — the single reverse toggle. Every hidden block is render-gated with `{!HIDE_TRACK_A && (...)}` and carries a `// hidden for Track B demo, recoverable` marker. No component, API route, or table was touched. Flip the flag to `false` and everything returns.
+
+**Where the six actually lived (only 2 pages needed edits — there is no global nav component):**
+- `src/app/dashboard/page.tsx` — resume banner (#1), credibility card (#2), Knowledge Graph's Value card (#3), profile-verification card (#4), the "Grow your Knowledge Graph" gap banner (its links route to /upload + /capture — #6), plus the "Needs your context" card (not in the six, but its copy references the now-hidden credibility score). State/fetch logic untouched — gating is render-only.
+- `src/app/page.tsx` — the logged-in homepage held the pending counter (#5), the Knowledge dept card linking /upload (#6), the $49–$499/mo pricing-tier grid, and the legacy Emerging-patterns section with Draft/Approve framework buttons. Brian's call: when the flag is on, logged-in users are redirected to /dashboard (one gated line) instead of piecemeal-hiding four blocks. Flag off = homepage fully restored. Logged-out marketing homepage unchanged.
+
+**#6 dependency check (mandated before hiding):** The upload/approve/insights pipeline is fully independent of Track B. Codify (`/api/codify*`) uses pattern_records + elicitation sessions — zero `insights` reads/writes. No seed script under `scripts/` references insights, /upload, /approve, or embed/extract-insights. Library, Retrieve, Prescriptions, Win Column, and Coaching all read pattern_records only. The insights pipeline serves only Track A surfaces (upload, approve, capture, ask, resume, org-fit, credibility/growth). All routes remain reachable by direct URL — nothing was removed.
+
+**Deliberately left alone:** `/ask` and `/simulate` each contain one /upload link, but both pages are orphans — no demo-spine page links to them, so a demo audience cannot reach them by clicking. `/resume`'s "Go approve some" link (page itself now unlinked). All API routes, components, DB tables.
+
+**Result:** `tsc --noEmit` clean. All six features' pages/routes confirmed still present in the repo post-edit. Local only at time of this entry — commit/push runs from Brian's PowerShell.

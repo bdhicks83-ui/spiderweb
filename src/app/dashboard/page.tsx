@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { badgeForScore } from '@/lib/insight-score';
+import { HIDE_TRACK_A } from '@/lib/demo-scope';
 
 const supabase = createClient();
 
@@ -278,15 +279,18 @@ export default function DashboardPage() {
           <a href="/library" style={styles.resumeBannerLink}>Browse library →</a>
         </div>
 
-        <div style={styles.resumeBanner}>
-          <div>
-            <h2 style={styles.resumeBannerTitle}>🌟 Build your resume</h2>
-            <p style={styles.resumeBannerSub}>
-              Turn your approved insights into a one-page executive resume — free on every plan.
-            </p>
+        {/* hidden for Track B demo, recoverable — flip HIDE_TRACK_A in src/lib/demo-scope.ts */}
+        {!HIDE_TRACK_A && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>🌟 Build your resume</h2>
+              <p style={styles.resumeBannerSub}>
+                Turn your approved insights into a one-page executive resume — free on every plan.
+              </p>
+            </div>
+            <a href="/resume" style={styles.resumeBannerLink}>Generate my resume →</a>
           </div>
-          <a href="/resume" style={styles.resumeBannerLink}>Generate my resume →</a>
-        </div>
+        )}
 
         {/* New — manager-only coaching watch. Visible link for everyone, but
             RLS (is_manager_of()) means it renders empty for anyone with no
@@ -303,51 +307,59 @@ export default function DashboardPage() {
           <a href="/coaching" style={styles.resumeBannerLink}>Open →</a>
         </div>
 
-        <div style={styles.scoreCard}>
-          <div style={styles.scoreHeader}>
-            <h2 style={styles.cardTitle}>Expert Credibility Score</h2>
-            <button style={styles.linkButtonSm} onClick={recalcScore} disabled={scoreLoading}>
-              {scoreLoading ? 'Calculating…' : score ? 'Recalculate' : 'Calculate'}
-            </button>
-          </div>
-
-          {score ? (
-            <>
-              <div style={styles.scoreMain}>
-                <span style={styles.scoreNumber}>{score.overall_score}</span>
-                <span style={styles.scoreOutOf}>/ 100</span>
-              </div>
-              <button style={styles.breakdownToggle} onClick={() => setShowBreakdown((s) => !s)}>
-                {showBreakdown ? 'Hide breakdown' : 'See breakdown'}
+        {/* hidden for Track B demo, recoverable — flip HIDE_TRACK_A in src/lib/demo-scope.ts */}
+        {!HIDE_TRACK_A && (
+          <div style={styles.scoreCard}>
+            <div style={styles.scoreHeader}>
+              <h2 style={styles.cardTitle}>Expert Credibility Score</h2>
+              <button style={styles.linkButtonSm} onClick={recalcScore} disabled={scoreLoading}>
+                {scoreLoading ? 'Calculating…' : score ? 'Recalculate' : 'Calculate'}
               </button>
-              {showBreakdown && (
-                <div style={styles.breakdown}>
-                  <Metric label="Source diversity" pct={score.source_diversity_pct}
-                    help="Variety of trust tiers behind your insights" />
-                  <Metric label="High-confidence" pct={score.high_confidence_pct}
-                    help="Insights with no unresolved contradiction" />
-                  <Metric label="Applied evidence" pct={score.applied_evidence_ratio}
-                    help="Principles backed by a real example" />
-                  <Metric label="Avg. trust tier" pct={score.avg_trust_tier}
-                    help="Average strength of your sources" />
-                </div>
-              )}
-            </>
-          ) : (
-            <p style={styles.help}>
-              Calculate your score from your captured expertise — source diversity,
-              confidence, applied evidence, and source strength.
-            </p>
-          )}
-        </div>
+            </div>
 
-        {needsContext.length > 0 && (
+            {score ? (
+              <>
+                <div style={styles.scoreMain}>
+                  <span style={styles.scoreNumber}>{score.overall_score}</span>
+                  <span style={styles.scoreOutOf}>/ 100</span>
+                </div>
+                <button style={styles.breakdownToggle} onClick={() => setShowBreakdown((s) => !s)}>
+                  {showBreakdown ? 'Hide breakdown' : 'See breakdown'}
+                </button>
+                {showBreakdown && (
+                  <div style={styles.breakdown}>
+                    <Metric label="Source diversity" pct={score.source_diversity_pct}
+                      help="Variety of trust tiers behind your insights" />
+                    <Metric label="High-confidence" pct={score.high_confidence_pct}
+                      help="Insights with no unresolved contradiction" />
+                    <Metric label="Applied evidence" pct={score.applied_evidence_ratio}
+                      help="Principles backed by a real example" />
+                    <Metric label="Avg. trust tier" pct={score.avg_trust_tier}
+                      help="Average strength of your sources" />
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={styles.help}>
+                Calculate your score from your captured expertise — source diversity,
+                confidence, applied evidence, and source strength.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* hidden for Track B demo, recoverable — copy references the credibility score */}
+        {!HIDE_TRACK_A && needsContext.length > 0 && (
           <NeedsContextCard items={needsContext} onResolved={clearNeedsContext} />
         )}
 
-        <GrowthCard snapshots={snapshots} loading={growthLoading} onRefresh={refreshGrowth} />
+        {/* hidden for Track B demo, recoverable — flip HIDE_TRACK_A in src/lib/demo-scope.ts */}
+        {!HIDE_TRACK_A && (
+          <GrowthCard snapshots={snapshots} loading={growthLoading} onRefresh={refreshGrowth} />
+        )}
 
-        {gaps.length > 0 && (
+        {/* hidden for Track B demo, recoverable — gap links route to /upload + /capture */}
+        {!HIDE_TRACK_A && gaps.length > 0 && (
           <div style={styles.gapBanner}>
             <h2 style={styles.gapBannerTitle}>🌱 Grow your Knowledge Graph</h2>
             <p style={styles.gapBannerSub}>
@@ -370,6 +382,8 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* hidden for Track B demo, recoverable — flip HIDE_TRACK_A in src/lib/demo-scope.ts */}
+        {!HIDE_TRACK_A && (
         <div style={styles.card}>
           <div style={styles.cardHeader}>
             <h2 style={styles.cardTitle}>Profile verification</h2>
@@ -426,6 +440,7 @@ export default function DashboardPage() {
 
           {message && <p style={styles.message}>{message}</p>}
         </div>
+        )}
       </div>
     </div>
   );
