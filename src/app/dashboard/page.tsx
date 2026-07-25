@@ -288,6 +288,21 @@ export default function DashboardPage() {
           <a href="/resume" style={styles.resumeBannerLink}>Generate my resume →</a>
         </div>
 
+        {/* New — manager-only coaching watch. Visible link for everyone, but
+            RLS (is_manager_of()) means it renders empty for anyone with no
+            direct reports on file — same "link is safe to show, RLS is the
+            real gate" pattern as the rest of the app. */}
+        <div style={styles.resumeBanner}>
+          <div>
+            <h2 style={styles.resumeBannerTitle}>🧭 Coaching Watch</h2>
+            <p style={styles.resumeBannerSub}>
+              Private, for your direct reports only — an early signal from concern or friction
+              records, before it becomes a documented failure.
+            </p>
+          </div>
+          <a href="/coaching" style={styles.resumeBannerLink}>Open →</a>
+        </div>
+
         <div style={styles.scoreCard}>
           <div style={styles.scoreHeader}>
             <h2 style={styles.cardTitle}>Expert Credibility Score</h2>
