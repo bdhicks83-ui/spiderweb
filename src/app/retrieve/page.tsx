@@ -3,19 +3,66 @@
 // plain language and the right org framework(s) surface, with attribution and
 // (surface-with-warning) any ⚠️ Contested badge intact. When nothing clears the
 // similarity threshold the page says so honestly instead of forcing a match.
-import { useEffect, useState } from "react";
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// P-7 HARDENING (2026-07-25) — "renders nothing on a successful response."
+//
+// The route was hardened first (src/app/api/retrieve/route.ts) so it can never
+// emit the contradictory { noMatch:false, results:[] }. This file closes the
+// other half: the CLIENT could still paint blank on a perfectly good 200.
+//
+// THE THREE WAYS THIS PAGE COULD GO BLANK, all now closed:
+//
+//   1. NO ERROR BOUNDARY. Any throw inside the results map unmounted the whole
+//      React tree — in production that is a silent blank page with the form
+//      back at its initial state, indistinguishable from "nothing happened."
+//      The live throw paths were real: `f.signals.slice(0,3).map(...)` and
+//      `f.boundaries.slice(0,3).map(...)` assume arrays. `framework` is a
+//      MODEL-AUTHORED artifact with no schema enforcement at the DB layer, so
+//      a `signals` that came back as a string passes the `.length > 0` check,
+//      survives `.slice`, and then throws on `.map`. One malformed record in a
+//      result set took down the entire page. Now: <ResultBoundary> isolates
+//      each card, so a bad artifact degrades to one visible "couldn't render"
+//      card and every other result still shows.
+//
+//   2. NO ARRAY COERCION. Every list field is now run through asArray() before
+//      it is mapped, so a string/object/null in signals or boundaries renders
+//      as nothing-in-that-section instead of throwing.
+//
+//   3. NO UNREACHABLE-STATE HANDLING. The old page rendered results only on
+//      `results.length > 0` and the empty state only on `noMatch === true`.
+//      Any response satisfying neither branch — an unexpected shape, a
+//      `results` key that is not an array, a 200 with a body the page did not
+//      anticipate — fell into a dead zone that rendered NOTHING and reported
+//      NOTHING. Now the page runs an explicit state machine with exactly one
+//      source of truth (`view`), and its default branch is a visible
+//      diagnostic panel, never blank.
+//
+// ALSO: every fetch logs a `[retrieve-page]` breadcrumb with the parsed
+// response, so the next time this misbehaves the browser console already has
+// the evidence — no need to re-instrument to reproduce.
+//
+// NOTE ON SHAPE (verified, do not "fix" this): the API returns
+// { noMatch, query, results } — the key is `results`, NOT `frameworks`. This
+// page reads `data.results`. `contested` is an ARRAY of
+// {conflict_id, other_record_id}, never a boolean — the badge tests
+// array-non-empty, never truthiness.
+// ─────────────────────────────────────────────────────────────────────────────
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
 type Framework = {
-  name: string;
-  tagline: string;
-  signals: string[];
-  the_play: string;
-  boundaries: string[];
+  name?: string | null;
+  tagline?: string | null;
+  signals?: unknown;
+  the_play?: string | null;
+  boundaries?: unknown;
 };
+
+type Contested = { conflict_id: string; other_record_id: string };
 
 type Result = {
   id: string;
@@ -27,8 +74,19 @@ type Result = {
   framework: Framework | null;
   is_mine: boolean;
   author: { display_name: string | null; persona: string | null } | null;
-  contested: { conflict_id: string; other_record_id: string }[];
+  contested: Contested[];
 };
+
+// The page is in exactly one of these at any moment. `view` is the SINGLE
+// source of truth for what paints — there is no combination of state that
+// renders nothing.
+type View =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "results"; results: Result[]; askedFor: string }
+  | { kind: "noMatch"; message: string }
+  | { kind: "error"; message: string; code?: string }
+  | { kind: "unexpected"; detail: string };
 
 const TRIGGER_EMOJI: Record<string, string> = {
   broke: "\u{1F4A5}",
@@ -71,15 +129,72 @@ function matchLabel(similarity: number): string {
   return "Possible match";
 }
 
+// Coerce anything into a safe array of strings. `framework` is model-authored
+// and not schema-enforced, so a list field can legitimately arrive as a string,
+// null, or an object. None of those may throw.
+function asArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x) => typeof x === "string" && x.trim().length > 0);
+  if (typeof v === "string" && v.trim().length > 0) return [v];
+  return [];
+}
+
+function asText(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
+function asNumber(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+function log(msg: string, extra?: unknown) {
+  // eslint-disable-next-line no-console
+  console.log(`[retrieve-page] ${msg}`, extra ?? "");
+}
+
+// ── Per-card error boundary ──────────────────────────────────────────────────
+// One malformed framework artifact must degrade to ONE broken card, never to a
+// blank page. React only offers this as a class component.
+class ResultBoundary extends React.Component<
+  { children: React.ReactNode; recordId: string },
+  { failed: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode; recordId: string }) {
+    super(props);
+    this.state = { failed: false, message: "" };
+  }
+  static getDerivedStateFromError(err: unknown) {
+    return { failed: true, message: err instanceof Error ? err.message : String(err) };
+  }
+  componentDidCatch(err: unknown) {
+    // eslint-disable-next-line no-console
+    console.error(`[retrieve-page] card ${this.props.recordId} failed to render:`, err);
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div style={styles.brokenCard}>
+          <div style={styles.brokenTitle}>⚠️ This framework couldn&apos;t be displayed</div>
+          <p style={styles.brokenBody}>
+            The record came back from the search but its content is malformed, so it was skipped
+            rather than blanking the page. Other results below are unaffected.
+          </p>
+          <a href={`/library/${this.props.recordId}`} style={styles.newLink}>
+            Open it in the library →
+          </a>
+          <div style={styles.brokenDetail}>{this.state.message}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function RetrievePage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [situation, setSituation] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<Result[] | null>(null);
-  const [noMatch, setNoMatch] = useState<string | null>(null);
-  const [askedFor, setAskedFor] = useState("");
+  const [view, setView] = useState<View>({ kind: "idle" });
   const [placeholder] = useState(
     () => SITUATION_PLACEHOLDERS[Math.floor(Math.random() * SITUATION_PLACEHOLDERS.length)]
   );
@@ -90,6 +205,9 @@ export default function RetrievePage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
+        // NOTE: this redirect is the other thing that looks like "the page
+        // rendered nothing and reset" — an expired session bounces to /login.
+        log("no session — redirecting to /login");
         router.replace("/login");
         return;
       }
@@ -99,27 +217,93 @@ export default function RetrievePage() {
 
   async function search() {
     if (loading || !situation.trim()) return;
+    const askedFor = situation.trim();
     setLoading(true);
-    setError(null);
-    setResults(null);
-    setNoMatch(null);
-    setAskedFor(situation.trim());
+    setView({ kind: "loading" });
+
     try {
       const res = await fetch("/api/retrieve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ situation: situation.trim() }),
+        body: JSON.stringify({ situation: askedFor }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Search failed. Try again.");
-      } else if (data.noMatch) {
-        setNoMatch(data.message || "Nothing codified on this yet.");
-      } else {
-        setResults(data.results || []);
+
+      let data: Record<string, unknown> | null = null;
+      let rawBody = "";
+      try {
+        rawBody = await res.text();
+        data = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null;
+      } catch (parseErr) {
+        log("response was not valid JSON", { status: res.status, rawBody: rawBody.slice(0, 400) });
+        setView({
+          kind: "unexpected",
+          detail: `HTTP ${res.status} — the server did not return JSON. First 200 chars: ${rawBody.slice(
+            0,
+            200
+          )}`,
+        });
+        return;
       }
+
+      log(`HTTP ${res.status}`, data);
+
+      if (!res.ok) {
+        setView({
+          kind: "error",
+          message: asText(data?.error) || "Search failed. Try again.",
+          code: asText(data?.code) || undefined,
+        });
+        return;
+      }
+      if (!data || typeof data !== "object") {
+        setView({ kind: "unexpected", detail: `HTTP ${res.status} with an empty body.` });
+        return;
+      }
+
+      // The route derives noMatch from the array it returns, so these agree by
+      // construction — but the client re-derives from the ARRAY rather than
+      // trusting the flag, so a stale/odd payload still cannot blank the page.
+      const rawResults = (data as { results?: unknown }).results;
+
+      if (data.noMatch === true) {
+        setView({
+          kind: "noMatch",
+          message: asText(data.message) || "Nothing codified on this yet.",
+        });
+        return;
+      }
+
+      if (!Array.isArray(rawResults)) {
+        // THE OLD DEAD ZONE. A 200 whose `results` is missing or not an array
+        // used to render absolutely nothing. Now it says so, out loud.
+        setView({
+          kind: "unexpected",
+          detail:
+            `HTTP ${res.status} with noMatch=${String(data.noMatch)} but no usable "results" array. ` +
+            `Keys received: ${Object.keys(data).join(", ") || "(none)"}. ` +
+            `The API contract is { noMatch, query, results }.`,
+        });
+        return;
+      }
+
+      const results = (rawResults as Result[]).filter((r) => r && typeof r === "object");
+      if (results.length === 0) {
+        // Belt and braces: an empty array with noMatch not true is the exact
+        // contradiction the route now prevents. If it ever reappears, it is
+        // reported rather than painted blank.
+        setView({
+          kind: "unexpected",
+          detail:
+            `HTTP ${res.status} returned an EMPTY results array with noMatch=${String(
+              data.noMatch
+            )}. That combination is a server-side fault, not an empty library.`,
+        });
+        return;
+      }
+
+      setView({ kind: "results", results, askedFor });
     } catch {
-      setError("Search failed. Try again.");
+      setView({ kind: "error", message: "Search failed. Try again." });
     } finally {
       setLoading(false);
     }
@@ -170,102 +354,140 @@ export default function RetrievePage() {
             onKeyDown={onKeyDown}
             disabled={loading}
           />
-          <button style={styles.searchButton} onClick={search} disabled={loading || !situation.trim()}>
+          <button
+            style={styles.searchButton}
+            onClick={search}
+            disabled={loading || !situation.trim()}
+          >
             {loading ? "Searching…" : "Find frameworks"}
           </button>
         </div>
 
-        {error && <p style={styles.errorText}>{error}</p>}
+        {view.kind === "loading" && <p style={styles.loadingText}>Searching your team&apos;s brain…</p>}
 
-        {noMatch && (
+        {view.kind === "error" && (
+          <p style={styles.errorText}>
+            {view.message}
+            {view.code ? ` (${view.code})` : ""}
+          </p>
+        )}
+
+        {view.kind === "unexpected" && (
+          <div style={styles.unexpected}>
+            <div style={styles.unexpectedTitle}>⚠️ The search came back in a shape this page didn&apos;t expect</div>
+            <p style={styles.unexpectedBody}>
+              Rather than showing you a blank screen, here is exactly what happened. The full
+              response is in the browser console under <code>[retrieve-page]</code>.
+            </p>
+            <div style={styles.unexpectedDetail}>{view.detail}</div>
+          </div>
+        )}
+
+        {view.kind === "noMatch" && (
           <div style={styles.empty}>
             <div style={styles.emptyEmoji}>🕸️</div>
-            <p style={styles.emptyTitle}>{noMatch}</p>
+            <p style={styles.emptyTitle}>{view.message}</p>
             <a href="/codify" style={styles.newLink}>
               Codify a framework for this →
             </a>
           </div>
         )}
 
-        {results && results.length > 0 && (
+        {view.kind === "results" && (
           <>
             <p style={styles.resultsHeading}>
-              {results.length} framework{results.length === 1 ? "" : "s"} for “{askedFor}”
+              {view.results.length} framework{view.results.length === 1 ? "" : "s"} for “
+              {view.askedFor}”
             </p>
             <div style={styles.list}>
-              {results.map((r) => {
-                const f = r.framework;
+              {view.results.map((r, idx) => {
+                const f: Framework = r.framework && typeof r.framework === "object" ? r.framework : {};
+                const signals = asArray(f.signals);
+                const boundaries = asArray(f.boundaries);
+                const thePlay = asText(f.the_play);
+                // `contested` is an ARRAY of {conflict_id, other_record_id} —
+                // test array-non-empty, never truthiness of an object.
+                const contested = Array.isArray(r.contested) ? r.contested : [];
+                const similarity = asNumber(r.similarity);
+                const key = typeof r.id === "string" && r.id ? r.id : `row-${idx}`;
+
                 return (
-                  <a key={r.id} href={`/library/${r.id}`} style={styles.card}>
-                    <div style={styles.cardTop}>
-                      <span style={styles.emoji}>
-                        {r.trigger_type ? TRIGGER_EMOJI[r.trigger_type] ?? "" : ""}
-                      </span>
-                      <span style={styles.badgeRow}>
-                        {r.contested && r.contested.length > 0 && (
-                          <span
-                            style={styles.contestedBadge}
-                            title="Another expert sees this differently — open the framework for both sides."
-                          >
-                            ⚠️ Contested
+                  <ResultBoundary key={key} recordId={typeof r.id === "string" ? r.id : ""}>
+                    <a href={`/library/${r.id}`} style={styles.card}>
+                      <div style={styles.cardTop}>
+                        <span style={styles.emoji}>
+                          {r.trigger_type ? TRIGGER_EMOJI[r.trigger_type] ?? "" : ""}
+                        </span>
+                        <span style={styles.badgeRow}>
+                          {contested.length > 0 && (
+                            <span
+                              style={styles.contestedBadge}
+                              title="Another expert sees this differently — open the framework for both sides."
+                            >
+                              ⚠️ Contested
+                            </span>
+                          )}
+                          {r.is_mine && <span style={styles.mineBadge}>Yours</span>}
+                          <span style={styles.matchBadge}>
+                            {matchLabel(similarity)} · {Math.round(similarity * 100)}%
+                          </span>
+                        </span>
+                      </div>
+
+                      <h2 style={styles.cardTitle}>{asText(f.name) || "(framework pending)"}</h2>
+                      <p style={styles.cardTagline}>{asText(f.tagline)}</p>
+
+                      {signals.length > 0 && (
+                        <div style={styles.field}>
+                          <div style={styles.fieldLabel}>Signals</div>
+                          <ul style={styles.list2}>
+                            {signals.slice(0, 3).map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {thePlay && (
+                        <div style={styles.field}>
+                          <div style={styles.fieldLabel}>The play</div>
+                          <p style={styles.fieldBody}>{thePlay}</p>
+                        </div>
+                      )}
+
+                      {boundaries.length > 0 && (
+                        <div style={styles.field}>
+                          <div style={styles.fieldLabel}>Boundaries — when NOT to use this</div>
+                          <ul style={styles.list2}>
+                            {boundaries.slice(0, 3).map((b, i) => (
+                              <li key={i}>{b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div style={styles.metaRow}>
+                        <span style={styles.methodTag}>
+                          {r.method ? METHOD_LABEL[r.method] ?? r.method : ""}
+                        </span>
+                        {r.context_function && (
+                          <span style={styles.metaTag}>{r.context_function}</span>
+                        )}
+                      </div>
+
+                      <div style={styles.authorRow}>
+                        <span style={styles.authorName}>
+                          {r.author?.display_name || "Org member"}
+                        </span>
+                        {r.author?.persona && (
+                          <span style={styles.personaTag}>
+                            {PERSONA_LABEL[r.author.persona] ?? r.author.persona}
                           </span>
                         )}
-                        {r.is_mine && <span style={styles.mineBadge}>Yours</span>}
-                        <span style={styles.matchBadge}>
-                          {matchLabel(r.similarity)} · {Math.round(r.similarity * 100)}%
-                        </span>
-                      </span>
-                    </div>
-
-                    <h2 style={styles.cardTitle}>{f?.name ?? "(framework pending)"}</h2>
-                    <p style={styles.cardTagline}>{f?.tagline ?? ""}</p>
-
-                    {f && f.signals && f.signals.length > 0 && (
-                      <div style={styles.field}>
-                        <div style={styles.fieldLabel}>Signals</div>
-                        <ul style={styles.list2}>
-                          {f.signals.slice(0, 3).map((s, i) => (
-                            <li key={i}>{s}</li>
-                          ))}
-                        </ul>
+                        <span style={styles.openLink}>Open framework →</span>
                       </div>
-                    )}
-
-                    {f && f.the_play && (
-                      <div style={styles.field}>
-                        <div style={styles.fieldLabel}>The play</div>
-                        <p style={styles.fieldBody}>{f.the_play}</p>
-                      </div>
-                    )}
-
-                    {f && f.boundaries && f.boundaries.length > 0 && (
-                      <div style={styles.field}>
-                        <div style={styles.fieldLabel}>Boundaries — when NOT to use this</div>
-                        <ul style={styles.list2}>
-                          {f.boundaries.slice(0, 3).map((b, i) => (
-                            <li key={i}>{b}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <div style={styles.metaRow}>
-                      <span style={styles.methodTag}>
-                        {r.method ? METHOD_LABEL[r.method] ?? r.method : ""}
-                      </span>
-                      {r.context_function && <span style={styles.metaTag}>{r.context_function}</span>}
-                    </div>
-
-                    <div style={styles.authorRow}>
-                      <span style={styles.authorName}>{r.author?.display_name || "Org member"}</span>
-                      {r.author?.persona && (
-                        <span style={styles.personaTag}>
-                          {PERSONA_LABEL[r.author.persona] ?? r.author.persona}
-                        </span>
-                      )}
-                      <span style={styles.openLink}>Open framework →</span>
-                    </div>
-                  </a>
+                    </a>
+                  </ResultBoundary>
                 );
               })}
             </div>
@@ -324,7 +546,45 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     cursor: "pointer",
   },
+  loadingText: { color: "#666", fontSize: "14px" },
   errorText: { color: "#ef4444", fontSize: "14px" },
+  unexpected: {
+    background: "#fffbeb",
+    border: "1px solid #fde68a",
+    borderRadius: 14,
+    padding: "16px 18px",
+    marginBottom: 16,
+  },
+  unexpectedTitle: { fontSize: "15px", fontWeight: 700, color: "#92400e", marginBottom: 6 },
+  unexpectedBody: { fontSize: "13px", color: "#78350f", margin: "0 0 10px", lineHeight: 1.5 },
+  unexpectedDetail: {
+    fontSize: "12px",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    color: "#7c2d12",
+    background: "#fff7ed",
+    border: "1px solid #fed7aa",
+    borderRadius: 8,
+    padding: "10px 12px",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  },
+  brokenCard: {
+    background: "#fff",
+    border: "1px dashed #fca5a5",
+    borderRadius: 14,
+    padding: "18px 20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  brokenTitle: { fontSize: "15px", fontWeight: 700, color: "#b91c1c" },
+  brokenBody: { fontSize: "13px", color: "#555", margin: 0, lineHeight: 1.5 },
+  brokenDetail: {
+    fontSize: "11px",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    color: "#991b1b",
+    wordBreak: "break-word",
+  },
   empty: {
     textAlign: "center",
     padding: "48px 24px",
