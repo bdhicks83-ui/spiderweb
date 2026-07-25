@@ -7,6 +7,44 @@
 // query → nearest-neighbour search → if nothing clears the honesty threshold,
 // say so plainly rather than return a confident wrong match. Org scoping and
 // contested badges are the exact RLS + enrichment pattern from /api/library.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// P-7 HARDENING (2026-07-25) — the empty-with-noMatch-false bug.
+//
+// SYMPTOM: this route returned { noMatch: false, results: [] } — a
+// CONTRADICTORY state. `noMatch:false` asserts "we found matches" while the
+// array says otherwise. `/retrieve` renders results only when
+// `results.length > 0` and renders the honest empty state only on
+// `noMatch === true`, so that response painted a blank page with no error —
+// a silent fail, the exact class P-3 Build 1 and P-4B were meant to kill.
+//
+// ROOT-CAUSE CLASS: the route ran TWO separate DB reads whose row sets were
+// assumed to be identical but were not:
+//    (a) rpc search_pattern_records_by_query  → ids + similarity
+//    (b) select pattern_records .in("id", ids) → the full rows
+// If (a) returns an id that (b) cannot load — because the live function is not
+// actually RLS-scoped to the caller, because it returns ids from a different
+// table, or because a row is visible to the ANN scan but not to the caller's
+// "org library read" policy — then `strong.length > 0` (drives noMatch:false)
+// while `rows.length === 0` (drives the empty array). The two numbers came
+// from different sources, so they could disagree.
+//
+// THE FIX IS STRUCTURAL, NOT COSMETIC:
+//   1. `noMatch` is DERIVED from the length of the array that is actually
+//      returned. There is now exactly ONE source of truth for "did we find
+//      anything," so the contradictory state is impossible by construction —
+//      not merely unlikely.
+//   2. An id the search returns but the record load cannot resolve is a REAL
+//      DEFECT, never an empty success. It returns HTTP 500 with
+//      code:"RETRIEVAL_VISIBILITY_GAP" and the offending ids, so it surfaces
+//      loudly instead of painting a blank page.
+//   3. A malformed match row (missing / non-uuid id, non-numeric similarity)
+//      returns code:"RETRIEVAL_BAD_MATCH_SHAPE" rather than being filtered
+//      away into a quiet empty result.
+//   4. Every stage logs a one-line `[retrieve]` breadcrumb with counts, so a
+//      future failure is diagnosable from the Vercel log alone.
+// Diagnostic harness for this path: scripts/diag-retrieve.mjs (read-only).
+// ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { embedText } from "@/lib/voyage";
@@ -31,6 +69,8 @@ const RESULT_COLUMNS =
   "id, user_id, org_id, created_at, trigger_type, method, context_function, " +
   "situation_type, framework";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type ResultRow = {
   id: string;
   user_id: string;
@@ -42,6 +82,12 @@ type ResultRow = {
   situation_type: string | null;
   framework: FrameworkArtifact | null;
 };
+
+type MatchRow = { id?: unknown; similarity?: unknown };
+
+function log(msg: string, extra?: Record<string, unknown>) {
+  console.log(`[retrieve] ${msg}${extra ? ` ${JSON.stringify(extra)}` : ""}`);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -58,40 +104,78 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Not logged in" }, { status: 401 });
     }
+    log("start", { user: user.id, chars: query.length });
 
-    // 1. Embed the situation as a query. A failure is surfaced, never swallowed.
+    // ── 1. Embed the situation as a query. A failure is surfaced, never
+    //    swallowed. (pattern_records embed as `document`, queries as `query` —
+    //    do not mix; mixing quietly degrades every similarity score.)
     const embed = await embedText(query, { inputType: "query" });
     if (!embed.ok) {
+      log("embed FAILED", { status: embed.status, rateLimited: embed.rateLimited, error: embed.error });
       return NextResponse.json(
         {
           error: embed.rateLimited
             ? "The search service is busy right now — try again in a moment."
             : "Could not run the search. Please try again.",
+          code: embed.rateLimited ? "EMBED_RATE_LIMITED" : "EMBED_FAILED",
           details: embed.error,
         },
         { status: 502 }
       );
     }
+    log("embed ok");
 
-    // 2. Nearest frameworks, org-scoped by RLS inside the RPC.
+    // ── 2. Nearest frameworks. SECURITY INVOKER by design, so the caller's
+    //    "org library read" RLS scopes this — see p3-pattern-record-embeddings.sql.
     const { data: matches, error: matchError } = await supabase.rpc(
       "search_pattern_records_by_query",
       { query_embedding: embed.vector, match_count: MATCH_COUNT }
     );
     if (matchError) {
+      log("rpc FAILED", { error: matchError.message });
       return NextResponse.json(
-        { error: "Search failed", details: matchError.message },
+        { error: "Search failed", code: "SEARCH_RPC_FAILED", details: matchError.message },
         { status: 500 }
       );
     }
 
-    const scored = ((matches as { id: string; similarity: number }[]) || []).filter(
-      (m) => typeof m.similarity === "number"
-    );
-    const strong = scored.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
+    const rawMatches = (matches ?? []) as MatchRow[];
 
-    // 3. Nothing codified on this yet → say so honestly. Echo the near-miss so
-    //    the threshold can be tuned against real demo data.
+    // A malformed match row is a schema/contract break (e.g. the live function
+    // no longer returns an `id` column, or returns it under another name). That
+    // must NOT be silently filtered into an empty result — it is the exact
+    // failure mode that produced the blank-page bug.
+    const malformed = rawMatches.filter(
+      (m) =>
+        typeof m.similarity !== "number" ||
+        typeof m.id !== "string" ||
+        !UUID_RE.test(m.id as string)
+    );
+    if (malformed.length > 0) {
+      log("rpc returned malformed rows", { count: malformed.length, sample: malformed[0] });
+      return NextResponse.json(
+        {
+          error: "Search returned an unexpected result shape.",
+          code: "RETRIEVAL_BAD_MATCH_SHAPE",
+          details:
+            "search_pattern_records_by_query must return (id uuid, similarity float). " +
+            `Got ${malformed.length} row(s) that do not match — sample keys: ` +
+            Object.keys(malformed[0] ?? {}).join(", "),
+        },
+        { status: 500 }
+      );
+    }
+
+    const scored = rawMatches as { id: string; similarity: number }[];
+    const strong = scored.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
+    log("search", {
+      returned: scored.length,
+      aboveThreshold: strong.length,
+      top: scored.length ? Number(scored[0].similarity.toFixed(3)) : null,
+    });
+
+    // ── 3. Nothing codified on this yet → say so honestly. Echo the near-miss
+    //    so the threshold can be tuned against real demo data.
     if (strong.length === 0) {
       return NextResponse.json({
         noMatch: true,
@@ -104,20 +188,46 @@ export async function POST(req: NextRequest) {
     const simById = new Map(strong.map((m) => [m.id, m.similarity]));
     const ids = strong.map((m) => m.id);
 
-    // 4. Load the full records (RLS re-scopes to the caller's org + own rows).
+    // ── 4. Load the full records (RLS re-scopes to the caller's org + own rows).
     const { data: records, error: recError } = await supabase
       .from("pattern_records")
       .select(RESULT_COLUMNS)
       .in("id", ids);
     if (recError) {
+      log("record load FAILED", { error: recError.message });
       return NextResponse.json(
-        { error: "Could not load frameworks", details: recError.message },
+        { error: "Could not load frameworks", code: "RECORD_LOAD_FAILED", details: recError.message },
         { status: 500 }
       );
     }
     const rows = (records || []) as unknown as ResultRow[];
 
-    // 5. Author attribution (same two-query pattern as /api/library — user_id
+    // ── 4b. THE GUARD. The search said these ids match; the record load could
+    //    not resolve some of them. That is never an empty success — it means
+    //    the two reads disagree about what the caller can see (RLS asymmetry,
+    //    a non-invoker search function, or foreign-table ids). Surface it.
+    const loaded = new Set(rows.map((r) => r.id));
+    const unresolved = ids.filter((id) => !loaded.has(id));
+    if (unresolved.length > 0) {
+      log("VISIBILITY GAP", { matched: ids.length, loaded: rows.length, unresolved });
+    }
+    if (rows.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Search found matches but none of them could be loaded. This is a server-side data-visibility fault, not an empty library.",
+          code: "RETRIEVAL_VISIBILITY_GAP",
+          details:
+            `search_pattern_records_by_query returned ${ids.length} id(s) above the ` +
+            `${SIMILARITY_THRESHOLD} threshold, but a SELECT on pattern_records as this ` +
+            `user returned 0 of them. Run scripts/diag-retrieve.mjs. Unresolved ids: ` +
+            unresolved.join(", "),
+        },
+        { status: 500 }
+      );
+    }
+
+    // ── 5. Author attribution (same two-query pattern as /api/library — user_id
     //    references auth.users, not profiles, so no auto-embed join).
     const authorIds = Array.from(new Set(rows.map((r) => r.user_id)));
     let authors: Record<string, { display_name: string | null; persona: string | null }> = {};
@@ -131,8 +241,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 6. Contested badges (P-2, surface-with-warning). Open conflicts annotate
-    //    a record — they never remove it from results.
+    // ── 6. Contested badges (P-2, surface-with-warning). Open conflicts
+    //    annotate a record — they never remove it from results.
     const contestedBy: Record<string, { conflict_id: string; other_record_id: string }[]> = {};
     if (rows.length > 0) {
       const idList = rows.map((r) => r.id).join(",");
@@ -166,9 +276,18 @@ export async function POST(req: NextRequest) {
       }))
       .sort((a, b) => b.similarity - a.similarity);
 
-    return NextResponse.json({ noMatch: false, query, results });
+    // THE INVARIANT: noMatch is derived from the array being returned — the one
+    // and only source of truth. { noMatch: false, results: [] } cannot be
+    // constructed from here, and neither can { noMatch: true, results: [...] }.
+    const noMatch = results.length === 0;
+    log("done", { results: results.length, noMatch, contested: Object.keys(contestedBy).length });
+
+    return NextResponse.json({ noMatch, query, results });
   } catch (err) {
-    console.error("Unexpected error in retrieve route:", err);
-    return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });
+    console.error("[retrieve] Unexpected error in retrieve route:", err);
+    return NextResponse.json(
+      { error: "Unexpected server error", code: "UNEXPECTED" },
+      { status: 500 }
+    );
   }
 }
