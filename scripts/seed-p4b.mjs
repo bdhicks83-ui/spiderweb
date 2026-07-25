@@ -696,8 +696,25 @@ const RECURRENCE = {
 
 // Tom's scripted teach-back answer — written to demonstrate the framework's
 // signal, play, and boundaries (a plausibly good learner answer).
+// P-5 fix — the original wording ("First I'd check WHEN...") scored
+// inconsistently (40, 60, 74, 75/100 across seed reruns) because whether it
+// reads as "correctly verifying the signal" or "reopening already-given
+// evidence" depends on details the freshly-generated scenario may or may
+// not spell out — a scenario-independent flaw is needed instead. This
+// version commits the violation regardless of scenario wording: it
+// recommends the play immediately, on pattern-match alone, and never checks
+// whether THIS case actually clears the boundary before acting on it — the
+// exact violation the framework's boundaries section exists to prevent.
 const TEACHBACK_ANSWER =
-  "First I'd check WHEN the scrapped parts were machined relative to the last restart — if they all cluster in the window right after the machine came back up and the drift runs in one consistent direction, that's the cold-fixture signature, not an operator technique problem. The play is to run the post-restart warm-up cycle that engineering proved out before releasing production parts, instead of launching a new investigation. I'd also check the boundary: if the scrap were scattered randomly through the shift or drifting in different directions, this fix wouldn't apply — that pattern points at technique or tooling wear and would deserve the full investigation.";
+  "This is the same cold-fixture drift we already fixed on Line 2 — I'd go straight to rolling out the post-restart warm-up cycle for 3rd shift, since that fix already works and there's no real reason to treat this occurrence any differently. It's the same equipment, the same shift, the same kind of tolerance failure, so I wouldn't spend time re-checking the specifics before applying it — the pattern match is close enough to act on now and confirm later.";
+
+// P-5 punch list item 4 — only a failing (40/100) teach-back existed; the
+// demo should show both outcomes. David's scripted answer for the conflict
+// prescription (Priya × Angela's resolved first-piece guidance) applies the
+// judgment directly instead of reopening it as a question, and states the
+// boundary explicitly — the two things Tom's answer above got wrong.
+const CONFLICT_TEACHBACK_ANSWER =
+  "I'd hold the line for the full first-piece inspection before releasing anything — even on a same-family die swap with a clean recent history. A clean history only proves prior setups were assembled correctly, not that THIS one was; the gate exists precisely because a setup error is a one-off event no track record can predict. The cost asymmetry settles it: the hold costs a few minutes of idle crew time, releasing early risks a full customer escape. Where this would flip: if the press had verified poka-yoke tooling that made an incorrect setup physically impossible, or if the question weren't about a changeover/setup step at all — this framework doesn't govern in-run SPC sampling frequency, that's a different lever.";
 
 // ═══ helpers ════════════════════════════════════════════════════════════════
 
@@ -1053,6 +1070,45 @@ async function main() {
   }).eq("id", conflictRx.id);
   console.log(`  ✓ delivered_at backdated 20 days (past the ${EFFICACY_QUIET_WINDOW_DAYS}-day quiet window)`);
 
+  // 2a. Teach-back on the conflict prescription — David (neither author)
+  // answers a fresh scenario. Scripted to PASS, so the demo can show both a
+  // passing and a failing teach-back side by side (P-5 punch list item 4).
+  {
+    const { data: cTbExisting } = await supabase
+      .from("prescription_teachbacks").select("id, completed_at, score")
+      .eq("prescription_id", conflictRx.id).not("completed_at", "is", null);
+    if ((cTbExisting || []).length === 0) {
+      const frameworks = await loadGrounding(orgId, conflictRx, nameById);
+      const { data: latestCT } = await supabase
+        .from("prescription_trainings").select("id, strategy, title")
+        .eq("prescription_id", conflictRx.id).order("version", { ascending: false }).limit(1);
+      const scenario = await generateTeachbackScenario(
+        frameworks, conflictRx.audience, latestCT[0].title, latestCT[0].strategy
+      );
+      if (!scenario) throw new Error("conflict teach-back scenario generation failed");
+      const scored = await scoreTeachback(frameworks, scenario.scenario, scenario.question, CONFLICT_TEACHBACK_ANSWER);
+      if (!scored) throw new Error("conflict teach-back scoring failed");
+      const { error: cTbErr } = await supabase.from("prescription_teachbacks").insert({
+        org_id: orgId,
+        prescription_id: conflictRx.id,
+        training_id: latestCT[0].id,
+        learner_user_id: uid("david"),
+        scenario: scenario.scenario,
+        question: scenario.question,
+        answer: CONFLICT_TEACHBACK_ANSWER,
+        score: scored.score,
+        passed: scored.score >= TEACHBACK_PASS_SCORE,
+        feedback: scored.feedback,
+        missed: scored.missed,
+        completed_at: new Date().toISOString(),
+      });
+      if (cTbErr) throw new Error(`conflict teach-back insert failed: ${cTbErr.message}`);
+      console.log(`  ✓ conflict teach-back scored ${scored.score}/100 (${scored.score >= TEACHBACK_PASS_SCORE ? "passed" : "below the pass line"}) — David, fresh scenario`);
+    } else {
+      console.log(`  (conflict teach-back already completed: ${cTbExisting[0].score}/100)`);
+    }
+  }
+
   // ═══ GUARDRAILS on the two coverage gaps ═══
   console.log(`\n─── Guardrails: capture-first skips fidelity · snooze defers ───`);
   // HR: approve; fidelity SKIPPED; generation refused.
@@ -1215,6 +1271,19 @@ async function main() {
   else if (typeof tbDone[0].score !== "number" || !tbDone[0].feedback?.trim())
     fail(`teach-back stored without a score/feedback`);
   else ok(`teach-back ran and scored: ${tbDone[0].score}/100 (${tbDone[0].passed ? "passed" : "below pass line"})`);
+
+  // 4b. P-5 — the demo needs BOTH a passing and a failing teach-back visible.
+  const { data: cTbDone } = await supabase
+    .from("prescription_teachbacks").select("score, passed, feedback")
+    .eq("prescription_id", conflictRx.id).not("completed_at", "is", null);
+  if ((cTbDone || []).length === 0) fail(`no completed teach-back on the conflict prescription`);
+  else if (typeof cTbDone[0].score !== "number" || !cTbDone[0].feedback?.trim())
+    fail(`conflict teach-back stored without a score/feedback`);
+  else ok(`conflict teach-back ran and scored: ${cTbDone[0].score}/100 (${cTbDone[0].passed ? "passed" : "below pass line"})`);
+  if (tbDone?.[0] && cTbDone?.[0] && tbDone[0].passed === cTbDone[0].passed)
+    fail(`both teach-backs landed on the same pass/fail side (${tbDone[0].passed}) — demo needs one of each`);
+  else if (tbDone?.[0] && cTbDone?.[0])
+    ok(`demo shows both outcomes: entity=${tbDone[0].passed ? "passed" : "failed"}, conflict=${cTbDone[0].passed ? "passed" : "failed"}`);
 
   // 5. Efficacy: escalation on the seeded recurrence.
   if (entRx.efficacy_status !== "escalated") fail(`entity prescription efficacy is '${entRx.efficacy_status}' — expected 'escalated'`);
