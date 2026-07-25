@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
         analysis: null,
         confidence: "low",
         confidenceStatement:
-          "Low confidence: your Spiderweb doesn't have captured heuristics that apply to this scenario yet.",
+          "Low confidence: your Knowledge Graph doesn't have captured heuristics that apply to this scenario yet.",
         sources: [],
         examples: [],
         grounded: [],

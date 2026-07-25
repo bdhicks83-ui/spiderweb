@@ -499,3 +499,17 @@ The original P0 ladder was 1 Situate · 2 Classify · 3 Call · 4 Signal · 5 Re
 
 **Two things need to happen, in this order, before P-0.5 can be marked fully done:** (1) paste the SQL migration into Supabase, (2) reconnect the desktop bridge so the files land in the repo and someone (Brian, or a follow-up Cowork session) runs `npm run build` + the actual 5-trigger click-through in a browser + `git commit`.
 
+### July 25, 2026 — Visible-text branding pass: "Human Bloom" → "Humanbloom", retire "Spiderweb" from UI copy, "Knowledge Graph" as the customer-facing graph label
+
+**Context:** Brand lexicon locked "Humanbloom" (one word) as the product name and retired "Spiderweb" as a brand word. The lexicon's boundary is "language now, code later" — user-visible text changes ship immediately; renaming the repo/URL/tables/identifiers stays parked. The customer-facing label for the captured graph is Brian's locked choice: **"Knowledge Graph"** (Doctrine #3 — "Trellis" is internal-only and must never appear in UI; no Track A plant/Vine/"your practice" register on the enterprise surfaces).
+
+**Decision:** Changed ONLY user-visible strings, across 13 files:
+- **"Human Bloom" → "Humanbloom"** — onboarding headings ×2, marketing hero + footer wordmark, homepage `<title>` metadata, framework-PDF footer ("codified with Humanbloom"), resume-PDF footer + PDF author metadata.
+- **"Spiderweb" removed from UI text:** app-wide tab title `layout.tsx` "Spiderweb" → "Humanbloom" · logged-in homepage header "🕸️ Spiderweb" → "🕸️ Humanbloom" (emoji kept — icons weren't retired, only the word) · every "your Spiderweb" phrasing → "your Knowledge Graph": dashboard value card ("Your Knowledge Graph's Value" + 3 trend lines + empty-state copy), "🌱 Grow your Knowledge Graph" gap banner, homepage dashboard-link copy, Ask page (h1 "Ask Your Knowledge Graph", chat speaker label, 2 login-error strings, thin-coverage nudge), Simulate page (subtitle + no-match copy), and 4 user-visible API strings (ask no-match message, simulate low-confidence statement, Word-report subtitle + docx creator metadata, deck slide "Answered from my Knowledge Graph").
+- **"Ask the brain" / "ask your team's brain" left as-is** — Brian's explicit call, that phrasing stays.
+
+**Deliberately NOT touched (the "code later" half):** repo name, `spiderweb-nine.vercel.app` (including where it appears inside the resume-PDF footer text — it's the live URL), Inngest client id `"spiderweb"`, prompt key `"ask-spiderweb"`, chat role values `'spiderweb'`, download filenames (`spiderweb-*.docx/pptx/mp3`, `spiderweb-answer.*`), all code comments, the CSS file-header comment, and everything in `_to_delete/`. Trellis/Vine/plant language: confirmed zero occurrences existed (nothing to remove).
+
+**Result:** Post-edit grep confirms every remaining "Human Bloom"/"Spiderweb" in `src/` is a code comment, none user-visible. `tsc --noEmit` clean. Committed and deployed same session.
+
+

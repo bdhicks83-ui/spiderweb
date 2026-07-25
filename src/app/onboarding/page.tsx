@@ -334,7 +334,7 @@ export default function OnboardingPage() {
   if (phase === "persona") {
     return (
       <div style={styles.page}>
-        <h1 style={styles.h1}>Welcome to Human Bloom 🌸</h1>
+        <h1 style={styles.h1}>Welcome to Humanbloom 🌸</h1>
         <p style={styles.subtitle}>Which best describes you?</p>
         <div style={styles.goalGrid}>
           {PERSONAS.map((p) => (
@@ -360,7 +360,7 @@ export default function OnboardingPage() {
   if (phase === "fork") {
     return (
       <div style={styles.page}>
-        <h1 style={styles.h1}>What are you hoping to get out of Human Bloom?</h1>
+        <h1 style={styles.h1}>What are you hoping to get out of Humanbloom?</h1>
         <div style={styles.goalGrid}>
           {GOALS.map((goal) => (
             <button

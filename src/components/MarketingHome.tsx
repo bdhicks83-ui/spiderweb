@@ -768,7 +768,7 @@ export default function MarketingHome() {
           <span className="hb-h1-line hb-gradient">{HEADLINE_2}</span>
         </h1>
         <p className="hb-sub">
-          Human Bloom turns what you already know into an AI company that works
+          Humanbloom turns what you already know into an AI company that works
           for you — seven departments, one source of truth: your expertise. You
           approve everything. It remembers everything.
         </p>
@@ -901,7 +901,7 @@ export default function MarketingHome() {
       {/* ─── Footer ─── */}
       <footer className="hb-footer">
         <p>
-          <span className="hb-logo-mark">🌸</span> Human Bloom · The Operating
+          <span className="hb-logo-mark">🌸</span> Humanbloom · The Operating
           System for Human Expertise
         </p>
         <p className="hb-footer-links">

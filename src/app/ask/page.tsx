@@ -100,7 +100,7 @@ export default function AskPage() {
       });
       const data = await res.json();
 
-      if (res.status === 401) return fail('Please log in to ask your Spiderweb.');
+      if (res.status === 401) return fail('Please log in to ask your Knowledge Graph.');
       if (!res.ok) return fail(data.error || 'Something went wrong. Try again.');
       if (data.noMatch) return setState({ phase: 'noMatch', message: data.message });
 
@@ -128,7 +128,7 @@ export default function AskPage() {
       });
       const data = await res.json();
 
-      if (res.status === 401) return fail('Please log in to ask your Spiderweb.');
+      if (res.status === 401) return fail('Please log in to ask your Knowledge Graph.');
       if (!res.ok) return fail(data.error || 'Something went wrong. Try again.');
 
       handleStep(data);
@@ -240,7 +240,7 @@ export default function AskPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
-        <h1 style={styles.title}>Ask Your Spiderweb</h1>
+        <h1 style={styles.title}>Ask Your Knowledge Graph</h1>
         <p style={styles.subtitle}>
           It asks a few questions first, then recommends — grounded only in
           insights you&apos;ve captured and approved.{' '}
@@ -260,7 +260,7 @@ export default function AskPage() {
                 }}
               >
                 <span style={styles.bubbleLabel}>
-                  {turn.role === 'you' ? 'You' : 'Your Spiderweb'}
+                  {turn.role === 'you' ? 'You' : 'Your Knowledge Graph'}
                 </span>
                 <span style={styles.bubbleText}>{turn.text}</span>
               </div>
@@ -436,7 +436,7 @@ export default function AskPage() {
                 ) : (
                   <>
                     <span style={styles.gapText}>
-                      Your Spiderweb is a little thin on this one. Want to add to it?
+                      Your Knowledge Graph is a little thin on this one. Want to add to it?
                     </span>
                     <a href="/upload" style={styles.gapLink}>Add a quick insight →</a>
                   </>

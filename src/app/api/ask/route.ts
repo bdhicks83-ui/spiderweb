@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         noMatch: true,
         message:
-          "Your Spiderweb doesn't have enough captured expertise on this yet. Capture more insights on this topic and ask again.",
+          "Your Knowledge Graph doesn't have enough captured expertise on this yet. Capture more insights on this topic and ask again.",
       });
     }
 

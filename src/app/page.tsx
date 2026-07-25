@@ -13,7 +13,7 @@ import ApproveFrameworkButton from "@/components/ApproveFrameworkButton";
 import MarketingHome from "@/components/MarketingHome";
 
 export const metadata: Metadata = {
-  title: "Human Bloom — Your AI Company. Built Around You.",
+  title: "Humanbloom — Your AI Company. Built Around You.",
   description: "The Operating System for Human Expertise.",
 };
 
@@ -61,7 +61,7 @@ export default async function Dashboard() {
 
   return (
     <main>
-      <h1>🕸️ Spiderweb</h1>
+      <h1>🕸️ Humanbloom</h1>
       <p>
         Logged in as {user.email} ·{" "}
         <span
@@ -110,7 +110,7 @@ export default async function Dashboard() {
               marginTop: "0.15rem",
             }}
           >
-            Your Spiderweb&apos;s value, credibility score, resume, and insights
+            Your Knowledge Graph&apos;s value, credibility score, resume, and insights
             that need your context.
           </span>
         </span>

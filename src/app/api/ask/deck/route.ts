@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       align: "left",
       valign: "middle",
     });
-    title.addText("Answered from my Spiderweb", {
+    title.addText("Answered from my Knowledge Graph", {
       x: 0.6,
       y: 3.6,
       w: 8.8,

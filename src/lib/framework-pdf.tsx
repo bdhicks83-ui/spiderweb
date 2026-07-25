@@ -218,7 +218,7 @@ export function FrameworkDocument({ data }: { data: FrameworkPdfData }) {
         </View>
 
         <Text style={styles.footer} fixed>
-          {`${f.name} is proprietary methodology of ${data.consultantName} — codified with Human Bloom`}
+          {`${f.name} is proprietary methodology of ${data.consultantName} — codified with Humanbloom`}
         </Text>
       </Page>
     </Document>

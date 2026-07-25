@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         : [];
 
     const doc = new Document({
-      creator: "Spiderweb",
+      creator: "Humanbloom",
       title: question,
       sections: [
         {
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Answered from your Spiderweb — grounded only in your captured insights.",
+                  text: "Answered from your Knowledge Graph — grounded only in your captured insights.",
                   italics: true,
                   size: 20, // 10pt
                   color: "888888",

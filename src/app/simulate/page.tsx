@@ -76,7 +76,7 @@ export default function SimulatePage() {
       <div style={styles.container}>
         <h1 style={styles.title}>Decision Simulation</h1>
         <p style={styles.subtitle}>
-          Pose a scenario you’ve never written down. Your Spiderweb reasons through it
+          Pose a scenario you’ve never written down. Your Knowledge Graph reasons through it
           using the heuristics you’ve captured — and tells you how far it’s stretching.
           <a href="/ask" style={styles.modeLink}> Ask a factual question instead →</a>
         </p>
@@ -176,7 +176,7 @@ export default function SimulatePage() {
               <div style={styles.noMatchCard}>
                 <p style={styles.noMatchText}>
                   Capture more heuristics on this kind of decision, then simulate again —
-                  right now there’s nothing in your Spiderweb to reason from.
+                  right now there’s nothing in your Knowledge Graph to reason from.
                 </p>
                 <a href="/upload" style={styles.modeLink}>Add expertise →</a>
               </div>

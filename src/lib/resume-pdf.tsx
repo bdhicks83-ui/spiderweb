@@ -145,7 +145,7 @@ export function ResumeDocument({ data }: { data: ResumeData }) {
   const headerMeta = [data.title, data.subtitle].filter(Boolean);
 
   return (
-    <Document title={`${data.name} — Resume`} author="Human Bloom">
+    <Document title={`${data.name} — Resume`} author="Humanbloom">
       <Page size="LETTER" style={styles.page}>
         <View>
           <Text style={styles.name}>{data.name}</Text>
@@ -194,7 +194,7 @@ export function ResumeDocument({ data }: { data: ResumeData }) {
         </View>
 
         <Text style={styles.footer} fixed>
-          Built with Human Bloom — capture and prove your expertise at spiderweb-nine.vercel.app
+          Built with Humanbloom — capture and prove your expertise at spiderweb-nine.vercel.app
         </Text>
       </Page>
     </Document>

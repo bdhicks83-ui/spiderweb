@@ -349,7 +349,7 @@ export default function DashboardPage() {
 
         {gaps.length > 0 && (
           <div style={styles.gapBanner}>
-            <h2 style={styles.gapBannerTitle}>🌱 Grow your Spiderweb</h2>
+            <h2 style={styles.gapBannerTitle}>🌱 Grow your Knowledge Graph</h2>
             <p style={styles.gapBannerSub}>
               A few things you asked about came up thin. Adding to them is like adding a
               record to your collection — no pressure.
@@ -558,16 +558,16 @@ function GrowthCard({
     const span = months === 1 ? '1 month' : `${months} months`;
     growthLine =
       pct > 0
-        ? `Your Spiderweb's value has grown ${pct}% over ${span}.`
+        ? `Your Knowledge Graph's value has grown ${pct}% over ${span}.`
         : pct < 0
-          ? `Your Spiderweb's value has moved ${pct}% over ${span}.`
-          : `Your Spiderweb's value has held steady over ${span}.`;
+          ? `Your Knowledge Graph's value has moved ${pct}% over ${span}.`
+          : `Your Knowledge Graph's value has held steady over ${span}.`;
   }
 
   return (
     <div style={styles.growthCard}>
       <div style={styles.scoreHeader}>
-        <h2 style={styles.cardTitle}>Your Spiderweb&apos;s Value</h2>
+        <h2 style={styles.cardTitle}>Your Knowledge Graph&apos;s Value</h2>
         <button style={styles.linkButtonSm} onClick={onRefresh} disabled={loading}>
           {loading ? 'Updating…' : latest ? 'Refresh' : 'Calculate'}
         </button>
@@ -600,7 +600,7 @@ function GrowthCard({
       ) : (
         <p style={styles.help}>
           Score your captured expertise to see your portfolio strength and track how your
-          Spiderweb&apos;s value grows month over month.
+          Knowledge Graph&apos;s value grows month over month.
         </p>
       )}
     </div>
