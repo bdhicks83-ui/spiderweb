@@ -1539,8 +1539,8 @@ export async function scoreTeachback(
 import {
   TRAINING_FORMATS,
   TRAINING_FORMAT_KEYS,
+  canonicalPrinciple,
   formatCatalogForPrompt,
-  isCitablePrinciple,
   isTrainingFormatKey,
   type TrainingFormatKey,
 } from "@/lib/training-formats";
@@ -1674,10 +1674,16 @@ export type FormatRecommendationInput = {
 // set is the credibility bar, so it is enforced in code, not just in prose.
 function keepCitablePrinciples(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
-    .map((c) => c.trim())
-    .filter((c) => isCitablePrinciple(c));
+  const out: string[] = [];
+  for (const c of raw as unknown[]) {
+    if (typeof c !== "string" || !c.trim()) continue;
+    // Resolve to the CANONICAL catalog name — a citation that arrives with
+    // its source in parentheses is the same citation, and storing the
+    // canonical form keeps the UI consistent no matter how it was written.
+    const canonical = canonicalPrinciple(c);
+    if (canonical && !out.includes(canonical)) out.push(canonical);
+  }
+  return out;
 }
 
 export async function recommendTrainingFormat(

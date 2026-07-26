@@ -322,8 +322,10 @@ export function formatCatalogForPrompt(): string {
       ...f.bestFor.map((b) => `  - ${b}`),
       `NOT for:`,
       ...f.notFor.map((b) => `  - ${b}`),
-      `Citable evidence basis for this format (cite by PRINCIPLE name, exactly as written):`,
-      ...f.basis.map((b) => `  - ${b.principle} (${b.source}): ${b.claim}`),
+      `Citable evidence basis for this format. CITE USING THE QUOTED NAME ONLY — leave the source and the claim out of your citation:`,
+      ...f.basis.map(
+        (b) => `  - CITE AS "${b.principle}" | source: ${b.source} | what it supports: ${b.claim}`
+      ),
     ].join("\n");
   }).join("\n\n");
 }
@@ -337,8 +339,37 @@ export function citablePrinciples(): string[] {
   return [...seen];
 }
 
+/**
+ * Resolve an agent's citation back to the canonical principle name, or null
+ * if it is not in the closed catalog.
+ *
+ * ⚠️ TOLERANT ON PURPOSE. The catalog renders each entry as
+ * "Principle (Source): claim", so a model asked to cite "by principle name"
+ * very reasonably returns "Spacing / distributed practice (Cepeda et al.,
+ * 2006)" — the name WITH the parenthetical it just read. An exact-match
+ * validator rejects that, drops every citation, and the whole
+ * recommendation fails the credibility gate for no good reason. That is
+ * exactly what happened on the first live run of the format re-recommendation.
+ *
+ * So: strip a trailing parenthetical, normalize whitespace and case, and match
+ * on the principle itself. The CANONICAL name is what gets stored and shown,
+ * so the closed catalog is still the only thing that can reach the UI — this
+ * loosens the parser, never the catalog.
+ */
+export function canonicalPrinciple(raw: string): string | null {
+  const strip = (v: string) =>
+    v
+      .replace(/\s*\([^)]*\)\s*$/, "")
+      .replace(/[.,;:]+$/, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  const target = strip(raw);
+  if (!target) return null;
+  return citablePrinciples().find((p) => strip(p) === target) ?? null;
+}
+
 /** Lookup used when validating an agent citation against the closed set. */
 export function isCitablePrinciple(name: string): boolean {
-  const norm = name.trim().toLowerCase();
-  return citablePrinciples().some((p) => p.trim().toLowerCase() === norm);
+  return canonicalPrinciple(name) !== null;
 }
