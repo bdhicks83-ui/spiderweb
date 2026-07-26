@@ -1493,3 +1493,390 @@ export async function scoreTeachback(
     };
   }, 5);
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// P-7 — On-Demand Training Studio helpers (Builds 1-4).
+//
+// Three model jobs, all reasoning-heavy, all failing open (null ⇒ the route
+// surfaces a retryable error and NOTHING half-built is stored):
+//   • understandTrainingIssue  — Build 1: the same issue-understanding step
+//     the detector's triage does, with a human as the trigger.
+//   • recommendTrainingFormat  — Build 2: the L&D Format Agent. Ranked
+//     format recommendation with CITED rationale, validated against the
+//     closed citation catalog in src/lib/training-formats.ts (an invented
+//     principle is dropped; a primary with no surviving citation fails the
+//     attempt, so withRetries asks again).
+//   • recommendNextFormat      — Build 4: format-aware re-recommendation
+//     after an attempt didn't land.
+// Generation in-format reuses the TrainingArtifact shape + validator from
+// P-4B — same three altitudes, different structure inside them.
+//
+// max_tokens 8000 on the reasoning-heavy calls: at 6000 a long ranked
+// recommendation or a four-section drill hits stop_reason=max_tokens and
+// returns an EMPTY text block (the logged P-4B gotcha).
+// ─────────────────────────────────────────────────────────────────────────
+
+import {
+  TRAINING_FORMATS,
+  TRAINING_FORMAT_KEYS,
+  formatCatalogForPrompt,
+  isCitablePrinciple,
+  isTrainingFormatKey,
+  type TrainingFormatKey,
+} from "@/lib/training-formats";
+
+export type TrainingIssueEntity = {
+  type: "error_class" | "equipment_asset" | "process" | "department";
+  name: string;
+  detail: string | null;
+};
+
+export type TrainingIssueUnderstanding = {
+  issueType: string;
+  issueRestated: string;
+  subjectEntities: TrainingIssueEntity[];
+  suggestedRung: 1 | 2 | 3 | 4;
+  understandingNote: string;
+};
+
+const ISSUE_TYPES = [
+  "definition_mismatch",
+  "procedural_skill",
+  "judgment_gap",
+  "cross_functional_seam",
+  "recurring_error",
+  "rare_high_stakes",
+  "onboarding_gap",
+];
+
+const ENTITY_TYPES = ["error_class", "equipment_asset", "process", "department"];
+
+// Build 1 — understand a leader-described issue. Returns null on any model or
+// validation failure: no request is created from a guessed understanding.
+export async function understandTrainingIssue(
+  issueText: string,
+  audience: string
+): Promise<TrainingIssueUnderstanding | null> {
+  const prompt = await loadPrompt("training-issue-understand", {
+    issue_text: issueText,
+    audience,
+  });
+  return withRetries("understandTrainingIssue", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as Record<string, unknown> | null;
+    if (!parsed) return null;
+
+    const issueType =
+      typeof parsed.issue_type === "string" && ISSUE_TYPES.includes(parsed.issue_type)
+        ? parsed.issue_type
+        : null;
+    const issueRestated =
+      typeof parsed.issue_restated === "string" && parsed.issue_restated.trim()
+        ? parsed.issue_restated.trim()
+        : null;
+    if (!issueType || !issueRestated) return null;
+
+    const rawRung = parsed.suggested_rung;
+    const suggestedRung =
+      typeof rawRung === "number" && [1, 2, 3, 4].includes(rawRung)
+        ? (rawRung as 1 | 2 | 3 | 4)
+        : 2;
+
+    const subjectEntities: TrainingIssueEntity[] = Array.isArray(parsed.subject_entities)
+      ? (parsed.subject_entities as unknown[])
+          .map((raw) => {
+            if (!raw || typeof raw !== "object") return null;
+            const e = raw as Record<string, unknown>;
+            if (typeof e.type !== "string" || !ENTITY_TYPES.includes(e.type)) return null;
+            if (typeof e.name !== "string" || !e.name.trim()) return null;
+            return {
+              type: e.type as TrainingIssueEntity["type"],
+              name: e.name.trim(),
+              detail:
+                typeof e.detail === "string" && e.detail.trim() ? e.detail.trim() : null,
+            };
+          })
+          .filter((e): e is TrainingIssueEntity => e !== null)
+          .slice(0, 5)
+      : [];
+
+    return {
+      issueType,
+      issueRestated,
+      subjectEntities,
+      suggestedRung,
+      understandingNote:
+        typeof parsed.understanding_note === "string" && parsed.understanding_note.trim()
+          ? parsed.understanding_note.trim().replace(/\s*\n+\s*/g, " ").slice(0, 300)
+          : "",
+    };
+  });
+}
+
+// ─── Build 2 — the L&D Format Agent ────────────────────────────────────────
+
+export type FormatRecommendation = {
+  formatKey: TrainingFormatKey;
+  rank: number;
+  isPrimary: boolean;
+  rationale: string;
+  citations: string[];
+};
+
+export type FormatRecommendationResult = {
+  primaryFormat: TrainingFormatKey;
+  headline: string;
+  recommendations: FormatRecommendation[];
+  tradeoff: string | null;
+  groundingCaution: string | null;
+};
+
+export type FormatRecommendationInput = {
+  issueText: string;
+  issueRestated: string;
+  issueType: string;
+  understandingNote: string;
+  subjectEntities: string;
+  audience: string;
+  /** The org's codified material on this territory — thin grounding is a real
+   *  input to the recommendation, not a detail. */
+  grounding: string;
+};
+
+// Drop any citation that isn't in the closed catalog. An agent that invents
+// "Miller's Law (1956)" gets it stripped rather than shipped — the citation
+// set is the credibility bar, so it is enforced in code, not just in prose.
+function keepCitablePrinciples(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[])
+    .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+    .map((c) => c.trim())
+    .filter((c) => isCitablePrinciple(c));
+}
+
+export async function recommendTrainingFormat(
+  input: FormatRecommendationInput
+): Promise<FormatRecommendationResult | null> {
+  const prompt = await loadPrompt("format-recommend", {
+    issue_text: input.issueText,
+    issue_restated: input.issueRestated,
+    issue_type: input.issueType,
+    understanding_note: input.understandingNote,
+    subject_entities: input.subjectEntities,
+    audience: input.audience,
+    grounding: input.grounding,
+    format_catalog: formatCatalogForPrompt(),
+  });
+  return withRetries("recommendTrainingFormat", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 8000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as Record<string, unknown> | null;
+    if (!parsed) return null;
+
+    if (!isTrainingFormatKey(parsed.primary_format)) return null;
+    const primaryFormat = parsed.primary_format;
+    const headline =
+      typeof parsed.headline === "string" && parsed.headline.trim()
+        ? parsed.headline.trim().replace(/\s*\n+\s*/g, " ")
+        : null;
+    if (!headline) return null;
+    if (!Array.isArray(parsed.recommendations)) return null;
+
+    const seen = new Set<string>();
+    const recommendations: FormatRecommendation[] = [];
+    for (const raw of parsed.recommendations as unknown[]) {
+      if (!raw || typeof raw !== "object") continue;
+      const r = raw as Record<string, unknown>;
+      if (!isTrainingFormatKey(r.format_key)) continue;
+      if (seen.has(r.format_key)) continue;
+      if (typeof r.rationale !== "string" || !r.rationale.trim()) continue;
+      seen.add(r.format_key);
+      recommendations.push({
+        formatKey: r.format_key,
+        rank: typeof r.rank === "number" ? r.rank : recommendations.length + 1,
+        isPrimary: r.format_key === primaryFormat,
+        rationale: r.rationale.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400),
+        citations: keepCitablePrinciples(r.citations),
+      });
+    }
+    if (recommendations.length < 2) return null;
+
+    // Every format in the library gets a place in the ranking, so the leader
+    // sees the full field. A format the agent skipped is appended last with
+    // an honest "not ranked" line rather than silently vanishing.
+    for (const key of TRAINING_FORMAT_KEYS) {
+      if (seen.has(key)) continue;
+      recommendations.push({
+        formatKey: key,
+        rank: recommendations.length + 1,
+        isPrimary: false,
+        rationale: `Not ranked for this issue — ${TRAINING_FORMATS[key].name} is built for: ${TRAINING_FORMATS[key].bestFor[0]}.`,
+        citations: [],
+      });
+    }
+
+    const primary = recommendations.find((r) => r.isPrimary);
+    // The primary recommendation MUST carry a surviving citation — that is
+    // the whole credibility contract. Treat a bare primary as a failed
+    // attempt so withRetries asks again.
+    if (!primary || primary.citations.length === 0) return null;
+    primary.rank = 1;
+    recommendations.sort((a, b) =>
+      a.isPrimary === b.isPrimary ? a.rank - b.rank : a.isPrimary ? -1 : 1
+    );
+    recommendations.forEach((r, i) => (r.rank = i + 1));
+
+    return {
+      primaryFormat,
+      headline,
+      recommendations,
+      tradeoff:
+        typeof parsed.tradeoff === "string" && parsed.tradeoff.trim()
+          ? parsed.tradeoff.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400)
+          : null,
+      groundingCaution:
+        typeof parsed.grounding_caution === "string" && parsed.grounding_caution.trim()
+          ? parsed.grounding_caution.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400)
+          : null,
+    };
+  });
+}
+
+// ─── Build 3 — generation IN the chosen format ─────────────────────────────
+
+export type FormatTrainingInput = {
+  formatKey: TrainingFormatKey;
+  formatRationale: string;
+  issueText: string;
+  issueRestated: string;
+  issueType: string;
+  audience: string;
+  attemptNote: string;
+  /** The expert framework material — the ONLY permitted source of substance. */
+  frameworks: string;
+};
+
+// Reuses the P-4B TrainingArtifact shape + validator: same three altitudes,
+// different structure INSIDE them. The rung-shaped generator (generateTraining)
+// is untouched and still serves the detected path.
+export async function generateFormatTraining(
+  input: FormatTrainingInput
+): Promise<TrainingArtifact | null> {
+  const format = TRAINING_FORMATS[input.formatKey];
+  const prompt = await loadPrompt("training-generate-format", {
+    format_name: format.name,
+    format_structure: format.structure,
+    format_rationale: input.formatRationale,
+    issue_text: input.issueText,
+    issue_restated: input.issueRestated,
+    issue_type: input.issueType,
+    audience: input.audience,
+    attempt_note: input.attemptNote,
+    frameworks: input.frameworks,
+  });
+  return withRetries("generateFormatTraining", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 8000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text);
+    return isTrainingArtifact(parsed) ? parsed : null;
+  });
+}
+
+// ─── Build 4 — format-aware re-recommendation ──────────────────────────────
+
+export type FormatReadaptation = {
+  nextFormat: TrainingFormatKey;
+  whyTheLastOneDidNotLand: string;
+  rationale: string;
+  citations: string[];
+  notATrainingProblem: string | null;
+};
+
+export type FormatReadaptInput = {
+  priorFormatKey: TrainingFormatKey;
+  triedFormatKeys: TrainingFormatKey[];
+  attempt: number;
+  priorTitle: string;
+  priorStrategy: string;
+  enhancements: string;
+  issueRestated: string;
+  issueType: string;
+  audience: string;
+  subjectEntities: string;
+  efficacyNote: string;
+};
+
+export async function recommendNextFormat(
+  input: FormatReadaptInput
+): Promise<FormatReadaptation | null> {
+  const prior = TRAINING_FORMATS[input.priorFormatKey];
+  const prompt = await loadPrompt("format-readapt", {
+    prior_format_name: prior.name,
+    prior_format_key: input.priorFormatKey,
+    attempt: String(input.attempt),
+    tried_formats:
+      input.triedFormatKeys.map((k) => `${TRAINING_FORMATS[k].name} (${k})`).join(" · ") ||
+      "(none recorded)",
+    prior_title: input.priorTitle,
+    prior_strategy: input.priorStrategy,
+    enhancements: input.enhancements || "(none)",
+    issue_restated: input.issueRestated,
+    issue_type: input.issueType,
+    audience: input.audience,
+    subject_entities: input.subjectEntities,
+    efficacy_note: input.efficacyNote,
+    format_catalog: formatCatalogForPrompt(),
+  });
+  return withRetries("recommendNextFormat", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 8000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text) as Record<string, unknown> | null;
+    if (!parsed) return null;
+    if (!isTrainingFormatKey(parsed.next_format)) return null;
+    if (typeof parsed.rationale !== "string" || !parsed.rationale.trim()) return null;
+    if (
+      typeof parsed.why_the_last_one_did_not_land !== "string" ||
+      !parsed.why_the_last_one_did_not_land.trim()
+    ) {
+      return null;
+    }
+    const citations = keepCitablePrinciples(parsed.citations);
+    if (citations.length === 0) return null; // same credibility contract
+    return {
+      nextFormat: parsed.next_format,
+      whyTheLastOneDidNotLand: parsed.why_the_last_one_did_not_land
+        .trim()
+        .replace(/\s*\n+\s*/g, " ")
+        .slice(0, 500),
+      rationale: parsed.rationale.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400),
+      citations,
+      notATrainingProblem:
+        typeof parsed.not_a_training_problem === "string" &&
+        parsed.not_a_training_problem.trim() &&
+        parsed.not_a_training_problem.trim().toLowerCase() !== "null"
+          ? parsed.not_a_training_problem.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400)
+          : null,
+    };
+  });
+}

@@ -63,6 +63,9 @@ const SOURCE_LABEL: Record<string, string> = {
   conflict: "⚠️ Conflict X-ray",
   coverage_gap: "🕳️ Coverage gap",
   entity_signal: "📈 Entity signal",
+  // P-7 — the Training Studio's human trigger. These live on their own
+  // surface, but the label is here so a direct link never renders a raw key.
+  leader_request: "✨ Leader request",
 };
 
 // P-5 fix — urgency now ranks the queue; ROI is the tiebreak within a tier.
@@ -239,7 +242,8 @@ export default function PrescriptionsPage() {
           auto-escalates, quiet gets proven effective.
         </p>
         <a href="/library" style={styles.backLink}>← Back to library</a>{" "}
-        <a href="/win-column" style={styles.backLink}>🏆 Win Column</a>
+        <a href="/win-column" style={styles.backLink}>🏆 Win Column</a>{" "}
+        <a href="/training-studio" style={styles.backLink}>✨ Training Studio</a>
 
         {runMessage && <p style={styles.runMessage}>{runMessage}</p>}
         {error && <p style={styles.errorText}>{error}</p>}

@@ -78,6 +78,9 @@ const RUNG_CEILING: Record<PrescriptionSourceType, number> = {
   conflict: 2,
   entity_signal: 3,
   coverage_gap: 4,
+  // A leader-initiated request is sized at intake by the Studio, not by the
+  // triage model, so the ceiling is the full ladder.
+  leader_request: 4,
 };
 
 // P-3's tuned retrieval threshold, reused verbatim (do not re-derive): below
@@ -90,12 +93,20 @@ export const COVERAGE_SIMILARITY_THRESHOLD = 0.75;
 // trips, the run reports how many detections were left open, never silently.
 export const MAX_TRIAGE_PER_RUN = 25;
 
-export type PrescriptionSourceType = "conflict" | "coverage_gap" | "entity_signal";
+export type PrescriptionSourceType =
+  | "conflict"
+  | "coverage_gap"
+  | "entity_signal"
+  // P-7 — the Training Studio's human trigger. The three above are produced
+  // by the detectors; this one means a leader asked for training directly.
+  // EXTENDED, not repurposed: no detector ever emits it.
+  | "leader_request";
 
 export const SOURCE_LABEL: Record<PrescriptionSourceType, string> = {
   conflict: "Conflict X-ray",
   coverage_gap: "Coverage gap",
   entity_signal: "Entity signal",
+  leader_request: "Leader request",
 };
 
 // ─── Record + conflict slices detection needs ──────────────────────────────

@@ -294,6 +294,21 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* P-7 — the On-Demand Training Studio. The manager+ gate lives in
+            the API route (is_manager()); the link is safe to show to
+            everyone, same "link is visible, the gate is real" pattern as
+            Coaching Watch. */}
+        <div style={styles.resumeBanner}>
+          <div>
+            <h2 style={styles.resumeBannerTitle}>✨ Training Studio</h2>
+            <p style={styles.resumeBannerSub}>
+              Something going wrong right now? Describe it, name who it&apos;s for, and get
+              the right kind of training — with the reasoning shown.
+            </p>
+          </div>
+          <a href="/training-studio" style={styles.resumeBannerLink}>Create training →</a>
+        </div>
+
         {/* New — manager-only coaching watch. Visible link for everyone, but
             RLS (is_manager_of()) means it renders empty for anyone with no
             direct reports on file — same "link is safe to show, RLS is the

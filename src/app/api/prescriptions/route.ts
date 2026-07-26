@@ -215,15 +215,22 @@ export async function GET() {
       };
     });
 
+    // P-7 — leader-initiated requests live on the Training Studio surface,
+    // not in the detected queue. They are real prescriptions (same tables,
+    // same efficacy loop) but they arrive through a different door and are
+    // already past the manager gate, so listing them here would read as a
+    // backlog of things to approve when there is nothing to approve.
+    const visible = mapped.filter((m) => m.source_type !== "leader_request");
+
     // Rank: urgency first (a live conflict is time-sensitive regardless of
     // its clamped rung), ROI as the tiebreak within a tier, newest last.
-    mapped.sort((a, b) => {
+    visible.sort((a, b) => {
       if (b.urgency_rank !== a.urgency_rank) return b.urgency_rank - a.urgency_rank;
       if (b.roi_score !== a.roi_score) return b.roi_score - a.roi_score;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
-    return NextResponse.json({ prescriptions: mapped });
+    return NextResponse.json({ prescriptions: visible });
   } catch (err) {
     console.error("Unexpected error in prescriptions route:", err);
     return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });

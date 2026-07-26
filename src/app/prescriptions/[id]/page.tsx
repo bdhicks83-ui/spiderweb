@@ -138,6 +138,8 @@ const SOURCE_LABEL: Record<string, string> = {
   conflict: "Conflict X-ray",
   coverage_gap: "Coverage gap",
   entity_signal: "Entity signal",
+  // P-7 — the Training Studio's human trigger.
+  leader_request: "Leader request",
 };
 
 const TRIGGER_EMOJI: Record<string, string> = {
