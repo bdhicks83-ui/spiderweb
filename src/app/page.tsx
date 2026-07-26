@@ -72,7 +72,7 @@ export default async function Dashboard() {
 
   return (
     <main>
-      <h1>🕸️ Humanbloom</h1>
+      <h1>Humanbloom</h1>
       <p>
         Logged in as {user.email} ·{" "}
         <span

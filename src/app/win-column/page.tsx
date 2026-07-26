@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -77,11 +78,14 @@ export default function WinColumnPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}>
+          <BrandHeader />
+        </div>
         <div style={styles.headerRow}>
           <h1 style={styles.title}>🏆 Win Column</h1>
           <div style={styles.headerLinks}>
             <a href="/library" style={styles.newLink}>
-              🕸️ Team Library
+              📚 Team Library
             </a>
             <a href="/prescriptions" style={styles.newLink}>
               💊 Prescriptions
@@ -180,36 +184,36 @@ export default function WinColumnPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 960, margin: "0 auto", padding: "40px 24px 80px" },
   headerRow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   title: { fontSize: "26px", margin: 0 },
-  subtitle: { color: "#666", fontSize: "14px", margin: "6px 0 24px", maxWidth: 640, lineHeight: 1.5 },
+  subtitle: { color: "var(--muted)", fontSize: "14px", margin: "6px 0 24px", maxWidth: 640, lineHeight: 1.5 },
   headerLinks: { display: "flex", alignItems: "center", gap: 16 },
-  newLink: { fontSize: "14px", fontWeight: 600, color: "#4338ca", textDecoration: "none" },
+  newLink: { fontSize: "14px", fontWeight: 600, color: "var(--accent)", textDecoration: "none" },
   tileRow: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 },
-  tile: { background: "#fff", border: "1px solid #e5e5e5", borderRadius: 12, padding: "14px 16px" },
-  tileLabel: { fontSize: "11px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.03em" },
+  tile: { background: "var(--white)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px" },
+  tileLabel: { fontSize: "11px", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.03em" },
   tileValue: { fontSize: "17px", fontWeight: 700, margin: "4px 0 2px" },
-  tileSub: { fontSize: "12px", color: "#888" },
+  tileSub: { fontSize: "12px", color: "var(--muted)" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 },
-  card: { display: "block", background: "#fff", border: "1px solid #e5e5e5", borderRadius: 12, padding: "18px 18px 14px", textDecoration: "none", color: "inherit" },
+  card: { display: "block", background: "var(--white)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 18px 14px", textDecoration: "none", color: "inherit" },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
   cardTitle: { fontSize: "18px", margin: 0, fontWeight: 700 },
-  cardRole: { fontSize: "13px", color: "#666", margin: "2px 0 0" },
+  cardRole: { fontSize: "13px", color: "var(--muted)", margin: "2px 0 0" },
   badgeStack: { display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" },
-  risingBadge: { fontSize: "11px", fontWeight: 600, color: "#166534", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" },
-  retentionBadge: { fontSize: "11px", fontWeight: 600, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" },
+  risingBadge: { fontSize: "11px", fontWeight: 600, color: "var(--ok-text)", background: "var(--ok-bg)", border: "1px solid var(--ok-border)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" },
+  retentionBadge: { fontSize: "11px", fontWeight: 600, color: "var(--warn-strong)", background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" },
   corroborationRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 },
-  corroborationBadge: { fontSize: "12px", fontWeight: 700, color: "#4338ca", background: "#eef2ff", borderRadius: 999, padding: "3px 10px" },
-  mentionCount: { fontSize: "12px", color: "#888" },
-  crossDeptBadge: { fontSize: "11px", color: "#555", background: "#f5f5f5", borderRadius: 999, padding: "2px 8px" },
+  corroborationBadge: { fontSize: "12px", fontWeight: 700, color: "var(--accent-deep)", background: "var(--accent-soft)", borderRadius: 999, padding: "3px 10px" },
+  mentionCount: { fontSize: "12px", color: "var(--muted)" },
+  crossDeptBadge: { fontSize: "11px", color: "var(--ink-soft)", background: "var(--accent-soft)", borderRadius: 999, padding: "2px 8px" },
   chips: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 },
-  chip: { borderLeft: "3px solid #e5e5e5", paddingLeft: 10 },
-  chipText: { fontSize: "13px", color: "#333", margin: 0, lineHeight: 1.4, fontStyle: "italic" },
-  chipMeta: { fontSize: "11px", color: "#999", margin: "2px 0 0" },
-  evidenceLink: { fontSize: "12px", fontWeight: 600, color: "#4338ca", borderTop: "1px solid #f0f0f0", paddingTop: 10 },
-  empty: { textAlign: "center", padding: "60px 0", color: "#666" },
-  errorText: { color: "#ef4444", fontSize: "14px" },
-  center: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif" },
+  chip: { borderLeft: "3px solid var(--line)", padding: "6px 10px", background: "var(--paper-2)", borderRadius: "0 6px 6px 0" },
+  chipText: { fontSize: "13px", color: "var(--ink-soft)", margin: 0, lineHeight: 1.4, fontStyle: "italic" },
+  chipMeta: { fontSize: "11px", color: "var(--muted)", margin: "2px 0 0" },
+  evidenceLink: { fontSize: "12px", fontWeight: 600, color: "var(--accent)", borderTop: "1px solid var(--line)", paddingTop: 10 },
+  empty: { textAlign: "center", padding: "60px 0", color: "var(--muted)" },
+  errorText: { color: "var(--danger)", fontSize: "14px" },
+  center: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)" },
 };

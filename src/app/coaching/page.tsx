@@ -7,6 +7,7 @@
 // table at all and never sees this page's data under any circumstance.
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import BrandHeader from '@/components/BrandHeader';
 
 const supabase = createClient();
 
@@ -94,6 +95,7 @@ export default function CoachingPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <BrandHeader />
         <div style={styles.titleRow}>
           <h1 style={styles.title}>🧭 Coaching Watch</h1>
           <div style={styles.headerLinks}>
@@ -159,28 +161,28 @@ export default function CoachingPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '48px 24px', fontFamily: 'system-ui, sans-serif' },
+  wrapper: { minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '48px 24px', fontFamily: 'var(--font-sans)' },
   container: { width: '100%', maxWidth: '680px', display: 'flex', flexDirection: 'column', gap: '20px' },
-  center: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif' },
+  center: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-sans)' },
   titleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' },
   title: { fontSize: '26px', fontWeight: 700, margin: 0 },
   headerLinks: { display: 'flex', alignItems: 'center', gap: '14px' },
-  backLink: { fontSize: '13px', fontWeight: 600, color: '#666', textDecoration: 'none' },
-  detectButton: { padding: '8px 16px', fontSize: '13px', fontWeight: 600, color: '#fff', background: '#111', border: 'none', borderRadius: '8px', cursor: 'pointer' },
-  subtitle: { fontSize: '14px', color: '#666', lineHeight: 1.6, margin: 0 },
-  message: { fontSize: '13px', color: '#555', margin: 0, background: '#f5f5f5', padding: '8px 12px', borderRadius: '8px' },
+  backLink: { fontSize: '13px', fontWeight: 600, color: 'var(--muted)', textDecoration: 'none' },
+  detectButton: { padding: '8px 16px', fontSize: '13px', fontWeight: 600, color: 'var(--white)', background: 'var(--accent)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  subtitle: { fontSize: '14px', color: 'var(--muted)', lineHeight: 1.6, margin: 0 },
+  message: { fontSize: '13px', color: 'var(--ink-soft)', margin: 0, background: 'var(--paper-2)', padding: '8px 12px', borderRadius: '8px' },
   section: { display: 'flex', flexDirection: 'column', gap: '10px' },
-  sectionTitle: { fontSize: '13px', fontWeight: 700, letterSpacing: '0.04em', color: '#888', margin: 0 },
-  empty: { fontSize: '14px', color: '#999', fontStyle: 'italic', margin: 0 },
-  card: { padding: '18px 20px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' },
-  cardHandled: { padding: '14px 18px', backgroundColor: '#fafafa', border: '1px solid #e5e5e5', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' },
+  sectionTitle: { fontSize: '13px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--muted)', margin: 0 },
+  empty: { fontSize: '14px', color: 'var(--muted)', fontStyle: 'italic', margin: 0 },
+  card: { padding: '18px 20px', backgroundColor: 'var(--warn-bg)', border: '1px solid var(--warn-border)', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  cardHandled: { padding: '14px 18px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' },
   cardTop: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' },
-  personName: { fontSize: '15px', fontWeight: 700, color: '#111' },
-  recurrenceChip: { fontSize: '12px', fontWeight: 600, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '9999px', padding: '3px 10px' },
-  statusChip: { fontSize: '12px', fontWeight: 600, color: '#666' },
-  summary: { fontSize: '14px', color: '#444', lineHeight: 1.5, margin: 0 },
-  summarySmall: { fontSize: '13px', color: '#888', lineHeight: 1.4, margin: 0 },
+  personName: { fontSize: '15px', fontWeight: 700, color: 'var(--ink)' },
+  recurrenceChip: { fontSize: '12px', fontWeight: 600, color: 'var(--warn-text)', background: 'var(--warn-chip-bg)', border: '1px solid var(--warn-border)', borderRadius: '9999px', padding: '3px 10px' },
+  statusChip: { fontSize: '12px', fontWeight: 600, color: 'var(--ink-soft)' },
+  summary: { fontSize: '14px', color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 },
+  summarySmall: { fontSize: '13px', color: 'var(--muted)', lineHeight: 1.4, margin: 0 },
   actions: { display: 'flex', gap: '10px' },
-  ackButton: { padding: '7px 14px', fontSize: '13px', fontWeight: 600, color: '#111', background: '#fff', border: '1px solid #ccc', borderRadius: '8px', cursor: 'pointer' },
-  dismissButton: { padding: '7px 14px', fontSize: '13px', fontWeight: 600, color: '#888', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' },
+  ackButton: { padding: '7px 14px', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', background: 'var(--white)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer' },
+  dismissButton: { padding: '7px 14px', fontSize: '13px', fontWeight: 600, color: 'var(--ink-soft)', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' },
 };

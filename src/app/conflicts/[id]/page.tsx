@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -193,6 +194,7 @@ export default function ConflictDetailPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}><BrandHeader /></div>
         <a href="/conflicts" style={styles.backLink}>← Back to conflicts</a>
 
         <h1 style={styles.title}>
@@ -369,14 +371,14 @@ function SidePanel({ record, highlight }: { record: SideRecord; highlight: boole
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 880, margin: "0 auto", padding: "32px 24px 80px" },
-  backLink: { fontSize: "13px", color: "#666", textDecoration: "none" },
+  backLink: { fontSize: "13px", color: "var(--muted)", textDecoration: "none" },
   title: { fontSize: "26px", margin: "14px 0 4px" },
-  territory: { fontSize: "14px", color: "#78350f", margin: "0 0 16px" },
+  territory: { fontSize: "14px", color: "var(--warn-text)", margin: "0 0 16px" },
   rationaleBox: {
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 12,
     padding: "14px 16px",
     marginBottom: 20,
@@ -385,11 +387,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "11px",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: "#b45309",
+    color: "var(--warn-strong)",
     fontWeight: 700,
     marginBottom: 6,
   },
-  rationaleText: { fontSize: "14px", color: "#78350f", margin: 0, lineHeight: 1.55 },
+  rationaleText: { fontSize: "14px", color: "var(--warn-text)", margin: 0, lineHeight: 1.55 },
   sideBySide: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
@@ -397,61 +399,61 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 24,
   },
   panel: {
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 12,
     padding: "18px",
   },
-  panelHighlight: { border: "2px solid #166534" },
-  panelMissing: { color: "#888", fontSize: "14px" },
+  panelHighlight: { border: "2px solid var(--ok-text)" },
+  panelMissing: { color: "var(--muted)", fontSize: "14px" },
   panelAuthor: {
     fontSize: "13px",
     fontWeight: 700,
-    color: "#111",
+    color: "var(--ink)",
     display: "flex",
     alignItems: "center",
     gap: 8,
     marginBottom: 8,
   },
   personaTag: {
-    background: "#f5f5f5",
+    background: "var(--paper-2)",
     borderRadius: 999,
     padding: "1px 7px",
     fontSize: "11px",
     fontWeight: 400,
-    color: "#666",
+    color: "var(--muted)",
     textTransform: "capitalize",
   },
   panelTitle: { fontSize: "17px", margin: "0 0 4px" },
   panelTitleLink: { color: "inherit", textDecoration: "none" },
-  panelTagline: { fontSize: "13px", color: "#555", margin: "0 0 12px", lineHeight: 1.4 },
+  panelTagline: { fontSize: "13px", color: "var(--ink-soft)", margin: "0 0 12px", lineHeight: 1.4 },
   panelSection: { marginBottom: 12 },
   panelLabel: {
     fontSize: "11px",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: "#888",
+    color: "var(--muted)",
     marginBottom: 4,
   },
   panelText: { fontSize: "14px", margin: 0, lineHeight: 1.5 },
   panelList: { margin: 0, paddingLeft: 18, fontSize: "14px", lineHeight: 1.5 },
   resolvedBox: {
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
+    background: "var(--ok-bg)",
+    border: "1px solid var(--ok-border)",
     borderRadius: 12,
     padding: "16px 18px",
   },
-  resolvedTitle: { fontSize: "15px", fontWeight: 700, color: "#166534", marginBottom: 8 },
-  resolvedNote: { fontSize: "14px", color: "#14532d", margin: "0 0 8px", lineHeight: 1.55 },
-  resolvedFootnote: { fontSize: "12px", color: "#4d7c5f", margin: 0 },
+  resolvedTitle: { fontSize: "15px", fontWeight: 700, color: "var(--ok-text)", marginBottom: 8 },
+  resolvedNote: { fontSize: "14px", color: "var(--ok-text)", margin: "0 0 8px", lineHeight: 1.55 },
+  resolvedFootnote: { fontSize: "12px", color: "var(--muted)", margin: 0 },
   resolveBox: {
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 12,
     padding: "18px",
   },
   resolveTitle: { fontSize: "17px", margin: "0 0 4px" },
-  resolveSubtitle: { fontSize: "13px", color: "#666", margin: "0 0 14px", lineHeight: 1.5 },
+  resolveSubtitle: { fontSize: "13px", color: "var(--muted)", margin: "0 0 14px", lineHeight: 1.5 },
   option: {
     display: "flex",
     gap: 10,
@@ -463,10 +465,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   radio: { marginTop: 3 },
   optionLabel: { fontWeight: 700 },
-  optionDescription: { color: "#555" },
+  optionDescription: { color: "var(--ink-soft)" },
   supersedePick: {
-    background: "#fafafa",
-    border: "1px solid #eee",
+    background: "var(--paper-2)",
+    border: "1px solid var(--line)",
     borderRadius: 8,
     padding: "10px 14px",
     margin: "6px 0 10px",
@@ -479,31 +481,31 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
     lineHeight: 1.5,
     padding: "10px 12px",
-    border: "1px solid #ddd",
+    border: "1px solid var(--line)",
     borderRadius: 8,
     marginTop: 10,
     resize: "vertical",
   },
   gateBox: {
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 8,
     padding: "10px 14px",
     marginTop: 12,
   },
-  gateMessage: { fontSize: "13px", color: "#78350f", margin: 0, lineHeight: 1.5 },
-  gateNote: { fontSize: "13px", color: "#b45309", margin: "6px 0 0", fontStyle: "italic" },
+  gateMessage: { fontSize: "13px", color: "var(--warn-text)", margin: 0, lineHeight: 1.5 },
+  gateNote: { fontSize: "13px", color: "var(--warn-strong)", margin: "6px 0 0", fontStyle: "italic" },
   submitButton: {
     marginTop: 14,
     fontSize: "14px",
     fontWeight: 600,
-    color: "#fff",
-    background: "#b45309",
+    color: "var(--white)",
+    background: "var(--warn-strong)",
     border: "none",
     borderRadius: 8,
     padding: "10px 18px",
   },
-  errorText: { color: "#ef4444" },
+  errorText: { color: "var(--danger)" },
   center: {
     minHeight: "100vh",
     display: "flex",
@@ -511,6 +513,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
 };

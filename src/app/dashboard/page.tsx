@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { badgeForScore } from '@/lib/insight-score';
 import { HIDE_TRACK_A } from '@/lib/demo-scope';
+import BrandHeader from '@/components/BrandHeader';
 
 const supabase = createClient();
 
@@ -53,16 +54,16 @@ type GrowthSnapshot = {
 };
 
 const BADGE_STYLE: Record<string, { bg: string; fg: string }> = {
-  Emerging: { bg: '#334155', fg: '#e2e8f0' },
-  Rising: { bg: '#1e3a8a', fg: '#bfdbfe' },
-  Verified: { bg: '#065f46', fg: '#a7f3d0' },
-  Elite: { bg: '#78350f', fg: '#fde68a' },
+  Emerging: { bg: 'rgba(255,255,255,0.14)', fg: 'var(--on-ink-soft)' },
+  Rising: { bg: 'var(--accent-soft)', fg: 'var(--accent-deep)' },
+  Verified: { bg: 'var(--ok-bg)', fg: 'var(--ok-text)' },
+  Elite: { bg: 'var(--warn-bg)', fg: 'var(--warn-text)' },
 };
 
 const BADGE: Record<Flag, { label: string; bg: string; fg: string; border: string; emoji: string }> = {
-  consistent: { label: 'Verified via LinkedIn', bg: '#f0fdf4', fg: '#166534', border: '#bbf7d0', emoji: '✓' },
-  partial_mismatch: { label: 'Some details didn’t line up', bg: '#fffbeb', fg: '#92400e', border: '#fde68a', emoji: '⚠' },
-  no_linkedin_provided: { label: 'Not verified yet', bg: '#f5f5f5', fg: '#666', border: '#e0e0e0', emoji: '—' },
+  consistent: { label: 'Verified via LinkedIn', bg: 'var(--ok-bg)', fg: 'var(--ok-text)', border: 'var(--ok-border)', emoji: '✓' },
+  partial_mismatch: { label: 'Some details didn’t line up', bg: 'var(--warn-bg)', fg: 'var(--warn-text)', border: 'var(--warn-border)', emoji: '⚠' },
+  no_linkedin_provided: { label: 'Not verified yet', bg: 'var(--paper-2)', fg: 'var(--muted)', border: 'var(--line)', emoji: '—' },
 };
 
 export default function DashboardPage() {
@@ -226,6 +227,7 @@ export default function DashboardPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <BrandHeader />
         <div style={styles.titleRow}>
           <h1 style={styles.title}>Your Dashboard</h1>
           <div style={styles.headerLinks}>
@@ -244,7 +246,7 @@ export default function DashboardPage() {
 
         <div style={styles.resumeBanner}>
           <div>
-            <h2 style={styles.resumeBannerTitle}>🕸️ Codify a pattern</h2>
+            <h2 style={styles.resumeBannerTitle}>🌱 Codify a pattern</h2>
             <p style={styles.resumeBannerSub}>
               A short interview about work you&apos;ve already done — walk out with a
               branded framework you could put in a proposal.
@@ -538,7 +540,7 @@ function NeedsContextItem({
           {submitting ? 'Checking…' : depthOk === true ? 'Counted ✓' : 'Submit explanation'}
         </button>
         {message && (
-          <span style={{ ...styles.needsMessage, color: depthOk === false ? '#b45309' : '#15803d' }}>
+          <span style={{ ...styles.needsMessage, color: depthOk === false ? 'var(--warn-strong)' : 'var(--ok-text)' }}>
             {message}
           </span>
         )}
@@ -640,7 +642,7 @@ function Sparkline({ values }: { values: number[] }) {
       <polyline
         points={pts.join(' ')}
         fill="none"
-        stroke="#38bdf8"
+        stroke="var(--leaf)"
         strokeWidth={2.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -650,7 +652,7 @@ function Sparkline({ values }: { values: number[] }) {
           cx={pts[pts.length - 1].split(',')[0]}
           cy={pts[pts.length - 1].split(',')[1]}
           r={4}
-          fill="#22c55e"
+          fill="var(--accent)"
         />
       )}
     </svg>
@@ -674,72 +676,72 @@ function Metric({ label, pct, help }: { label: string; pct: number; help: string
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '48px 24px', fontFamily: 'system-ui, sans-serif' },
+  wrapper: { minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '48px 24px', fontFamily: 'var(--font-sans)' },
   container: { width: '100%', maxWidth: '640px', display: 'flex', flexDirection: 'column', gap: '20px' },
-  center: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif' },
+  center: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-sans)' },
   title: { fontSize: '28px', fontWeight: 700, margin: 0 },
   titleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' },
   headerLinks: { display: 'flex', alignItems: 'center', gap: '14px' },
-  settingsLink: { fontSize: '13px', fontWeight: 600, color: '#666', textDecoration: 'none' },
-  signOutLink: { fontSize: '13px', fontWeight: 600, color: '#b91c1c', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' },
-  card: { padding: '24px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' },
-  resumeBanner: { padding: '20px 24px', backgroundColor: '#111', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' },
-  resumeBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: '#fff' },
-  resumeBannerSub: { fontSize: '13px', color: '#bbb', margin: '4px 0 0', lineHeight: 1.5, maxWidth: '360px' },
-  resumeBannerLink: { fontSize: '14px', fontWeight: 600, color: '#111', background: '#fff', padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', whiteSpace: 'nowrap' },
+  settingsLink: { fontSize: '13px', fontWeight: 600, color: 'var(--muted)', textDecoration: 'none' },
+  signOutLink: { fontSize: '13px', fontWeight: 600, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' },
+  card: { padding: '24px', backgroundColor: 'var(--white)', border: '1px solid var(--line)', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' },
+  resumeBanner: { padding: '20px 24px', backgroundColor: 'var(--ink)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' },
+  resumeBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--on-ink)' },
+  resumeBannerSub: { fontSize: '13px', color: 'var(--on-ink-soft)', margin: '4px 0 0', lineHeight: 1.5, maxWidth: '360px' },
+  resumeBannerLink: { fontSize: '14px', fontWeight: 600, color: 'var(--ink)', background: 'var(--white)', padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', whiteSpace: 'nowrap' },
   cardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' },
   cardTitle: { fontSize: '17px', fontWeight: 600, margin: 0 },
   badge: { fontSize: '13px', fontWeight: 600, padding: '5px 12px', borderRadius: '9999px', border: '1px solid' },
-  notes: { margin: 0, fontSize: '14px', color: '#444', lineHeight: 1.5, background: '#fafafa', padding: '10px 12px', borderRadius: '8px' },
-  help: { margin: 0, fontSize: '13px', color: '#888', lineHeight: 1.5 },
-  linkButton: { alignSelf: 'flex-start', padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#111', background: '#fff', border: '1px solid #ccc', borderRadius: '8px', cursor: 'pointer' },
+  notes: { margin: 0, fontSize: '14px', color: 'var(--ink-soft)', lineHeight: 1.5, background: 'var(--paper-2)', padding: '10px 12px', borderRadius: '8px' },
+  help: { margin: 0, fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5 },
+  linkButton: { alignSelf: 'flex-start', padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--ink)', background: 'var(--white)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer' },
   form: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  label: { fontSize: '13px', fontWeight: 600, color: '#555' },
-  input: { padding: '10px 12px', fontSize: '15px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'inherit' },
-  textarea: { padding: '10px 12px', fontSize: '15px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
+  label: { fontSize: '13px', fontWeight: 600, color: 'var(--ink-soft)' },
+  input: { padding: '10px 12px', fontSize: '15px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit' },
+  textarea: { padding: '10px 12px', fontSize: '15px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
   formRow: { display: 'flex', gap: '10px', marginTop: '4px' },
-  primary: { padding: '10px 20px', fontSize: '15px', fontWeight: 600, color: '#fff', background: '#111', border: 'none', borderRadius: '8px', cursor: 'pointer' },
-  ghost: { padding: '10px 14px', fontSize: '14px', color: '#666', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
-  message: { margin: 0, fontSize: '14px', color: '#555' },
-  gapBanner: { padding: '18px 20px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' },
-  gapBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: '#166534' },
-  gapBannerSub: { fontSize: '13px', color: '#3f6212', margin: 0, lineHeight: 1.5 },
+  primary: { padding: '10px 20px', fontSize: '15px', fontWeight: 600, color: 'var(--white)', background: 'var(--accent)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  ghost: { padding: '10px 14px', fontSize: '14px', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
+  message: { margin: 0, fontSize: '14px', color: 'var(--ink-soft)' },
+  gapBanner: { padding: '18px 20px', backgroundColor: 'var(--ok-bg)', border: '1px solid var(--ok-border)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' },
+  gapBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--ok-text)' },
+  gapBannerSub: { fontSize: '13px', color: 'var(--ok-text)', margin: 0, lineHeight: 1.5 },
   gapList: { listStyle: 'none', margin: '4px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' },
-  gapItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', background: '#fff', border: '1px solid #d1fae5', borderRadius: '10px', padding: '10px 12px' },
-  gapQuestion: { fontSize: '14px', color: '#166534', fontStyle: 'italic', flex: 1, minWidth: '200px' },
-  gapItemLink: { fontSize: '13px', fontWeight: 600, color: '#15803d', textDecoration: 'none', whiteSpace: 'nowrap' },
-  scoreCard: { padding: '24px', backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: '#fff' },
+  gapItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', background: 'var(--white)', border: '1px solid var(--ok-border)', borderRadius: '10px', padding: '10px 12px' },
+  gapQuestion: { fontSize: '14px', color: 'var(--ok-text)', fontStyle: 'italic', flex: 1, minWidth: '200px' },
+  gapItemLink: { fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', whiteSpace: 'nowrap' },
+  scoreCard: { padding: '24px', backgroundColor: 'var(--ink)', border: '1px solid var(--ink-line)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: 'var(--on-ink)' },
   scoreHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' },
   scoreMain: { display: 'flex', alignItems: 'baseline', gap: '8px' },
-  scoreNumber: { fontSize: '56px', fontWeight: 800, lineHeight: 1, color: '#fff' },
-  scoreOutOf: { fontSize: '18px', color: '#94a3b8', fontWeight: 600 },
-  breakdownToggle: { alignSelf: 'flex-start', padding: 0, fontSize: '13px', color: '#7dd3fc', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
+  scoreNumber: { fontSize: '56px', fontWeight: 800, lineHeight: 1, color: 'var(--on-ink)' },
+  scoreOutOf: { fontSize: '18px', color: 'var(--on-ink-soft)', fontWeight: 600 },
+  breakdownToggle: { alignSelf: 'flex-start', padding: 0, fontSize: '13px', color: 'var(--accent-soft)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
   breakdown: { display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '8px' },
-  linkButtonSm: { padding: '6px 12px', fontSize: '13px', fontWeight: 600, color: '#fff', background: 'transparent', border: '1px solid #334155', borderRadius: '8px', cursor: 'pointer' },
+  linkButtonSm: { padding: '6px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--on-ink)', background: 'transparent', border: '1px solid var(--ink-line)', borderRadius: '8px', cursor: 'pointer' },
   metric: { display: 'flex', flexDirection: 'column', gap: '4px' },
   metricTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  metricLabel: { fontSize: '14px', fontWeight: 600, color: '#e2e8f0' },
-  metricPct: { fontSize: '14px', fontWeight: 700, color: '#fff' },
-  metricBarTrack: { height: '8px', background: '#1e293b', borderRadius: '9999px', overflow: 'hidden' },
-  metricBarFill: { height: '100%', background: 'linear-gradient(90deg,#38bdf8,#22c55e)', borderRadius: '9999px' },
-  metricHelp: { fontSize: '12px', color: '#94a3b8' },
-  growthCard: { padding: '24px', backgroundColor: '#0b1220', border: '1px solid #1e293b', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: '#fff' },
+  metricLabel: { fontSize: '14px', fontWeight: 600, color: 'var(--on-ink-soft)' },
+  metricPct: { fontSize: '14px', fontWeight: 700, color: 'var(--on-ink)' },
+  metricBarTrack: { height: '8px', background: 'rgba(255,255,255,0.14)', borderRadius: '9999px', overflow: 'hidden' },
+  metricBarFill: { height: '100%', background: 'linear-gradient(90deg,var(--leaf-light),var(--leaf))', borderRadius: '9999px' },
+  metricHelp: { fontSize: '12px', color: 'var(--on-ink-muted)' },
+  growthCard: { padding: '24px', backgroundColor: 'var(--ink)', border: '1px solid var(--ink-line)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: 'var(--on-ink)' },
   growthMain: { display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' },
   statusBadge: { fontSize: '13px', fontWeight: 700, padding: '4px 12px', borderRadius: '9999px', alignSelf: 'center' },
-  growthSub: { fontSize: '13px', color: '#94a3b8', margin: 0 },
-  growthLine: { fontSize: '15px', fontWeight: 600, color: '#7dd3fc', margin: '4px 0 0' },
+  growthSub: { fontSize: '13px', color: 'var(--on-ink-soft)', margin: 0 },
+  growthLine: { fontSize: '15px', fontWeight: 600, color: 'var(--accent-soft)', margin: '4px 0 0' },
   sparkline: { display: 'block', marginTop: '6px' },
-  needsCard: { padding: '20px 22px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' },
-  needsTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: '#92400e' },
-  needsSub: { fontSize: '13px', color: '#a16207', margin: 0, lineHeight: 1.5 },
+  needsCard: { padding: '20px 22px', backgroundColor: 'var(--warn-bg)', border: '1px solid var(--warn-border)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  needsTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--warn-text)' },
+  needsSub: { fontSize: '13px', color: 'var(--warn-text)', margin: 0, lineHeight: 1.5 },
   needsList: { display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '4px' },
-  needsItem: { background: '#fff', border: '1px solid #fef3c7', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' },
+  needsItem: { background: 'var(--white)', border: '1px solid var(--warn-border)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' },
   needsItemTop: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
-  needsBadge: { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '9999px', padding: '3px 10px' },
-  needsNote: { fontSize: '12px', color: '#a16207', fontStyle: 'italic' },
-  needsContent: { fontSize: '15px', lineHeight: 1.5, color: '#1f2937', margin: 0 },
-  needsTextarea: { padding: '10px 12px', fontSize: '14px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
+  needsBadge: { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--warn-text)', background: 'var(--warn-chip-bg)', border: '1px solid var(--warn-border)', borderRadius: '9999px', padding: '3px 10px' },
+  needsNote: { fontSize: '12px', color: 'var(--warn-text)', fontStyle: 'italic' },
+  needsContent: { fontSize: '15px', lineHeight: 1.5, color: 'var(--ink)', margin: 0 },
+  needsTextarea: { padding: '10px 12px', fontSize: '14px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
   needsRow: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
-  needsSubmit: { padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: '#92400e', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  needsSubmit: { padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--white)', background: 'var(--warn-strong)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
   needsMessage: { fontSize: '13px', fontWeight: 500, lineHeight: 1.4, flex: 1, minWidth: '180px' },
 };

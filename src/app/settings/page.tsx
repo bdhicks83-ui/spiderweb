@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -104,6 +105,7 @@ export default function SettingsPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}><BrandHeader /></div>
         <h1 style={styles.title}>Settings</h1>
 
         <div style={styles.card}>
@@ -171,25 +173,25 @@ export default function SettingsPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 560, margin: "0 auto", padding: "40px 24px 80px" },
   title: { fontSize: "26px", marginBottom: 20 },
   card: {
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 12,
     padding: "20px 20px 22px",
     marginBottom: 16,
   },
   cardTitle: { fontSize: "16px", margin: "0 0 4px" },
-  help: { fontSize: "13px", color: "#777", margin: "0 0 14px" },
+  help: { fontSize: "13px", color: "var(--muted)", margin: "0 0 14px" },
   row: { display: "flex", gap: 8 },
   input: {
     flex: 1,
     padding: "10px 12px",
     fontSize: "14px",
     borderRadius: 8,
-    border: "1px solid #d4d4d4",
+    border: "1px solid var(--line)",
   },
   saveButton: {
     padding: "10px 18px",
@@ -197,18 +199,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     border: "none",
     borderRadius: 8,
-    background: "#4338ca",
-    color: "#fff",
+    background: "var(--accent)",
+    color: "var(--white)",
     cursor: "pointer",
   },
   signOutButton: {
     padding: "10px 18px",
     fontSize: "14px",
     fontWeight: 600,
-    border: "1px solid #fecaca",
+    border: "1px solid var(--danger-border)",
     borderRadius: 8,
-    background: "#fef2f2",
-    color: "#b91c1c",
+    background: "var(--danger-bg)",
+    color: "var(--danger)",
     cursor: "pointer",
   },
   personaGrid: { display: "grid", gap: 10 },
@@ -218,26 +220,26 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
     gap: 4,
     padding: "14px 16px",
-    border: "1px solid #e5e5e5",
+    border: "1px solid var(--line)",
     borderRadius: 10,
-    background: "#fff",
+    background: "var(--white)",
     cursor: "pointer",
     textAlign: "left",
   },
   personaCardSelected: {
-    borderColor: "#4338ca",
-    background: "#eef2ff",
+    borderColor: "var(--accent)",
+    background: "var(--accent-soft)",
   },
   personaEmoji: { fontSize: "18px" },
   personaLabel: { fontWeight: 700, fontSize: "14px" },
-  personaHelp: { fontSize: "12px", color: "#777" },
-  message: { fontSize: "13px", color: "#166534" },
-  backLink: { fontSize: "13px", color: "#666", textDecoration: "none" },
+  personaHelp: { fontSize: "12px", color: "var(--muted)" },
+  message: { fontSize: "13px", color: "var(--ok-text)" },
+  backLink: { fontSize: "13px", color: "var(--muted)", textDecoration: "none" },
   center: {
     minHeight: "100vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
 };

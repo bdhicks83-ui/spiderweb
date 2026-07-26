@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -69,15 +70,15 @@ const SOURCE_LABEL: Record<string, string> = {
 // today) regardless of its clamped rung, so it no longer sinks below a
 // higher-rung coverage gap with no clock on it.
 const URGENCY_CHIP: Record<string, { color: string; bg: string; border: string }> = {
-  High: { color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
-  Medium: { color: "#b45309", bg: "#fffbeb", border: "#fde68a" },
-  Low: { color: "#57534e", bg: "#f5f5f4", border: "#e7e5e4" },
+  High: { color: "var(--danger)", bg: "var(--danger-bg)", border: "var(--danger-border)" },
+  Medium: { color: "var(--warn-strong)", bg: "var(--warn-bg)", border: "var(--warn-border)" },
+  Low: { color: "var(--ink-soft)", bg: "var(--paper-2)", border: "var(--line)" },
 };
 
 const EFFICACY_CHIP: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  watching: { label: "👁 watching", color: "#1e40af", bg: "#eff6ff", border: "#bfdbfe" },
-  escalated: { label: "🔺 escalated", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
-  effective: { label: "✅ effective — proven", color: "#166534", bg: "#f0fdf4", border: "#bbf7d0" },
+  watching: { label: "👁 watching", color: "var(--accent-deep)", bg: "var(--white)", border: "var(--accent)" },
+  escalated: { label: "🔺 escalated", color: "var(--danger)", bg: "var(--danger-bg)", border: "var(--danger-border)" },
+  effective: { label: "✅ effective — proven", color: "var(--ok-text)", bg: "var(--ok-bg)", border: "var(--ok-border)" },
 };
 
 export default function PrescriptionsPage() {
@@ -213,6 +214,9 @@ export default function PrescriptionsPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}>
+          <BrandHeader />
+        </div>
         <div style={styles.headerRow}>
           <h1 style={styles.title}>💊 Prescription Queue</h1>
           <div style={styles.headerButtons}>
@@ -354,16 +358,16 @@ export default function PrescriptionsPage() {
             {closed.map((r) => (
               <div
                 key={r.id}
-                style={{ ...styles.card, borderColor: "#bbf7d0", background: "#f6fef8" }}
+                style={{ ...styles.card, borderColor: "var(--ok-border)", background: "var(--ok-bg)" }}
               >
                 <a href={`/prescriptions/${r.id}`} style={styles.cardLinkArea}>
                   <div style={styles.cardTop}>
                     <span
                       style={{
                         ...styles.efficacyChip,
-                        color: "#166534",
-                        background: "#f0fdf4",
-                        borderColor: "#bbf7d0",
+                        color: "var(--ok-text)",
+                        background: "var(--ok-bg)",
+                        borderColor: "var(--ok-border)",
                       }}
                     >
                       ✅ effective — proven
@@ -432,7 +436,7 @@ export default function PrescriptionsPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 820, margin: "0 auto", padding: "40px 24px 80px" },
   headerRow: {
     display: "flex",
@@ -442,13 +446,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   headerButtons: { display: "flex", gap: 8 },
   title: { fontSize: "26px", margin: 0 },
-  subtitle: { color: "#666", fontSize: "14px", margin: "6px 0 10px", lineHeight: 1.5 },
-  backLink: { fontSize: "13px", color: "#666", textDecoration: "none" },
+  subtitle: { color: "var(--muted)", fontSize: "14px", margin: "6px 0 10px", lineHeight: 1.5 },
+  backLink: { fontSize: "13px", color: "var(--muted)", textDecoration: "none" },
   runButton: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#fff",
-    background: "#7c3aed",
+    color: "var(--white)",
+    background: "var(--accent)",
     border: "none",
     borderRadius: 8,
     padding: "8px 14px",
@@ -457,27 +461,27 @@ const styles: Record<string, React.CSSProperties> = {
   efficacyButton: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#7c3aed",
-    background: "#f5f3ff",
-    border: "1px solid #ddd6fe",
+    color: "var(--accent-deep)",
+    background: "var(--accent-soft)",
+    border: "1px solid var(--leaf-light)",
     borderRadius: 8,
     padding: "8px 14px",
     cursor: "pointer",
   },
-  runMessage: { fontSize: "13px", color: "#166534", margin: "12px 0 0" },
-  errorText: { color: "#ef4444", fontSize: "14px" },
+  runMessage: { fontSize: "13px", color: "var(--ok-text)", margin: "12px 0 0" },
+  errorText: { color: "var(--danger)", fontSize: "14px" },
   sectionTitle: {
     fontSize: "13px",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: "#888",
+    color: "var(--muted)",
     margin: "28px 0 10px",
   },
-  empty: { color: "#888", fontSize: "14px" },
+  empty: { color: "var(--muted)", fontSize: "14px" },
   card: {
     display: "block",
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 12,
     padding: "16px 18px",
     textDecoration: "none",
@@ -501,8 +505,8 @@ const styles: Record<string, React.CSSProperties> = {
   approveButton: {
     fontSize: "13px",
     fontWeight: 600,
-    color: "#fff",
-    background: "#16a34a",
+    color: "var(--white)",
+    background: "var(--leaf)",
     border: "none",
     borderRadius: 8,
     padding: "6px 12px",
@@ -511,20 +515,20 @@ const styles: Record<string, React.CSSProperties> = {
   snoozeButton: {
     fontSize: "13px",
     fontWeight: 600,
-    color: "#57534e",
-    background: "#f5f5f4",
-    border: "1px solid #e7e5e4",
+    color: "var(--ink-soft)",
+    background: "var(--paper-2)",
+    border: "1px solid var(--line)",
     borderRadius: 8,
     padding: "6px 12px",
     cursor: "pointer",
   },
-  rank: { fontSize: "13px", fontWeight: 700, color: "#7c3aed" },
+  rank: { fontSize: "13px", fontWeight: 700, color: "var(--accent)" },
   roi: {
     fontSize: "11px",
     fontWeight: 700,
-    color: "#7c3aed",
-    background: "#f5f3ff",
-    border: "1px solid #ddd6fe",
+    color: "var(--accent-deep)",
+    background: "var(--accent-soft)",
+    border: "1px solid var(--leaf-light)",
     borderRadius: 999,
     padding: "3px 9px",
   },
@@ -538,33 +542,33 @@ const styles: Record<string, React.CSSProperties> = {
   rungChip: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#1e40af",
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
+    color: "var(--accent-deep)",
+    background: "var(--accent-soft)",
+    border: "1px solid var(--leaf-light)",
     borderRadius: 999,
     padding: "3px 9px",
   },
   sourceChip: {
     fontSize: "11px",
-    color: "#666",
-    background: "#f5f5f5",
-    border: "1px solid #e5e5e5",
+    color: "var(--ink-soft)",
+    background: "var(--paper-2)",
+    border: "1px solid var(--line)",
     borderRadius: 999,
     padding: "3px 9px",
   },
   captureChip: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#b45309",
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    color: "var(--warn-strong)",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 999,
     padding: "3px 9px",
   },
   statusChip: {
     fontSize: "11px",
-    color: "#666",
-    background: "#f5f5f5",
+    color: "var(--ink-soft)",
+    background: "var(--paper-2)",
     borderRadius: 999,
     padding: "3px 9px",
     textTransform: "capitalize" as const,
@@ -580,8 +584,8 @@ const styles: Record<string, React.CSSProperties> = {
   nudgeBanner: {
     marginTop: 10,
     padding: "10px 12px",
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 10,
     display: "flex",
     alignItems: "center",
@@ -589,13 +593,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap" as const,
     gap: 8,
   },
-  nudgeText: { fontSize: "13px", fontWeight: 600, color: "#92400e" },
+  nudgeText: { fontSize: "13px", fontWeight: 600, color: "var(--warn-text)" },
   nudgeButtons: { display: "flex", gap: 8 },
   nudgeHoldButton: {
     fontSize: "12px",
     fontWeight: 600,
-    color: "#fff",
-    background: "#16a34a",
+    color: "var(--white)",
+    background: "var(--leaf)",
     border: "none",
     borderRadius: 8,
     padding: "6px 12px",
@@ -604,25 +608,25 @@ const styles: Record<string, React.CSSProperties> = {
   nudgeRegressButton: {
     fontSize: "12px",
     fontWeight: 600,
-    color: "#92400e",
-    background: "#fff",
-    border: "1px solid #fde68a",
+    color: "var(--warn-text)",
+    background: "var(--white)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 8,
     padding: "6px 12px",
     cursor: "pointer",
   },
-  outcomeConfirmedNote: { fontSize: "12px", color: "#666", margin: "10px 0 0" },
+  outcomeConfirmedNote: { fontSize: "12px", color: "var(--muted)", margin: "10px 0 0" },
   gap: { fontSize: "15px", fontWeight: 600, margin: "0 0 6px", lineHeight: 1.45 },
-  pairing: { fontSize: "13px", color: "#555", margin: "0 0 8px", lineHeight: 1.5 },
-  approvalMeta: { fontSize: "12px", color: "#888", margin: "0 0 4px" },
-  efficacyNote: { fontSize: "12px", color: "#666", margin: 0, lineHeight: 1.5 },
-  cardMeta: { fontSize: "12px", color: "#999" },
-  snoozedLine: { fontSize: "13px", color: "#888", marginTop: 24, lineHeight: 1.5 },
+  pairing: { fontSize: "13px", color: "var(--ink-soft)", margin: "0 0 8px", lineHeight: 1.5 },
+  approvalMeta: { fontSize: "12px", color: "var(--muted)", margin: "0 0 4px" },
+  efficacyNote: { fontSize: "12px", color: "var(--muted)", margin: 0, lineHeight: 1.5 },
+  cardMeta: { fontSize: "12px", color: "var(--muted)" },
+  snoozedLine: { fontSize: "13px", color: "var(--muted)", marginTop: 24, lineHeight: 1.5 },
   center: {
     minHeight: "100vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
 };

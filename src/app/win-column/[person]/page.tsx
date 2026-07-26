@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -118,6 +119,9 @@ export default function WinColumnEvidencePage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}>
+          <BrandHeader />
+        </div>
         <div style={styles.actions} className="no-print">
           <a href="/win-column" style={styles.backLink}>
             ← Win Column
@@ -172,21 +176,21 @@ export default function WinColumnEvidencePage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 720, margin: "0 auto", padding: "40px 24px 80px" },
   actions: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
-  backLink: { fontSize: "14px", fontWeight: 600, color: "#4338ca", textDecoration: "none" },
-  actionButton: { fontSize: "13px", fontWeight: 600, color: "#333", background: "#fff", border: "1px solid #d4d4d4", borderRadius: 8, padding: "6px 14px", cursor: "pointer" },
-  packetHeader: { background: "#fff", border: "1px solid #e5e5e5", borderRadius: 12, padding: "22px 24px", marginBottom: 20 },
+  backLink: { fontSize: "14px", fontWeight: 600, color: "var(--accent)", textDecoration: "none" },
+  actionButton: { fontSize: "13px", fontWeight: 600, color: "var(--ink)", background: "var(--white)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 14px", cursor: "pointer" },
+  packetHeader: { background: "var(--white)", border: "1px solid var(--line)", borderRadius: 12, padding: "22px 24px", marginBottom: 20 },
   name: { fontSize: "24px", margin: 0, fontWeight: 700 },
-  role: { fontSize: "14px", color: "#666", margin: "4px 0 12px" },
-  headline: { fontSize: "14px", color: "#333", margin: 0 },
+  role: { fontSize: "14px", color: "var(--muted)", margin: "4px 0 12px" },
+  headline: { fontSize: "14px", color: "var(--ink)", margin: 0 },
   entries: { display: "flex", flexDirection: "column", gap: 14 },
-  entry: { background: "#fff", border: "1px solid #e5e5e5", borderRadius: 12, padding: "16px 18px" },
-  quote: { fontSize: "15px", color: "#222", margin: "0 0 8px", lineHeight: 1.5, fontStyle: "italic" },
-  entryMeta: { fontSize: "13px", color: "#666", margin: 0 },
-  frameworkTag: { fontSize: "12px", color: "#4338ca", margin: "6px 0 0" },
-  footnote: { fontSize: "12px", color: "#999", marginTop: 24, lineHeight: 1.5 },
-  errorText: { color: "#ef4444", fontSize: "14px" },
-  center: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif" },
+  entry: { background: "var(--white)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 18px" },
+  quote: { fontSize: "15px", color: "var(--ink)", margin: "0 0 8px", lineHeight: 1.5, fontStyle: "italic" },
+  entryMeta: { fontSize: "13px", color: "var(--muted)", margin: 0 },
+  frameworkTag: { fontSize: "12px", color: "var(--accent)", margin: "6px 0 0" },
+  footnote: { fontSize: "12px", color: "var(--muted)", marginTop: 24, lineHeight: 1.5 },
+  errorText: { color: "var(--danger)", fontSize: "14px" },
+  center: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)" },
 };

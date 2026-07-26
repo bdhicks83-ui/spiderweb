@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -98,8 +99,9 @@ export default function LibraryPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}><BrandHeader /></div>
         <div style={styles.headerRow}>
-          <h1 style={styles.title}>🕸️ Team Library</h1>
+          <h1 style={styles.title}>📚 Team Library</h1>
           <div style={styles.headerLinks}>
             <a href="/retrieve" style={styles.newLink}>
               🔍 Ask the brain
@@ -185,8 +187,7 @@ export default function LibraryPage() {
 const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     minHeight: "100vh",
-    background: "#fafafa",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
   container: {
     maxWidth: 920,
@@ -200,27 +201,27 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 4,
   },
   title: { fontSize: "26px", margin: 0 },
-  subtitle: { color: "#666", fontSize: "14px", margin: "6px 0 28px" },
+  subtitle: { color: "var(--muted)", fontSize: "14px", margin: "6px 0 28px" },
   headerLinks: { display: "flex", alignItems: "center", gap: 16 },
   conflictsLink: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#b45309",
+    color: "var(--warn-strong)",
     textDecoration: "none",
   },
   newLink: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#4338ca",
+    color: "var(--accent)",
     textDecoration: "none",
   },
   badgeRow: { display: "flex", alignItems: "center", gap: 6 },
   contestedBadge: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#b45309",
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    color: "var(--warn-strong)",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 999,
     padding: "2px 8px",
   },
@@ -231,8 +232,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   card: {
     display: "block",
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 12,
     padding: "18px 18px 14px",
     textDecoration: "none",
@@ -248,32 +249,32 @@ const styles: Record<string, React.CSSProperties> = {
   mineBadge: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#166534",
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
+    color: "var(--accent-deep)",
+    background: "var(--accent-soft)",
+    border: "1px solid var(--leaf-light)",
     borderRadius: 999,
     padding: "2px 8px",
   },
   cardTitle: { fontSize: "17px", margin: "0 0 6px", fontWeight: 700 },
   cardTagline: {
     fontSize: "13px",
-    color: "#555",
+    color: "var(--ink-soft)",
     margin: "0 0 12px",
     lineHeight: 1.4,
   },
   metaRow: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 },
   methodTag: {
     fontSize: "11px",
-    background: "#eef2ff",
-    color: "#4338ca",
+    background: "var(--accent-soft)",
+    color: "var(--accent-deep)",
     borderRadius: 999,
     padding: "2px 8px",
     fontWeight: 600,
   },
   metaTag: {
     fontSize: "11px",
-    background: "#f5f5f5",
-    color: "#555",
+    background: "var(--paper-2)",
+    color: "var(--ink-soft)",
     borderRadius: 999,
     padding: "2px 8px",
   },
@@ -281,14 +282,14 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    borderTop: "1px solid #f0f0f0",
+    borderTop: "1px solid var(--line)",
     paddingTop: 10,
     fontSize: "12px",
-    color: "#888",
+    color: "var(--muted)",
   },
-  authorName: { fontWeight: 600, color: "#333" },
+  authorName: { fontWeight: 600, color: "var(--ink)" },
   personaTag: {
-    background: "#f5f5f5",
+    background: "var(--paper-2)",
     borderRadius: 999,
     padding: "1px 7px",
     fontSize: "11px",
@@ -297,14 +298,14 @@ const styles: Record<string, React.CSSProperties> = {
   empty: {
     textAlign: "center",
     padding: "60px 0",
-    color: "#666",
+    color: "var(--muted)",
   },
-  errorText: { color: "#ef4444", fontSize: "14px" },
+  errorText: { color: "var(--danger)", fontSize: "14px" },
   center: {
     minHeight: "100vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
 };

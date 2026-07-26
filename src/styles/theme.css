@@ -1,0 +1,77 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Humanbloom brand theme — SINGLE SOURCE OF TRUTH for the app's palette.
+   Tokens copied verbatim from the marketing landing page. Every page's
+   inline style object references these via var(--…); change a color here
+   and it cascades app-wide.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Landing-page tokens — verbatim, do not re-pick */
+  --ink: #0c2e3b;
+  --ink-soft: #2c4a54;
+  --paper: #fef9f6;
+  --paper-2: #f4ece4;
+  --line: #ddd2c7;
+  --accent: #4e7e70;
+  --accent-deep: #3c6255;
+  --accent-soft: #dfe9df;
+  --leaf: #6b9e76;
+  --leaf-light: #a3bda0;
+  --muted: #6a7b78;
+  --white: #ffffff;
+
+  /* Derived — text/lines on dark (--ink) surfaces */
+  --on-ink: #ffffff;
+  --on-ink-soft: rgba(255, 255, 255, 0.78);
+  --on-ink-muted: rgba(255, 255, 255, 0.55);
+  --ink-line: rgba(255, 255, 255, 0.16);
+
+  /* Semantic status — harmonized with the palette, meaning preserved */
+  --ok-text: #3c6255;
+  --ok-bg: #dfe9df;
+  --ok-border: #a3bda0;
+  --warn-text: #8a5a20;
+  --warn-strong: #b45309;
+  --warn-bg: #fdf3e0;
+  --warn-border: #ecd9a8;
+  --warn-chip-bg: #f6e8c9;
+  --danger: #b0492f;
+  --danger-bg: #f9e9e3;
+  --danger-border: #e7c4b5;
+
+  /* Type */
+  --font-serif: Georgia, 'Times New Roman', Times, serif;
+  --font-sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html {
+  background: var(--paper);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Headings: serif, editorial — matches the landing page. Color inherits so
+   headings on dark (--ink) surfaces stay light. */
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  letter-spacing: 0.01em;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Calm hover affordance without per-element :hover styles (pages use inline
+   styles, which CSS :hover can't override — filter works regardless). */
+a:hover,
+button:not(:disabled):hover {
+  filter: brightness(0.92);
+}
+
+button:disabled {
+  opacity: 0.55;
+}

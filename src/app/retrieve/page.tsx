@@ -51,6 +51,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader, { Daisy } from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -335,6 +336,9 @@ export default function RetrievePage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}>
+          <BrandHeader />
+        </div>
         <div style={styles.headerRow}>
           <h1 style={styles.title}>🔍 Ask your team&apos;s brain</h1>
           <div style={styles.headerLinks}>
@@ -393,7 +397,9 @@ export default function RetrievePage() {
 
         {view.kind === "noMatch" && (
           <div style={styles.empty}>
-            <div style={styles.emptyEmoji}>🕸️</div>
+            <div style={styles.emptyEmoji}>
+              <Daisy size={40} />
+            </div>
             <p style={styles.emptyTitle}>{view.message}</p>
             <a href="/codify" style={styles.newLink}>
               Codify a framework for this →
@@ -507,7 +513,7 @@ export default function RetrievePage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 760, margin: "0 auto", padding: "40px 24px 80px" },
   headerRow: {
     display: "flex",
@@ -519,15 +525,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: { fontSize: "26px", margin: 0 },
   headerLinks: { display: "flex", alignItems: "center", gap: 16 },
-  headerLink: { fontSize: "14px", fontWeight: 600, color: "#333", textDecoration: "none" },
-  newLink: { fontSize: "14px", fontWeight: 600, color: "#4338ca", textDecoration: "none" },
-  subtitle: { color: "#666", fontSize: "14px", margin: "6px 0 22px", lineHeight: 1.5 },
+  headerLink: { fontSize: "14px", fontWeight: 600, color: "var(--ink)", textDecoration: "none" },
+  newLink: { fontSize: "14px", fontWeight: 600, color: "var(--accent)", textDecoration: "none" },
+  subtitle: { color: "var(--muted)", fontSize: "14px", margin: "6px 0 22px", lineHeight: 1.5 },
   searchBox: {
     display: "flex",
     flexDirection: "column",
     gap: 10,
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 14,
     padding: 16,
     marginBottom: 24,
@@ -535,7 +541,7 @@ const styles: Record<string, React.CSSProperties> = {
   textarea: {
     fontSize: "15px",
     fontFamily: "inherit",
-    border: "1px solid #ddd",
+    border: "1px solid var(--line)",
     borderRadius: 10,
     padding: "12px 14px",
     resize: "vertical",
@@ -548,56 +554,56 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 22px",
     fontSize: "15px",
     fontWeight: 600,
-    color: "#fff",
-    background: "#111",
+    color: "var(--white)",
+    background: "var(--accent)",
     border: "none",
     borderRadius: 10,
     cursor: "pointer",
   },
-  loadingText: { color: "#666", fontSize: "14px" },
-  errorText: { color: "#ef4444", fontSize: "14px" },
+  loadingText: { color: "var(--muted)", fontSize: "14px" },
+  errorText: { color: "var(--danger)", fontSize: "14px" },
   unexpected: {
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 14,
     padding: "16px 18px",
     marginBottom: 16,
   },
-  unexpectedTitle: { fontSize: "15px", fontWeight: 700, color: "#92400e", marginBottom: 6 },
-  unexpectedBody: { fontSize: "13px", color: "#78350f", margin: "0 0 10px", lineHeight: 1.5 },
+  unexpectedTitle: { fontSize: "15px", fontWeight: 700, color: "var(--warn-text)", marginBottom: 6 },
+  unexpectedBody: { fontSize: "13px", color: "var(--warn-text)", margin: "0 0 10px", lineHeight: 1.5 },
   unexpectedDetail: {
     fontSize: "12px",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    color: "#7c2d12",
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
+    color: "var(--warn-text)",
+    background: "var(--warn-chip-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 8,
     padding: "10px 12px",
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
   },
   brokenCard: {
-    background: "#fff",
-    border: "1px dashed #fca5a5",
+    background: "var(--white)",
+    border: "1px dashed var(--danger-border)",
     borderRadius: 14,
     padding: "18px 20px",
     display: "flex",
     flexDirection: "column",
     gap: 8,
   },
-  brokenTitle: { fontSize: "15px", fontWeight: 700, color: "#b91c1c" },
-  brokenBody: { fontSize: "13px", color: "#555", margin: 0, lineHeight: 1.5 },
+  brokenTitle: { fontSize: "15px", fontWeight: 700, color: "var(--danger)" },
+  brokenBody: { fontSize: "13px", color: "var(--ink-soft)", margin: 0, lineHeight: 1.5 },
   brokenDetail: {
     fontSize: "11px",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    color: "#991b1b",
+    color: "var(--danger)",
     wordBreak: "break-word",
   },
   empty: {
     textAlign: "center",
     padding: "48px 24px",
-    background: "#fff",
-    border: "1px dashed #d4d4d4",
+    background: "var(--white)",
+    border: "1px dashed var(--line)",
     borderRadius: 14,
     display: "flex",
     flexDirection: "column",
@@ -605,13 +611,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   emptyEmoji: { fontSize: "34px" },
-  emptyTitle: { fontSize: "15px", color: "#444", margin: 0, lineHeight: 1.5, maxWidth: 460 },
-  resultsHeading: { fontSize: "14px", color: "#666", margin: "0 0 14px", fontWeight: 600 },
+  emptyTitle: { fontSize: "15px", color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 460 },
+  resultsHeading: { fontSize: "14px", color: "var(--muted)", margin: "0 0 14px", fontWeight: 600 },
   list: { display: "flex", flexDirection: "column", gap: 16 },
   card: {
     display: "block",
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 14,
     padding: "18px 20px 14px",
     textDecoration: "none",
@@ -629,55 +635,55 @@ const styles: Record<string, React.CSSProperties> = {
   contestedBadge: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#b45309",
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    color: "var(--warn-strong)",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 999,
     padding: "2px 8px",
   },
   mineBadge: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#166534",
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
+    color: "var(--ok-text)",
+    background: "var(--ok-bg)",
+    border: "1px solid var(--ok-border)",
     borderRadius: 999,
     padding: "2px 8px",
   },
   matchBadge: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#3730a3",
-    background: "#eef2ff",
-    border: "1px solid #c7d2fe",
+    color: "var(--accent-deep)",
+    background: "var(--accent-soft)",
+    border: "1px solid var(--leaf-light)",
     borderRadius: 999,
     padding: "2px 8px",
   },
   cardTitle: { fontSize: "18px", margin: "0 0 4px", fontWeight: 700 },
-  cardTagline: { fontSize: "13px", color: "#555", margin: "0 0 12px", lineHeight: 1.4 },
+  cardTagline: { fontSize: "13px", color: "var(--ink-soft)", margin: "0 0 12px", lineHeight: 1.4 },
   field: { marginBottom: 10 },
   fieldLabel: {
     fontSize: "11px",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: "#999",
+    color: "var(--muted)",
     marginBottom: 3,
   },
-  fieldBody: { margin: 0, fontSize: "14px", lineHeight: 1.5, color: "#222" },
-  list2: { margin: 0, paddingLeft: 18, fontSize: "14px", lineHeight: 1.5, color: "#222" },
+  fieldBody: { margin: 0, fontSize: "14px", lineHeight: 1.5, color: "var(--ink)" },
+  list2: { margin: 0, paddingLeft: 18, fontSize: "14px", lineHeight: 1.5, color: "var(--ink)" },
   metaRow: { display: "flex", gap: 6, flexWrap: "wrap", margin: "12px 0 10px" },
   methodTag: {
     fontSize: "11px",
-    background: "#eef2ff",
-    color: "#4338ca",
+    background: "var(--accent-soft)",
+    color: "var(--accent-deep)",
     borderRadius: 999,
     padding: "2px 8px",
     fontWeight: 600,
   },
   metaTag: {
     fontSize: "11px",
-    background: "#f5f5f5",
-    color: "#555",
+    background: "var(--paper-2)",
+    color: "var(--ink-soft)",
     borderRadius: 999,
     padding: "2px 8px",
   },
@@ -685,19 +691,19 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    borderTop: "1px solid #f0f0f0",
+    borderTop: "1px solid var(--line)",
     paddingTop: 10,
     fontSize: "12px",
-    color: "#888",
+    color: "var(--muted)",
   },
-  authorName: { fontWeight: 600, color: "#333" },
-  personaTag: { background: "#f5f5f5", borderRadius: 999, padding: "1px 7px", fontSize: "11px" },
-  openLink: { marginLeft: "auto", color: "#4338ca", fontWeight: 600 },
+  authorName: { fontWeight: 600, color: "var(--ink)" },
+  personaTag: { background: "var(--paper-2)", borderRadius: 999, padding: "1px 7px", fontSize: "11px" },
+  openLink: { marginLeft: "auto", color: "var(--accent)", fontWeight: 600 },
   center: {
     minHeight: "100vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
 };

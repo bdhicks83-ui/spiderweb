@@ -4,6 +4,7 @@
 // (Same flow either way — the magic link creates the account if it doesn't exist.)
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -43,6 +44,7 @@ export default function Login() {
   if (sent) {
     return (
       <div style={styles.wrapper}>
+        <BrandHeader />
         <div style={styles.card}>
           <h1 style={styles.title}>Check your email 📬</h1>
           <p style={styles.help}>Magic link sent to {email}. Click it and you&apos;re in.</p>
@@ -54,6 +56,7 @@ export default function Login() {
   if (signup) {
     return (
       <div style={styles.wrapper}>
+        <BrandHeader />
         <div style={styles.card}>
           <h1 style={styles.title}>Start free today 🌸</h1>
           <p style={styles.help}>
@@ -81,6 +84,7 @@ export default function Login() {
 
   return (
     <div style={styles.wrapper}>
+      <BrandHeader />
       <div style={styles.card}>
         <h1 style={styles.title}>Log in</h1>
 
@@ -113,15 +117,15 @@ export default function Login() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: 'system-ui, sans-serif' },
-  card: { width: '100%', maxWidth: '380px', padding: '32px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '16px' },
+  wrapper: { minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: 'var(--font-sans)' },
+  card: { width: '100%', maxWidth: '380px', padding: '32px', backgroundColor: 'var(--white)', border: '1px solid var(--line)', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '16px' },
   title: { fontSize: '24px', fontWeight: 700, margin: 0 },
   form: { display: 'flex', flexDirection: 'column', gap: '10px' },
-  input: { padding: '10px 12px', fontSize: '15px', border: '1px solid #ccc', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
-  primary: { padding: '10px 16px', fontSize: '15px', fontWeight: 600, color: '#fff', background: '#111', border: 'none', borderRadius: '8px', cursor: 'pointer' },
-  ghost: { padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: '#111', background: '#fff', border: '1px solid #ccc', borderRadius: '8px', cursor: 'pointer' },
-  divider: { fontSize: '13px', color: '#999', textAlign: 'center', margin: 0 },
-  subtle: { fontSize: '13px', color: '#888', margin: 0, lineHeight: 1.5 },
-  help: { fontSize: '14px', color: '#555', margin: 0, lineHeight: 1.5 },
-  error: { fontSize: '13px', color: '#b91c1c', margin: 0 },
+  input: { padding: '10px 12px', fontSize: '15px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
+  primary: { padding: '10px 16px', fontSize: '15px', fontWeight: 600, color: 'var(--white)', background: 'var(--accent)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  ghost: { padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--ink)', background: 'var(--white)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer' },
+  divider: { fontSize: '13px', color: 'var(--muted)', textAlign: 'center', margin: 0 },
+  subtle: { fontSize: '13px', color: 'var(--muted)', margin: 0, lineHeight: 1.5 },
+  help: { fontSize: '14px', color: 'var(--ink-soft)', margin: 0, lineHeight: 1.5 },
+  error: { fontSize: '13px', color: 'var(--danger)', margin: 0 },
 };

@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -123,6 +124,7 @@ export default function LibraryDetailPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}><BrandHeader /></div>
         <a href="/library" style={styles.backLink}>← Back to library</a>
 
         <div style={styles.authorBar}>
@@ -241,20 +243,20 @@ function Meta({ label, value }: { label: string; value: string }) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 720, margin: "0 auto", padding: "32px 24px 80px" },
-  backLink: { fontSize: "13px", color: "#666", textDecoration: "none" },
+  backLink: { fontSize: "13px", color: "var(--muted)", textDecoration: "none" },
   authorBar: {
     display: "flex",
     alignItems: "center",
     gap: 10,
     margin: "18px 0 8px",
     fontSize: "13px",
-    color: "#666",
+    color: "var(--muted)",
   },
-  authorName: { fontWeight: 700, color: "#111" },
+  authorName: { fontWeight: 700, color: "var(--ink)" },
   personaTag: {
-    background: "#f5f5f5",
+    background: "var(--paper-2)",
     borderRadius: 999,
     padding: "2px 8px",
     fontSize: "11px",
@@ -263,16 +265,16 @@ const styles: Record<string, React.CSSProperties> = {
   mineBadge: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#166534",
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
+    color: "var(--accent-deep)",
+    background: "var(--accent-soft)",
+    border: "1px solid var(--leaf-light)",
     borderRadius: 999,
     padding: "2px 8px",
   },
   date: { marginLeft: "auto" },
   contestedBanner: {
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 12,
     padding: "14px 16px",
     margin: "12px 0 20px",
@@ -280,12 +282,12 @@ const styles: Record<string, React.CSSProperties> = {
   contestedTitle: {
     fontSize: "14px",
     fontWeight: 700,
-    color: "#b45309",
+    color: "var(--warn-strong)",
     marginBottom: 6,
   },
   contestedBody: {
     fontSize: "13px",
-    color: "#78350f",
+    color: "var(--warn-text)",
     lineHeight: 1.5,
     marginBottom: 10,
   },
@@ -293,25 +295,25 @@ const styles: Record<string, React.CSSProperties> = {
   contestedLink: {
     fontSize: "13px",
     fontWeight: 600,
-    color: "#b45309",
+    color: "var(--warn-strong)",
     textDecoration: "none",
   },
   title: { fontSize: "30px", margin: "4px 0 4px" },
-  tagline: { fontSize: "16px", color: "#555", margin: "0 0 28px" },
+  tagline: { fontSize: "16px", color: "var(--ink-soft)", margin: "0 0 28px" },
   section: { marginBottom: 24 },
   sectionTitle: {
     fontSize: "13px",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: "#888",
+    color: "var(--muted)",
     marginBottom: 8,
   },
   list: { margin: 0, paddingLeft: 20, lineHeight: 1.6, fontSize: "15px" },
   paragraph: { margin: 0, lineHeight: 1.6, fontSize: "15px" },
   entityGrid: { display: "flex", flexWrap: "wrap", gap: 8 },
   entityChip: {
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 8,
     padding: "6px 10px",
     fontSize: "13px",
@@ -320,15 +322,15 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   entityName: { fontWeight: 600 },
-  entityDetail: { color: "#777" },
+  entityDetail: { color: "var(--muted)" },
   metaGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
     gap: 12,
   },
-  metaLabel: { fontSize: "11px", color: "#888", textTransform: "uppercase" },
+  metaLabel: { fontSize: "11px", color: "var(--muted)", textTransform: "uppercase" },
   metaValue: { fontSize: "14px", fontWeight: 600 },
-  errorText: { color: "#ef4444" },
+  errorText: { color: "var(--danger)" },
   center: {
     minHeight: "100vh",
     display: "flex",
@@ -336,6 +338,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
 };

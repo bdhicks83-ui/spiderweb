@@ -119,7 +119,7 @@ const STAGES = [
   },
   {
     n: "03",
-    emoji: "🕸️",
+    emoji: "🌱",
     title: "Connect",
     desc: "Approved insights embed into your private knowledge web. Related ideas find each other, and emerging patterns surface on their own.",
   },

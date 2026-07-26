@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
@@ -110,6 +111,7 @@ export default function ConflictsPage() {
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
+        <div style={{ marginBottom: 18 }}><BrandHeader /></div>
         <div style={styles.headerRow}>
           <h1 style={styles.title}>⚠️ Conflict X-ray</h1>
           <button onClick={runScan} disabled={scanning} style={styles.scanButton}>
@@ -178,7 +180,7 @@ export default function ConflictsPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui, sans-serif" },
+  wrapper: { minHeight: "100vh", fontFamily: "var(--font-sans)" },
   container: { maxWidth: 760, margin: "0 auto", padding: "40px 24px 80px" },
   headerRow: {
     display: "flex",
@@ -187,32 +189,32 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 4,
   },
   title: { fontSize: "26px", margin: 0 },
-  subtitle: { color: "#666", fontSize: "14px", margin: "6px 0 10px", lineHeight: 1.5 },
-  backLink: { fontSize: "13px", color: "#666", textDecoration: "none" },
+  subtitle: { color: "var(--muted)", fontSize: "14px", margin: "6px 0 10px", lineHeight: 1.5 },
+  backLink: { fontSize: "13px", color: "var(--muted)", textDecoration: "none" },
   scanButton: {
     fontSize: "14px",
     fontWeight: 600,
-    color: "#fff",
-    background: "#b45309",
+    color: "var(--white)",
+    background: "var(--warn-strong)",
     border: "none",
     borderRadius: 8,
     padding: "8px 14px",
     cursor: "pointer",
   },
-  scanMessage: { fontSize: "13px", color: "#166534", margin: "12px 0 0" },
-  errorText: { color: "#ef4444", fontSize: "14px" },
+  scanMessage: { fontSize: "13px", color: "var(--ok-text)", margin: "12px 0 0" },
+  errorText: { color: "var(--danger)", fontSize: "14px" },
   sectionTitle: {
     fontSize: "13px",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: "#888",
+    color: "var(--muted)",
     margin: "28px 0 10px",
   },
-  empty: { color: "#888", fontSize: "14px" },
+  empty: { color: "var(--muted)", fontSize: "14px" },
   card: {
     display: "block",
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--white)",
+    border: "1px solid var(--line)",
     borderRadius: 12,
     padding: "16px 18px",
     textDecoration: "none",
@@ -222,32 +224,32 @@ const styles: Record<string, React.CSSProperties> = {
   cardVs: { display: "flex", alignItems: "center", gap: 12, marginBottom: 8 },
   cardSide: { flex: 1 },
   cardFramework: { fontSize: "15px", fontWeight: 700 },
-  cardAuthor: { fontSize: "12px", color: "#888", marginTop: 2 },
+  cardAuthor: { fontSize: "12px", color: "var(--muted)", marginTop: 2 },
   vsBubble: {
     fontSize: "11px",
     fontWeight: 700,
-    color: "#b45309",
-    background: "#fffbeb",
-    border: "1px solid #fde68a",
+    color: "var(--warn-strong)",
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
     borderRadius: 999,
     padding: "4px 10px",
   },
   vsBubbleResolved: {
     fontSize: "11px",
     fontWeight: 700,
-    color: "#166534",
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
+    color: "var(--ok-text)",
+    background: "var(--ok-bg)",
+    border: "1px solid var(--ok-border)",
     borderRadius: 999,
     padding: "4px 10px",
   },
-  territory: { fontSize: "13px", color: "#78350f", marginBottom: 6 },
-  cardMeta: { fontSize: "12px", color: "#999" },
+  territory: { fontSize: "13px", color: "var(--warn-text)", marginBottom: 6 },
+  cardMeta: { fontSize: "12px", color: "var(--muted)" },
   center: {
     minHeight: "100vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
 };
