@@ -29,7 +29,7 @@ WHAT THE ORGANIZATION HAS ALREADY CODIFIED ON THIS TERRITORY (the material the t
 THE FORMAT LIBRARY — recommend from these keys ONLY:
 {{format_catalog}}
 
-Rank EVERY format in the library. Exactly one has "is_primary": true and rank 1; the rest follow in descending fit. A format that is a poor fit still gets a rank and an honest one-line reason it lost.
+Return the THREE best-fitting formats ONLY, ranked 1-3. Exactly one has "is_primary": true and rank 1. Do NOT return more than three. The leader still sees every other format in the library alongside your ranking, so a format you leave out is not hidden from them - it is simply not one of your three. Keep every rationale to ONE line.
 
 Respond with ONLY a JSON object, no markdown, no code fence:
 {

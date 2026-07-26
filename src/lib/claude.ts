@@ -1673,10 +1673,16 @@ export async function recommendTrainingFormat(
     grounding: input.grounding,
     format_catalog: formatCatalogForPrompt(),
   });
+  // 4000 and two attempts, not 8000 and three: the agent now returns THREE
+  // ranked formats (not six) and reads a compact grounding summary rather
+  // than the full framework surface. The original budget could outrun the
+  // serverless timeout, and a killed connection reads to the leader as a
+  // network failure instead of a clean retryable error. Validation and the
+  // closed citation catalog are unchanged.
   return withRetries("recommendTrainingFormat", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 8000,
+      max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -1750,7 +1756,7 @@ export async function recommendTrainingFormat(
           ? parsed.grounding_caution.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400)
           : null,
     };
-  });
+  }, 2);
 }
 
 // ─── Build 3 — generation IN the chosen format ─────────────────────────────

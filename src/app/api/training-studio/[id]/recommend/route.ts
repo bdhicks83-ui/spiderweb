@@ -21,7 +21,12 @@ import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { recommendTrainingFormat } from "@/lib/claude";
 import { TRAINING_FORMATS } from "@/lib/training-formats";
-import { describeEntities, groundingForIssue, groundingSummary } from "@/lib/training-studio";
+import {
+  compactGrounding,
+  describeEntities,
+  groundingForIssue,
+  groundingSummary,
+} from "@/lib/training-studio";
 
 export const maxDuration = 60;
 
@@ -93,9 +98,7 @@ export async function POST(
       understandingNote: request.understanding_note ?? "(none recorded)",
       subjectEntities: describeEntities(request.subject_entities || []),
       audience: request.audience_summary,
-      grounding: grounding.captureFirst
-        ? `NOTHING CODIFIED YET on this territory. ${grounding.note ?? ""}`
-        : grounding.groundingText.slice(0, 24000),
+      grounding: compactGrounding(grounding),
     });
 
     if (!recommendation) {

@@ -190,6 +190,35 @@ export async function groundingForIssue(
   };
 }
 
+/**
+ * A COMPACT grounding view, for the FORMAT AGENT only.
+ *
+ * Choosing a SHAPE does not need the full framework surface - it needs to
+ * know what has been codified and how rich it is. Passing the whole
+ * generation-grade text (up to ~24k chars) while ranking all six formats made
+ * the recommendation call slow enough to hit the serverless timeout in
+ * production: the connection died mid-flight and surfaced to the leader as a
+ * network failure, not a clean error. Generation still receives the full
+ * surface; only the format CHOICE reads this summary.
+ */
+export function compactGrounding(g: StudioGrounding): string {
+  if (g.captureFirst) {
+    return `NOTHING CODIFIED YET on this territory. ${g.note ?? ""}`;
+  }
+  return g.records
+    .map((r, i) => {
+      const f = r.framework;
+      return [
+        `Framework ${i + 1}: ${f?.name ?? "(unnamed)"} - ${f?.tagline ?? ""} (by ${g.authorName(r.user_id)})`,
+        `  Signals: ${(f?.signals ?? []).slice(0, 3).join(" | ") || "(none recorded)"}`,
+        `  The play, in brief: ${(f?.the_play ?? r.judgment ?? "").slice(0, 280)}`,
+        `  Boundaries: ${(f?.boundaries ?? []).slice(0, 2).join(" | ") || "(none recorded)"}`,
+      ].join("\n");
+    })
+    .join("\n\n")
+    .slice(0, 4000);
+}
+
 /** Short, leader-readable summary of what the training will be built from. */
 export function groundingSummary(g: StudioGrounding): string {
   if (g.captureFirst) return g.note ?? "Nothing codified covers this yet.";
