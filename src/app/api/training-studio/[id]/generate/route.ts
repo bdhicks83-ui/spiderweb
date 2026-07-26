@@ -1,27 +1,48 @@
 // P-7 Build 3 (second half) — generate the training IN the chosen format.
 //
-// POST, no body.
+// POST { altitude?: "floor" | "supervisor" | "exec" }   (default "floor")
 //
-// This EXTENDS the P-4B generator rather than replacing it. The detected
-// path still generates by RUNG (clarification card / micro-training /
-// designed session / curriculum) through generateTraining(). The Studio
-// generates by FORMAT — each format carries its own structure template in
+// This EXTENDS the P-4B generator rather than replacing it. The detected path
+// still generates by RUNG (clarification card / micro-training / designed
+// session / curriculum) through generateTraining(). The Studio generates by
+// FORMAT — each format carries its own structure template in
 // src/lib/training-formats.ts, so a drill really is steps + materials and a
-// scenario really is setup + decision points + debrief. The three audience
-// altitudes still apply WITHIN each format, and artifacts land in the same
-// versioned prescription_trainings table (history is never overwritten).
+// scenario really is setup + decision points + debrief.
 //
-// Grounding doctrine, unchanged: built ONLY from the org's codified
-// framework material. Nothing codified ⇒ nothing generated, honestly.
+// ⚠️ WHY THIS IS THREE CALLS, NOT ONE (measured on the deployed app, July 26):
+// Vercel kills an invocation at 60s with FUNCTION_INVOCATION_TIMEOUT, and
+// maxDuration=60 is already the ceiling on this plan. Writing all three
+// audience altitudes in one model call took ~55-60s and died on the wall. So:
+//
+//   1. "floor"      generates the substance and INSERTS the version row.
+//   2. "supervisor" re-frames the floor version and patches it in.
+//   3. "exec"       does the same, and only then does the request flip to
+//                   'generated' and become approvable.
+//
+// The client drives the three in sequence with visible progress. Re-framing
+// (rather than generating each altitude independently) is also the stronger
+// fidelity story: the other two altitudes cannot introduce a fact the floor
+// version does not already contain.
+//
+// Grounding doctrine, unchanged: built ONLY from the org's codified framework
+// material. Nothing codified ⇒ nothing generated, honestly.
 //
 // Nothing DEPLOYS here — generation produces a draft the leader reads and
 // approves (human-approves-before-deploy). Approval is the /approve route.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { generateFormatTraining } from "@/lib/claude";
+import {
+  generateFormatTraining,
+  reframeTrainingAltitude,
+  type TrainingAltitude,
+} from "@/lib/claude";
 import { TRAINING_FORMATS, isTrainingFormatKey } from "@/lib/training-formats";
-import { describeEntities, groundingForIssue, rungForFormat } from "@/lib/training-studio";
+import {
+  describeEntities,
+  groundingForIssue,
+  rungForFormat,
+} from "@/lib/training-studio";
 
 export const maxDuration = 60;
 
@@ -36,16 +57,29 @@ type RequestRow = {
   chosen_format: string | null;
   recommendations: { ranked?: { format_key: string; rationale: string }[] } | null;
   prescription_id: string | null;
+  current_training_id: string | null;
   status: string;
   attempt_count: number;
 };
 
+type Altitudes = {
+  floor?: TrainingAltitude;
+  supervisor?: TrainingAltitude;
+  exec?: TrainingAltitude;
+};
+
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const body = await req.json().catch(() => ({}));
+    const altitude: "floor" | "supervisor" | "exec" =
+      body?.altitude === "supervisor" || body?.altitude === "exec"
+        ? body.altitude
+        : "floor";
+
     const supabase = await createSessionClient();
     const {
       data: { user },
@@ -64,7 +98,7 @@ export async function POST(
     const { data: reqRaw } = await supabase
       .from("training_requests")
       .select(
-        "id, org_id, issue_text, issue_restated, issue_type, subject_entities, audience_summary, chosen_format, recommendations, prescription_id, status, attempt_count"
+        "id, org_id, issue_text, issue_restated, issue_type, subject_entities, audience_summary, chosen_format, recommendations, prescription_id, current_training_id, status, attempt_count"
       )
       .eq("id", id)
       .maybeSingle();
@@ -85,13 +119,80 @@ export async function POST(
       );
     }
     const formatKey = request.chosen_format;
+    const attempt = Math.max(1, request.attempt_count);
 
     const service = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // ── Grounding: the ONLY permitted source of substance ──
+    // ═══ STEP 2 + 3 — re-frame an existing floor version ═══════════════════
+    if (altitude !== "floor") {
+      const { data: trRaw } = await service
+        .from("prescription_trainings")
+        .select("id, title, altitudes")
+        .eq("prescription_id", request.prescription_id)
+        .order("version", { ascending: false })
+        .limit(1);
+      const training = ((trRaw || []) as unknown as {
+        id: string;
+        title: string;
+        altitudes: Altitudes | null;
+      }[])[0];
+      const floor = training?.altitudes?.floor;
+      if (!training || !floor) {
+        return NextResponse.json(
+          { error: "Write the floor version first — the other altitudes re-frame it." },
+          { status: 409 }
+        );
+      }
+
+      const reframed = await reframeTrainingAltitude({
+        formatKey,
+        altitude,
+        floorTitle: floor.title,
+        floorBody: floor.body,
+        issueRestated: request.issue_restated ?? request.issue_text,
+        audience: request.audience_summary,
+      });
+      if (!reframed) {
+        return NextResponse.json(
+          {
+            error: `The ${altitude === "exec" ? "executive" : "supervisor"} version didn't come through — the floor version is safe. Try again.`,
+          },
+          { status: 502 }
+        );
+      }
+
+      const altitudes: Altitudes = { ...(training.altitudes || {}), [altitude]: reframed };
+      const complete = !!(altitudes.floor && altitudes.supervisor && altitudes.exec);
+
+      const { error: updTrError } = await service
+        .from("prescription_trainings")
+        .update({ altitudes })
+        .eq("id", training.id);
+      if (updTrError) {
+        return NextResponse.json({ error: updTrError.message }, { status: 500 });
+      }
+
+      if (complete && request.status !== "deployed") {
+        await service
+          .from("training_requests")
+          .update({ status: "generated" })
+          .eq("id", request.id);
+      }
+
+      return NextResponse.json({
+        success: true,
+        altitude,
+        complete,
+        message: complete
+          ? "All three versions are written. Read them — nothing goes out until you approve it."
+          : `The ${altitude === "exec" ? "executive" : "supervisor"} version is written.`,
+      });
+    }
+
+    // ═══ STEP 1 — the floor version carries the substance ══════════════════
     const grounding = await groundingForIssue(
       service,
       request.org_id,
@@ -116,10 +217,6 @@ export async function POST(
         ?.rationale ??
       `Chosen by the leader: ${TRAINING_FORMATS[formatKey].oneLiner}`;
 
-    // The attempt was opened when the format was chosen; re-running
-    // generation works on that same attempt (a new one starts only when a
-    // format is chosen again).
-    const attempt = Math.max(1, request.attempt_count);
     const attemptNote =
       attempt === 1
         ? "First attempt on this issue."
@@ -143,16 +240,13 @@ export async function POST(
       );
     }
 
-    // ── Version it into the SAME table the detected path uses ──
     const { data: priorRaw } = await service
       .from("prescription_trainings")
       .select("version")
       .eq("prescription_id", request.prescription_id)
       .order("version", { ascending: false })
       .limit(1);
-    const version =
-      ((priorRaw || []) as { version: number }[])[0]?.version ?? 0;
-    const nextVersion = version + 1;
+    const nextVersion = (((priorRaw || []) as { version: number }[])[0]?.version ?? 0) + 1;
 
     const { data: inserted, error: insError } = await service
       .from("prescription_trainings")
@@ -165,7 +259,7 @@ export async function POST(
         format: TRAINING_FORMATS[formatKey].name,
         format_key: formatKey,
         title: artifact.title,
-        altitudes: artifact.altitudes,
+        altitudes: { floor: artifact.floor },
         generated_by: "training-studio-format-v1",
       })
       .select("id, version")
@@ -178,19 +272,16 @@ export async function POST(
     }
     const trainingId = (inserted as { id: string }).id;
 
+    // Status stays short of 'generated' until all three altitudes exist —
+    // the approve gate must never open on a half-written draft.
     const { error: updError } = await service
       .from("training_requests")
-      .update({
-        status: "generated",
-        current_training_id: trainingId,
-        attempt_count: attempt,
-      })
+      .update({ current_training_id: trainingId })
       .eq("id", request.id);
     if (updError) {
       return NextResponse.json({ error: updError.message }, { status: 500 });
     }
 
-    // Attach the artifact to this attempt's format-outcome row.
     const { error: logError } = await service
       .from("training_format_outcomes")
       .update({ training_id: trainingId })
@@ -202,6 +293,8 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+      altitude: "floor",
+      complete: false,
       training: {
         id: trainingId,
         version: nextVersion,
@@ -210,8 +303,7 @@ export async function POST(
         strategy: artifact.strategy,
         title: artifact.title,
       },
-      grounding_summary: `Built from ${grounding.records.length} codified framework${grounding.records.length === 1 ? "" : "s"}.`,
-      message: `Draft ready as a ${TRAINING_FORMATS[formatKey].name}, in three audience altitudes. Read it — nothing goes out until you approve it.`,
+      message: `Floor version written as a ${TRAINING_FORMATS[formatKey].name}. Writing the other two altitudes now.`,
     });
   } catch (err) {
     console.error("Unexpected error in training-studio generate route:", err);

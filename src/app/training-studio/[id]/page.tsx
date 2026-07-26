@@ -135,6 +135,7 @@ export default function TrainingStudioDetailPage({
   const [overrideReason, setOverrideReason] = useState("");
   const [altitude, setAltitude] = useState<"floor" | "supervisor" | "exec">("floor");
   const [enhancement, setEnhancement] = useState("");
+  const [genStep, setGenStep] = useState<string | null>(null);
 
   useEffect(() => {
     params.then((p) => setId(p.id));
@@ -194,6 +195,47 @@ export default function TrainingStudioDetailPage({
       setError("That didn't go through.");
     } finally {
       setBusy(null);
+    }
+  };
+
+  // Generation runs as THREE requests, not one. Vercel kills an invocation at
+  // 60s and writing all three audience altitudes in a single model call ran
+  // right into that wall — the connection died and read to the leader as a
+  // network failure. The floor version carries the substance; the other two
+  // re-frame it. Sequential, visible, and each one comfortably inside the cap.
+  const generateAll = async () => {
+    if (!id || busy) return;
+    setBusy("generate");
+    setMessage(null);
+    setError(null);
+    const steps: { altitude: string; label: string }[] = [
+      { altitude: "floor", label: "Writing the floor version…" },
+      { altitude: "supervisor", label: "Framing it for supervisors…" },
+      { altitude: "exec", label: "Framing it for the exec…" },
+    ];
+    try {
+      for (const step of steps) {
+        setGenStep(step.label);
+        const res = await fetch(`/api/training-studio/${id}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ altitude: step.altitude }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          // Whatever was written already is kept — the leader retries from
+          // where it stopped rather than starting over.
+          setError(json.error || "That didn't go through.");
+          break;
+        }
+        setMessage(json.message ?? null);
+      }
+    } catch {
+      setError("That didn't go through.");
+    } finally {
+      setGenStep(null);
+      setBusy(null);
+      await load(id);
     }
   };
 
@@ -426,9 +468,9 @@ export default function TrainingStudioDetailPage({
                 type="button"
                 style={styles.primaryButton}
                 disabled={busy !== null}
-                onClick={() => post("/generate", "generate")}
+                onClick={generateAll}
               >
-                {busy === "generate" ? "Writing it…" : "Build the training"}
+                {busy === "generate" ? (genStep ?? "Writing it…") : "Build the training"}
               </button>
             )}
           </>
@@ -465,9 +507,11 @@ export default function TrainingStudioDetailPage({
                   <pre style={styles.artifactBody}>{currentAltitude.body}</pre>
                 </>
               ) : (
-                <p style={styles.empty}>This altitude didn&apos;t render.</p>
+                <p style={styles.empty}>Not written yet — this altitude comes after the floor version.</p>
               )}
             </div>
+
+            {genStep && <p style={styles.strategyLine}>{genStep}</p>}
 
             {r.status === "generated" && data.can_act && (
               <div style={styles.approveBar}>
@@ -488,9 +532,9 @@ export default function TrainingStudioDetailPage({
                     type="button"
                     style={styles.ghostButton}
                     disabled={busy !== null}
-                    onClick={() => post("/generate", "generate")}
+                    onClick={generateAll}
                   >
-                    {busy === "generate" ? "Rewriting…" : "Write it again"}
+                    {busy === "generate" ? (genStep ?? "Rewriting…") : "Write it again"}
                   </button>
                 </div>
               </div>

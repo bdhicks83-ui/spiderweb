@@ -1785,9 +1785,29 @@ export type FormatTrainingInput = {
 // Reuses the P-4B TrainingArtifact shape + validator: same three altitudes,
 // different structure INSIDE them. The rung-shaped generator (generateTraining)
 // is untouched and still serves the detected path.
+export type TrainingFloorArtifact = {
+  strategy: string;
+  title: string;
+  floor: TrainingAltitude;
+};
+
+export function isTrainingFloorArtifact(v: unknown): v is TrainingFloorArtifact {
+  if (!v || typeof v !== "object") return false;
+  const t = v as Record<string, unknown>;
+  if (typeof t.strategy !== "string" || !t.strategy.trim()) return false;
+  if (typeof t.title !== "string" || !t.title.trim()) return false;
+  return isTrainingAltitude(t.floor);
+}
+
+// Reuses the P-4B altitude shape, ONE altitude at a time. The rung-shaped
+// generator (generateTraining) is untouched and still serves the detected
+// path; it writes all three altitudes in one call because it runs from a
+// background-friendly route. The Studio's runs from a leader's click under a
+// hard 60s serverless cap, so it is split: the FLOOR version carries the
+// substance, and the other two altitudes are re-framings of it.
 export async function generateFormatTraining(
   input: FormatTrainingInput
-): Promise<TrainingArtifact | null> {
+): Promise<TrainingFloorArtifact | null> {
   const format = TRAINING_FORMATS[input.formatKey];
   const prompt = await loadPrompt("training-generate-format", {
     format_name: format.name,
@@ -1800,21 +1820,56 @@ export async function generateFormatTraining(
     attempt_note: input.attemptNote,
     frameworks: input.frameworks,
   });
-  // 5000 and two attempts. Three full altitudes at 8000 tokens, retried three
-  // times, outran the serverless timeout in production - the connection died
-  // and read to the leader as a network failure. The prompt now carries hard
-  // per-altitude word limits, which is better product anyway: a training
-  // nobody finishes teaches nobody.
   return withRetries("generateFormatTraining", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 5000,
+      max_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
     if (!text) return null;
     const parsed = parseJsonLoose(text);
-    return isTrainingArtifact(parsed) ? parsed : null;
+    return isTrainingFloorArtifact(parsed) ? parsed : null;
+  }, 1);
+}
+
+// The altitude specs. Same substance at three heights — never three different
+// trainings.
+export const ALTITUDE_SPEC: Record<"supervisor" | "exec", string> = {
+  supervisor:
+    'The SUPERVISOR / lead altitude: how to RUN this with the crew. What to set up, what to watch for while it happens, how to tell it landed, and when the boundaries say it does not fit and you escalate instead. Address the supervisor directly. At most 250 words.',
+  exec:
+    'The EXECUTIVE altitude: why this matters and what it costs. The pattern behind it, what knowledge is moving from whom to whom, and what "it worked" will look like. No procedural detail. At most 120 words — read in under a minute or it does not get read.',
+};
+
+export async function reframeTrainingAltitude(input: {
+  formatKey: TrainingFormatKey;
+  altitude: "supervisor" | "exec";
+  floorTitle: string;
+  floorBody: string;
+  issueRestated: string;
+  audience: string;
+}): Promise<TrainingAltitude | null> {
+  const format = TRAINING_FORMATS[input.formatKey];
+  const prompt = await loadPrompt("training-reframe-altitude", {
+    format_name: format.name,
+    format_structure: format.structure,
+    altitude_spec: ALTITUDE_SPEC[input.altitude],
+    issue_restated: input.issueRestated,
+    audience: input.audience,
+    floor_title: input.floorTitle,
+    floor_body: input.floorBody,
+  });
+  return withRetries(`reframeTrainingAltitude:${input.altitude}`, async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) return null;
+    const parsed = parseJsonLoose(text);
+    return isTrainingAltitude(parsed) ? parsed : null;
   }, 1);
 }
 
