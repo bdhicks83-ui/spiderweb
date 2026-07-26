@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { recommendNextFormat } from "@/lib/claude";
+import { lastFormatReadaptDiagnostic, recommendNextFormat } from "@/lib/claude";
 import { TRAINING_FORMATS, isTrainingFormatKey } from "@/lib/training-formats";
 import { runEfficacyLoop } from "@/lib/prescription";
 import { describeEntities, resolveFormatAttempt } from "@/lib/training-studio";
@@ -222,6 +222,7 @@ export async function POST(
         efficacy_status: "escalated",
         message:
           "The problem came back, and picking the next format didn't complete. Run the check again — the miss is already recorded.",
+        diagnostic: lastFormatReadaptDiagnostic,
         efficacy_note: rx.efficacy_note,
         summary,
       });

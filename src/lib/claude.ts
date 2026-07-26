@@ -1925,6 +1925,17 @@ export async function reframeTrainingAltitude(input: {
 
 // ─── Build 4 — format-aware re-recommendation ──────────────────────────────
 
+// Same diagnostic contract as generation — see the note above. A readapt that
+// returns null is otherwise indistinguishable from a flaked call, and the
+// route can only say "run it again."
+export let lastFormatReadaptDiagnostic: {
+  stopReason: string | null;
+  blockTypes: string;
+  textLength: number;
+  snippet: string;
+  error: string | null;
+} | null = null;
+
 export type FormatReadaptation = {
   nextFormat: TrainingFormatKey;
   whyTheLastOneDidNotLand: string;
@@ -1978,19 +1989,40 @@ export async function recommendNextFormat(
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
+    lastFormatReadaptDiagnostic = {
+      stopReason: msg.stop_reason ?? null,
+      blockTypes: (msg.content as { type: string }[]).map((b) => b.type).join(","),
+      textLength: text.length,
+      snippet: text.slice(0, 300),
+      error: null,
+    };
     if (!text) return null;
     const parsed = parseJsonLoose(text) as Record<string, unknown> | null;
-    if (!parsed) return null;
-    if (!isTrainingFormatKey(parsed.next_format)) return null;
-    if (typeof parsed.rationale !== "string" || !parsed.rationale.trim()) return null;
+    if (!parsed) {
+      lastFormatReadaptDiagnostic.error = "JSON did not parse";
+      return null;
+    }
+    if (!isTrainingFormatKey(parsed.next_format)) {
+      lastFormatReadaptDiagnostic.error = `bad next_format: ${JSON.stringify(parsed.next_format)}`;
+      return null;
+    }
+    if (typeof parsed.rationale !== "string" || !parsed.rationale.trim()) {
+      lastFormatReadaptDiagnostic.error = `missing rationale; keys=${Object.keys(parsed).join("|")}`;
+      return null;
+    }
     if (
       typeof parsed.why_the_last_one_did_not_land !== "string" ||
       !parsed.why_the_last_one_did_not_land.trim()
     ) {
+      lastFormatReadaptDiagnostic.error = `missing why_the_last_one_did_not_land; keys=${Object.keys(parsed).join("|")}`;
       return null;
     }
     const citations = keepCitablePrinciples(parsed.citations);
-    if (citations.length === 0) return null; // same credibility contract
+    if (citations.length === 0) {
+      // Same credibility contract as the first recommendation.
+      lastFormatReadaptDiagnostic.error = `no citable principles survived; raw=${JSON.stringify(parsed.citations)}`;
+      return null;
+    }
     return {
       nextFormat: parsed.next_format,
       whyTheLastOneDidNotLand: parsed.why_the_last_one_did_not_land
