@@ -271,9 +271,14 @@ alter table training_format_outcomes add constraint training_format_outcomes_cho
 
 -- One live row per (request, attempt) — a re-run of the same attempt upserts
 -- rather than duplicating.
+-- NOT a partial index, deliberately: PostgREST cannot infer an ON CONFLICT
+-- target from a PARTIAL unique index, so the upsert in logFormatAttempt()
+-- fails outright against one. A plain unique index is safe here because
+-- Postgres treats NULLs as distinct in a unique index - rows logged by the
+-- detected path (training_request_id null) never collide with each other.
+drop index if exists training_format_outcomes_attempt_idx;
 create unique index if not exists training_format_outcomes_attempt_idx
-  on training_format_outcomes (training_request_id, attempt)
-  where training_request_id is not null;
+  on training_format_outcomes (training_request_id, attempt);
 
 -- ═══ 6. ROW LEVEL SECURITY ═════════════════════════════════════════════════
 -- Org members READ (the whole point is that training is visible to the org —

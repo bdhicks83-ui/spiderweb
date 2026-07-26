@@ -133,7 +133,7 @@ export async function POST(
       issueType: request.issue_type ?? "unclassified",
       audience: request.audience_summary,
       attemptNote,
-      frameworks: grounding.groundingText.slice(0, 40000),
+      frameworks: grounding.groundingText.slice(0, 14000),
     });
     if (!artifact) {
       // Fail open — nothing half-built is stored.

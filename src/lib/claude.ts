@@ -1791,17 +1791,22 @@ export async function generateFormatTraining(
     attempt_note: input.attemptNote,
     frameworks: input.frameworks,
   });
+  // 5000 and two attempts. Three full altitudes at 8000 tokens, retried three
+  // times, outran the serverless timeout in production - the connection died
+  // and read to the leader as a network failure. The prompt now carries hard
+  // per-altitude word limits, which is better product anyway: a training
+  // nobody finishes teaches nobody.
   return withRetries("generateFormatTraining", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 8000,
+      max_tokens: 5000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
     if (!text) return null;
     const parsed = parseJsonLoose(text);
     return isTrainingArtifact(parsed) ? parsed : null;
-  });
+  }, 2);
 }
 
 // ─── Build 4 — format-aware re-recommendation ──────────────────────────────
@@ -1849,10 +1854,13 @@ export async function recommendNextFormat(
     efficacy_note: input.efficacyNote,
     format_catalog: formatCatalogForPrompt(),
   });
+  // The re-recommendation is a few sentences plus citations - 2000 is ample,
+  // and keeps this inside one serverless invocation alongside the efficacy
+  // loop that runs just before it.
   return withRetries("recommendNextFormat", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 8000,
+      max_tokens: 2000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -1884,5 +1892,5 @@ export async function recommendNextFormat(
           ? parsed.not_a_training_problem.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400)
           : null,
     };
-  });
+  }, 2);
 }
