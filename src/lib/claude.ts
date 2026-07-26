@@ -1495,6 +1495,17 @@ export async function scoreTeachback(
 }
 
 
+// ⚠️ THE TOKEN BUDGET MUST COVER THE THINKING BLOCK, NOT THE OUTPUT (P-7,
+// July 26 — this is the P-4B "never assume content[0] is text" gotcha wearing
+// a different hat). claude-sonnet-5 emits a thinking block before its text
+// block. Sizing max_tokens to the VISIBLE answer (2500 for a 300-word
+// artifact — generous on paper) let the thinking consume the entire budget:
+// stop_reason="max_tokens", content=[thinking], ZERO text blocks, and
+// firstText() correctly returned "". From the outside that is indistinguishable
+// from a flaked call. Size every budget here for thinking PLUS output, and
+// note that a bigger ceiling does NOT cost wall-clock — the model stops when
+// it is done, so this is free headroom, unlike asking for more OUTPUT.
+//
 // ⚠️ P-7 SERVERLESS BUDGET (measured on the deployed app, July 26): Vercel
 // kills the invocation at 60s with FUNCTION_INVOCATION_TIMEOUT, and
 // maxDuration=60 is already the ceiling on this plan. That makes an internal
@@ -1573,7 +1584,7 @@ export async function understandTrainingIssue(
   return withRetries("understandTrainingIssue", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 1500,
+      max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -1691,7 +1702,7 @@ export async function recommendTrainingFormat(
   return withRetries("recommendTrainingFormat", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 4000,
+      max_tokens: 6000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -1785,11 +1796,13 @@ export type FormatTrainingInput = {
 // Reuses the P-4B TrainingArtifact shape + validator: same three altitudes,
 // different structure INSIDE them. The rung-shaped generator (generateTraining)
 // is untouched and still serves the detected path.
-// ⚠️ TEMPORARY DIAGNOSTIC (P-7, July 26). Serverless logs are not reachable
-// from the verification loop, so a failed generation reports WHY through the
-// route's error body instead of dying silently. Remove once generation is
-// stable. Module-level is safe here: a serverless invocation handles one
-// request, and nothing user-identifying is stored.
+// ⚠️ KEEP THIS. Serverless logs are not reachable from the browser
+// verification loop, so a failed generation reports WHY through the route's
+// error body instead of dying silently. It earned its place immediately: it
+// caught a stop_reason="max_tokens" with a THINKING block and ZERO text
+// blocks, which is invisible from the outside and looks identical to "the
+// model flaked." Module-level is safe here: a serverless invocation handles
+// one request, and nothing user-identifying is stored.
 export let lastFormatGenerationDiagnostic: {
   stopReason: string | null;
   blockTypes: string;
@@ -1837,7 +1850,7 @@ export async function generateFormatTraining(
     try {
       const msg = await anthropic.messages.create({
         model: "claude-sonnet-5",
-        max_tokens: 2500,
+        max_tokens: 6000,
         messages: [{ role: "user", content: prompt }],
       });
       const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -1900,7 +1913,7 @@ export async function reframeTrainingAltitude(input: {
   return withRetries(`reframeTrainingAltitude:${input.altitude}`, async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 1500,
+      max_tokens: 5000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -1961,7 +1974,7 @@ export async function recommendNextFormat(
   return withRetries("recommendNextFormat", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 2000,
+      max_tokens: 5000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
