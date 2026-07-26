@@ -19,6 +19,15 @@
 // Grounding doctrine: the artifact is built ONLY from the paired expert
 // framework record(s) in prescriptions.experts — same no-outside-knowledge
 // rule as /retrieve and Ask Your Spiderweb. Prompts load from /prompts.
+//
+// ── P-8 Phase 1 (LEARNING LEDGER) — SIGNAL 3 of 7: the regenerate note ──────
+// `regenerate_note` is a leader saying, in their own words, WHY the design the
+// engine produced was wrong. It has been stored on prescription_trainings since
+// P-4B and read by nothing. The ledger entry judges the version that was
+// REJECTED (subject = the prior training id), not the replacement — the signal
+// is "this design failed to satisfy," and the useful features are the shape of
+// the design that missed: its rung, its format, its instructional strategy.
+// WRITERS ONLY — nothing reads this yet.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
@@ -29,6 +38,7 @@ import {
   formatFrameworksForTraining,
   type PrescriptionSourceRecord,
 } from "@/lib/prescription";
+import { recordLearningSignal } from "@/lib/learning-ledger";
 
 type RxRow = {
   id: string;
@@ -50,9 +60,13 @@ type FidelityRow = {
 };
 
 type TrainingRow = {
+  id: string;
   version: number;
   strategy: string;
   title: string;
+  rung: number;
+  format: string;
+  format_key: string | null;
 };
 
 export async function POST(
@@ -211,7 +225,7 @@ export async function POST(
     // ── Prior versions (history is never overwritten) ──
     const { data: priorRaw } = await service
       .from("prescription_trainings")
-      .select("version, strategy, title")
+      .select("id, version, strategy, title, rung, format, format_key")
       .eq("prescription_id", rx.id)
       .order("version", { ascending: false });
     const prior = (priorRaw || []) as unknown as TrainingRow[];
@@ -290,6 +304,44 @@ export async function POST(
       .eq("id", rx.id);
     if (updError) {
       return NextResponse.json({ error: updError.message }, { status: 500 });
+    }
+
+    // ── P-8 SIGNAL 3: the regenerate note — a leader rejecting a design ──
+    // Only a REGENERATE is a judgment; a first generation is not (nobody has
+    // rejected anything yet). The subject is the version that was rejected,
+    // because "what shape of design failed here" is the learnable thing —
+    // never who asked for the redo.
+    if (regenerate && prior[0]) {
+      const rejectedVersion = prior[0];
+      await recordLearningSignal(service, {
+        orgId: rx.org_id,
+        sourceSurface: "prescription",
+        signalType: "training_regenerate",
+        subjectType: "training",
+        subjectId: rejectedVersion.id,
+        verdict: "negative",
+        features: {
+          rejected_version: rejectedVersion.version,
+          rejected_strategy: rejectedVersion.strategy,
+          replacement_strategy: artifact.strategy,
+          rung: rejectedVersion.rung,
+          format: rejectedVersion.format,
+          format_key: rejectedVersion.format_key,
+          source_type: sourceType,
+          prior_version_count: prior.length,
+          had_note: !!note,
+        },
+        payload: {
+          prescription_id: rx.id,
+          new_training_id: (inserted as { id: string }).id,
+          new_version: version,
+          // The leader's own words on what was wrong with the design. The one
+          // thing here that cannot be reconstructed after the fact.
+          regenerate_note: note,
+        },
+        actorId: user.id,
+        actorRole: "leader",
+      });
     }
 
     return NextResponse.json({

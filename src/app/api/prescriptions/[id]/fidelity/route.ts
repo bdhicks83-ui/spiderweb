@@ -13,9 +13,20 @@
 // Only a NAMED expert may submit — this is the one P-4B write that checks
 // identity beyond org membership, because the signature being protected is
 // the expert's own.
+//
+// ── P-8 Phase 1 (LEARNING LEDGER) — SIGNAL 2 of 7: expert fidelity ──────────
+// A REJECTION here is the highest-value negative signal in the system: a named
+// expert saying the engine misrepresented their judgment. Until now it landed
+// in prescription_fidelity and dead-ended there. Both directions are logged —
+// a ledger that only ever hears rejections teaches a pessimistic prior — but
+// the rejection is the one worth building for. The features describe the
+// FRAMEWORK and the situation (method, trigger type, rung, detection source),
+// never the expert: see GUARDRAIL 1 in src/lib/learning-ledger.ts.
+// WRITERS ONLY — nothing reads this yet.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { recordLearningSignal } from "@/lib/learning-ledger";
 
 type RxRow = {
   id: string;
@@ -23,6 +34,8 @@ type RxRow = {
   status: string;
   capture_first: boolean;
   experts: { user_id: string; record_id: string }[];
+  rung: number;
+  detection_id: string;
 };
 
 export async function POST(
@@ -59,7 +72,7 @@ export async function POST(
 
     const { data: rxRaw } = await supabase
       .from("prescriptions")
-      .select("id, org_id, status, capture_first, experts")
+      .select("id, org_id, status, capture_first, experts, rung, detection_id")
       .eq("id", id)
       .maybeSingle();
     const rx = rxRaw as unknown as RxRow | null;
@@ -95,6 +108,7 @@ export async function POST(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+    const decidedAt = new Date().toISOString();
     const { error } = await service.from("prescription_fidelity").upsert(
       {
         org_id: rx.org_id,
@@ -103,13 +117,61 @@ export async function POST(
         record_id: mine.record_id,
         decision,
         note,
-        decided_at: new Date().toISOString(),
+        decided_at: decidedAt,
       },
       { onConflict: "prescription_id,expert_user_id" }
     );
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // ── P-8 SIGNAL 2: the expert's verdict on how they were represented ──
+    // Feature context is fetched AFTER the user's write has already succeeded,
+    // so nothing about the learning write can cost the expert their decision.
+    const { data: recRaw } = await service
+      .from("pattern_records")
+      .select("id, method, trigger_type, situation_type, context_function")
+      .eq("id", mine.record_id)
+      .maybeSingle();
+    const rec = recRaw as unknown as {
+      method: string | null;
+      trigger_type: string | null;
+      situation_type: string | null;
+      context_function: string | null;
+    } | null;
+    const { data: detRaw } = await service
+      .from("prescription_detections")
+      .select("source_type")
+      .eq("id", rx.detection_id)
+      .maybeSingle();
+
+    await recordLearningSignal(service, {
+      orgId: rx.org_id,
+      sourceSurface: "prescription",
+      signalType: "expert_fidelity",
+      subjectType: "pattern_record",
+      subjectId: mine.record_id,
+      verdict: decision === "confirmed" ? "positive" : "negative",
+      features: {
+        decision,
+        rung: rx.rung,
+        source_type: (detRaw as { source_type?: string } | null)?.source_type ?? null,
+        method: rec?.method ?? null,
+        trigger_type: rec?.trigger_type ?? null,
+        situation_type: rec?.situation_type ?? null,
+        context_function: rec?.context_function ?? null,
+      },
+      payload: {
+        prescription_id: rx.id,
+        // The expert's own words on what we got wrong. This is the text a
+        // Phase-2 reader will want most and the one thing that cannot be
+        // reconstructed later.
+        note,
+      },
+      actorId: user.id,
+      actorRole: "expert",
+      occurredAt: decidedAt,
+    });
 
     return NextResponse.json({
       success: true,

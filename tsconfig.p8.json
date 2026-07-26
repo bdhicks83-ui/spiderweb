@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/learning-ledger.ts",
+    "src/lib/prescription.ts",
+    "src/lib/training-studio.ts",
+    "src/lib/training-formats.ts",
+    "src/app/api/retrieve/route.ts",
+    "src/app/api/retrieve/signal/route.ts",
+    "src/app/api/coaching/[id]/status/route.ts",
+    "src/app/api/prescriptions/[id]/fidelity/route.ts",
+    "src/app/api/prescriptions/[id]/snooze/route.ts",
+    "src/app/api/prescriptions/[id]/outcome/route.ts",
+    "src/app/api/prescriptions/[id]/teachback/route.ts",
+    "src/app/api/prescriptions/[id]/training/route.ts",
+    "src/app/api/prescriptions/efficacy/route.ts",
+    "src/app/api/training-studio/[id]/format/route.ts",
+    "src/app/retrieve/page.tsx",
+    "src/app/coaching/page.tsx"
+  ]
+}

@@ -13,9 +13,30 @@
 // reopen anything — flag-never-block family — it's a recorded signal an
 // exec can act on, same doctrine as escalation notes: names records, not
 // people.
+//
+// ── P-8 Phase 1 (LEARNING LEDGER) — SIGNAL 6 of 7: the 6-month check-in ────
+// This is the ONLY signal in the product that measures DURABILITY. The
+// efficacy loop can prove an intervention held for 14 quiet days; only a human
+// six months later can say whether it is still true. An intervention that
+// looks identical to another at the 14-day mark but decays by month six is the
+// most valuable distinction a Phase-2 reader could learn — and until now it
+// dead-ended in outcome_confirmed_status.
+// WRITERS ONLY — nothing reads this yet.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { recordLearningSignal } from "@/lib/learning-ledger";
+
+type RxRow = {
+  id: string;
+  org_id: string;
+  status: string;
+  efficacy_status: string | null;
+  rung: number;
+  detection_id: string;
+  delivered_at: string | null;
+  recurrence: number;
+};
 
 export async function POST(
   req: NextRequest,
@@ -36,10 +57,10 @@ export async function POST(
 
     const { data: rxRaw } = await supabase
       .from("prescriptions")
-      .select("id, status, efficacy_status")
+      .select("id, org_id, status, efficacy_status, rung, detection_id, delivered_at, recurrence")
       .eq("id", id)
       .maybeSingle();
-    const rx = rxRaw as unknown as { id: string; status: string; efficacy_status: string | null } | null;
+    const rx = rxRaw as unknown as RxRow | null;
     if (!rx) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -52,6 +73,7 @@ export async function POST(
       );
     }
 
+    const confirmedAt = new Date().toISOString();
     const service = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -59,7 +81,7 @@ export async function POST(
     const { error } = await service
       .from("prescriptions")
       .update({
-        outcome_confirmed_at: new Date().toISOString(),
+        outcome_confirmed_at: confirmedAt,
         outcome_confirmed_status: status,
         outcome_confirmed_by: user.id,
       })
@@ -67,6 +89,44 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // ── P-8 SIGNAL 6: did it actually hold? ──
+    const { data: detRaw } = await service
+      .from("prescription_detections")
+      .select("source_type")
+      .eq("id", rx.detection_id)
+      .maybeSingle();
+    const monthsSinceDelivery = rx.delivered_at
+      ? Math.round(
+          (new Date(confirmedAt).getTime() - new Date(rx.delivered_at).getTime()) /
+            (30 * 24 * 60 * 60 * 1000)
+        )
+      : null;
+
+    await recordLearningSignal(service, {
+      orgId: rx.org_id,
+      sourceSurface: "prescription",
+      signalType: "outcome_checkin",
+      subjectType: "prescription",
+      subjectId: rx.id,
+      verdict: status === "holding" ? "positive" : "negative",
+      features: {
+        outcome_status: status,
+        rung: rx.rung,
+        source_type: (detRaw as { source_type?: string } | null)?.source_type ?? null,
+        recurrence: rx.recurrence,
+        // How long the intervention had to decay before someone was asked.
+        // Durability is meaningless without the interval it was measured over.
+        months_since_delivery: monthsSinceDelivery,
+      },
+      payload: {
+        delivered_at: rx.delivered_at,
+        confirmed_at: confirmedAt,
+      },
+      actorId: user.id,
+      actorRole: "manager",
+      occurredAt: confirmedAt,
+    });
 
     return NextResponse.json({
       success: true,

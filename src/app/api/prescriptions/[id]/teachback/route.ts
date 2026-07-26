@@ -10,6 +10,17 @@
 // boundaries 20; pass ≥ TEACHBACK_PASS_SCORE). Completion + score are
 // stored and sit alongside the efficacy loop: teach-back is the Kirkpatrick
 // L2 evidence next to the loop's automatic L4.
+//
+// ── P-8 Phase 1 (LEARNING LEDGER) — SIGNAL 5 of 7: score + WHAT WAS MISSED ──
+// `missed` is the single best signal in the product of what did NOT transfer:
+// not "the training was rated poorly" but "this specific piece of the
+// framework failed to land, in this format, at this rung, for this audience."
+// It has been stored on prescription_teachbacks since P-4B and read by nothing.
+// The learner is recorded as the actor for auditability and is FORBIDDEN as a
+// prior key — a system that learns "this person fails teach-backs" is the
+// exact failure the Win Column's wins-only rollup exists to prevent. See
+// GUARDRAIL 1 in src/lib/learning-ledger.ts.
+// WRITERS ONLY — nothing reads this yet.
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
@@ -21,12 +32,15 @@ import {
   formatFrameworksForTraining,
   type PrescriptionSourceRecord,
 } from "@/lib/prescription";
+import { recordLearningSignal, scoreBand } from "@/lib/learning-ledger";
 
 type RxRow = {
   id: string;
   org_id: string;
   status: string;
   audience: string;
+  rung: number;
+  detection_id: string;
   experts: { user_id: string; record_id: string }[];
 };
 
@@ -35,6 +49,7 @@ type TrainingRow = { id: string; version: number; strategy: string; title: strin
 type TeachbackRow = {
   id: string;
   prescription_id: string;
+  training_id: string;
   learner_user_id: string;
   scenario: string;
   question: string;
@@ -87,7 +102,7 @@ export async function POST(
 
     const { data: rxRaw } = await supabase
       .from("prescriptions")
-      .select("id, org_id, status, audience, experts")
+      .select("id, org_id, status, audience, rung, detection_id, experts")
       .eq("id", id)
       .maybeSingle();
     const rx = rxRaw as unknown as RxRow | null;
@@ -170,7 +185,7 @@ export async function POST(
       // Load through the SESSION client — org RLS scopes it.
       const { data: tbRaw } = await supabase
         .from("prescription_teachbacks")
-        .select("id, prescription_id, learner_user_id, scenario, question, answer")
+        .select("id, prescription_id, training_id, learner_user_id, scenario, question, answer")
         .eq("id", teachbackId)
         .maybeSingle();
       const tb = tbRaw as unknown as TeachbackRow | null;
@@ -204,6 +219,7 @@ export async function POST(
         );
       }
       const passed = result.score >= TEACHBACK_PASS_SCORE;
+      const completedAt = new Date().toISOString();
       const { error: updError } = await service
         .from("prescription_teachbacks")
         .update({
@@ -212,12 +228,70 @@ export async function POST(
           passed,
           feedback: result.feedback,
           missed: result.missed,
-          completed_at: new Date().toISOString(),
+          completed_at: completedAt,
         })
         .eq("id", tb.id);
       if (updError) {
         return NextResponse.json({ error: updError.message }, { status: 500 });
       }
+
+      // ── P-8 SIGNAL 5: the score, and what did not transfer ──
+      // Context read happens AFTER the learner's result is safely stored, so
+      // nothing about the learning write can cost them their submission.
+      const { data: trRaw } = await service
+        .from("prescription_trainings")
+        .select("id, rung, format, format_key, strategy, version")
+        .eq("id", tb.training_id)
+        .maybeSingle();
+      const tr = trRaw as unknown as {
+        rung: number | null;
+        format: string | null;
+        format_key: string | null;
+        strategy: string | null;
+        version: number | null;
+      } | null;
+      const { data: detRaw } = await service
+        .from("prescription_detections")
+        .select("source_type")
+        .eq("id", rx.detection_id)
+        .maybeSingle();
+      const missed = Array.isArray(result.missed) ? result.missed : [];
+
+      await recordLearningSignal(service, {
+        orgId: rx.org_id,
+        sourceSurface: "prescription",
+        signalType: "teachback_score",
+        subjectType: "training",
+        subjectId: tb.training_id,
+        verdict: passed ? "positive" : "negative",
+        features: {
+          passed,
+          // Banded, not raw: a prior over three bands needs far less data than
+          // one over 101 scores, and the band is what a human-readable
+          // explanation would say out loud anyway.
+          score_band: scoreBand(result.score),
+          rung: tr?.rung ?? rx.rung,
+          format: tr?.format ?? null,
+          format_key: tr?.format_key ?? null,
+          strategy: tr?.strategy ?? null,
+          training_version: tr?.version ?? null,
+          source_type: (detRaw as { source_type?: string } | null)?.source_type ?? null,
+          missed_count: missed.length,
+        },
+        payload: {
+          prescription_id: rx.id,
+          teachback_id: tb.id,
+          score: result.score,
+          // ⭐ THE PAYLOAD THAT MATTERS. Which parts of the framework did not
+          // land — the difference between "training was rated 6/10" and "the
+          // boundaries never transferred."
+          missed,
+        },
+        actorId: user.id,
+        actorRole: "learner",
+        occurredAt: completedAt,
+      });
+
       return NextResponse.json({
         success: true,
         score: result.score,

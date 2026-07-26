@@ -17,12 +17,20 @@
 // formats sit on the same 4-rung effort ladder the rest of the engine ranks
 // by, so the queue, the ROI rank and the efficacy loop keep seeing one
 // consistent shape.
+//
+// ── P-8 Phase 1 (LEARNING LEDGER) — SIGNAL 1 of 7: format choice + override ──
+// training_format_outcomes already recorded this, but only inside the Studio's
+// own schema, where it can only ever teach the Studio. The ledger mirror makes
+// the same judgment legible to every future reader in one place, keyed on the
+// generalizable features (issue type × audience × format), never on the leader
+// who made the call. WRITERS ONLY — nothing reads this yet.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { TRAINING_FORMATS, isTrainingFormatKey } from "@/lib/training-formats";
 import { logFormatAttempt, rungForFormat } from "@/lib/training-studio";
 import { RUNGS } from "@/lib/prescription";
+import { recordLearningSignal } from "@/lib/learning-ledger";
 
 type RequestRow = {
   id: string;
@@ -147,6 +155,39 @@ export async function POST(
       wasOverride,
       overrideReason: wasOverride ? overrideReason : null,
       agentRationale: request.recommendations?.ranked ?? [],
+    });
+
+    // ── P-8 SIGNAL 1: the leader's verdict on the agent's recommendation ──
+    // verdict is about THE RECOMMENDATION, not about the format: an override
+    // is the leader saying the agent got the shape wrong for this situation.
+    // Never throws — see recordLearningSignal's contract.
+    await recordLearningSignal(service, {
+      orgId: request.org_id,
+      sourceSurface: "training_studio",
+      signalType: "format_choice",
+      subjectType: "format",
+      subjectId: formatKey,
+      verdict: wasOverride ? "negative" : "positive",
+      features: {
+        issue_type: request.issue_type,
+        audience_role: request.audience_role,
+        audience_team: request.audience_team,
+        audience_experience: request.audience_experience,
+        format_key: formatKey,
+        recommended_format: request.recommended_format,
+        rung,
+        was_override: wasOverride,
+        attempt,
+      },
+      payload: {
+        training_request_id: request.id,
+        prescription_id: request.prescription_id,
+        override_reason: wasOverride ? overrideReason : null,
+        agent_rationale: request.recommendations?.ranked ?? [],
+      },
+      actorId: user.id,
+      actorRole: "leader",
+      occurredAt: now,
     });
 
     return NextResponse.json({

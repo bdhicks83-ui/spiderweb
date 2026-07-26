@@ -48,12 +48,53 @@
 // {conflict_id, other_record_id}, never a boolean — the badge tests
 // array-non-empty, never truthiness.
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// P-8 PHASE 1 (2026-07-26) — ⭐ SIGNAL 7: WHICH RESULT WAS ACTUALLY USEFUL.
+//
+// This is the ONLY user-visible change in the whole P-8 Phase 1 build, and it
+// exists because /retrieve has been ranking frameworks by cosine similarity
+// since P-3 without ever being told whether the top result was the one the
+// person actually used. Similarity is a proxy for usefulness — it is the only
+// proxy this path has ever had.
+//
+// Two grades of evidence, captured separately and never merged:
+//   • IMPLICIT — which card was opened. Fires on the existing card link with
+//     `keepalive: true` so the in-flight POST survives the navigation. Costs
+//     the user nothing and asks nothing. Weak evidence: a promising title also
+//     gets opened.
+//   • EXPLICIT — a "this helped" control. Higher quality by a wide margin,
+//     because it takes deliberate effort. Optional, one tap, never blocking.
+//
+// The control CANNOT fail in the user's face: the POST result is ignored, the
+// button flips to its thanks state optimistically, and no error is ever shown.
+// Telemetry that can interrupt someone's work is telemetry that trains people
+// to ignore it.
+// ─────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import BrandHeader, { Daisy } from "@/components/BrandHeader";
 
 const supabase = createClient();
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ⚠️⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF (P-8 Phase 1) ⚠️⚠️
+//
+// Everything a user reads on the new capture control lives in this one block so
+// the wording can be changed without touching logic. It is deliberately framed
+// as HELPING THE NEXT PERSON, not as "rate this result": the product's whole
+// pitch is a team brain that gets better because colleagues feed it, and a
+// thumbs-up widget reads like an AI product asking to be graded.
+//
+// Register check: Track B (enterprise operating brain), plain language, no Vine
+// /Trellis plant metaphors, no "SOP", no AI-product framing. Lands the point
+// once and stops.
+// ═════════════════════════════════════════════════════════════════════════════
+const HELPED_PROMPT = "Was this the one you needed?";
+const HELPED_BUTTON = "Yes — this helped";
+const HELPED_CONFIRMED = "Noted — thanks. That tells your team's brain which framework actually worked here.";
+// ═════════════════════════════════════════════════════════════════════════════
 
 type Framework = {
   name?: string | null;
@@ -196,6 +237,10 @@ export default function RetrievePage() {
   const [situation, setSituation] = useState("");
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<View>({ kind: "idle" });
+  // P-8 signal 7: which cards this person has already said "helped" on, so the
+  // control flips to its thanks state. Per-search state; cleared on a new
+  // search alongside `view`.
+  const [helped, setHelped] = useState<Record<string, boolean>>({});
   const [placeholder] = useState(
     () => SITUATION_PLACEHOLDERS[Math.floor(Math.random() * SITUATION_PLACEHOLDERS.length)]
   );
@@ -216,6 +261,39 @@ export default function RetrievePage() {
     })();
   }, [router]);
 
+  // ── P-8 SIGNAL 7 capture ───────────────────────────────────────────────────
+  // Fire-and-forget, always. The response is never read, no error is ever
+  // surfaced, and nothing about this call can change what the user sees. The
+  // ledger write on the server side is equally non-throwing, so a failure at
+  // either end costs the user nothing.
+  function sendRetrievalSignal(
+    kind: "opened" | "helped",
+    r: Result,
+    rank: number,
+    askedFor: string,
+    resultCount: number
+  ) {
+    try {
+      void fetch("/api/retrieve/signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // keepalive matters for 'opened': the click navigates away, and a
+        // normal fetch would be cancelled mid-flight by the unload.
+        keepalive: true,
+        body: JSON.stringify({
+          record_id: r.id,
+          kind,
+          query: askedFor,
+          similarity: asNumber(r.similarity),
+          rank,
+          result_count: resultCount,
+        }),
+      }).catch(() => {});
+    } catch {
+      // Never surfaces. See above.
+    }
+  }
+
   async function search() {
     // Breadcrumbs on the SUBMIT path itself — a "dead button" report is only
     // diagnosable if the console shows exactly how far the click got.
@@ -227,6 +305,7 @@ export default function RetrievePage() {
     const askedFor = situation.trim();
     setLoading(true);
     setView({ kind: "loading" });
+    setHelped({});
 
     try {
       log("POSTing /api/retrieve");
@@ -424,83 +503,125 @@ export default function RetrievePage() {
                 const contested = Array.isArray(r.contested) ? r.contested : [];
                 const similarity = asNumber(r.similarity);
                 const key = typeof r.id === "string" && r.id ? r.id : `row-${idx}`;
+                const wasHelpful = !!helped[key];
+                const results = view.results;
+                const askedFor = view.askedFor;
 
                 return (
                   <ResultBoundary key={key} recordId={typeof r.id === "string" ? r.id : ""}>
-                    <a href={`/library/${r.id}`} style={styles.card}>
-                      <div style={styles.cardTop}>
-                        <span style={styles.emoji}>
-                          {r.trigger_type ? TRIGGER_EMOJI[r.trigger_type] ?? "" : ""}
-                        </span>
-                        <span style={styles.badgeRow}>
-                          {contested.length > 0 && (
-                            <span
-                              style={styles.contestedBadge}
-                              title="Another expert sees this differently — open the framework for both sides."
-                            >
-                              ⚠️ Contested
+                    <div style={styles.cardShell}>
+                      <a
+                        href={`/library/${r.id}`}
+                        style={styles.card}
+                        // P-8 signal 7 (implicit): which result was opened.
+                        // Fire-and-forget with keepalive; navigation is never
+                        // delayed or blocked by it.
+                        onClick={() =>
+                          sendRetrievalSignal("opened", r, idx + 1, askedFor, results.length)
+                        }
+                      >
+                        <div style={styles.cardTop}>
+                          <span style={styles.emoji}>
+                            {r.trigger_type ? TRIGGER_EMOJI[r.trigger_type] ?? "" : ""}
+                          </span>
+                          <span style={styles.badgeRow}>
+                            {contested.length > 0 && (
+                              <span
+                                style={styles.contestedBadge}
+                                title="Another expert sees this differently — open the framework for both sides."
+                              >
+                                ⚠️ Contested
+                              </span>
+                            )}
+                            {r.is_mine && <span style={styles.mineBadge}>Yours</span>}
+                            <span style={styles.matchBadge}>
+                              {matchLabel(similarity)} · {Math.round(similarity * 100)}%
+                            </span>
+                          </span>
+                        </div>
+
+                        <h2 style={styles.cardTitle}>{asText(f.name) || "(framework pending)"}</h2>
+                        <p style={styles.cardTagline}>{asText(f.tagline)}</p>
+
+                        {signals.length > 0 && (
+                          <div style={styles.field}>
+                            <div style={styles.fieldLabel}>Signals</div>
+                            <ul style={styles.list2}>
+                              {signals.slice(0, 3).map((s, i) => (
+                                <li key={i}>{s}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {thePlay && (
+                          <div style={styles.field}>
+                            <div style={styles.fieldLabel}>The play</div>
+                            <p style={styles.fieldBody}>{thePlay}</p>
+                          </div>
+                        )}
+
+                        {boundaries.length > 0 && (
+                          <div style={styles.field}>
+                            <div style={styles.fieldLabel}>Boundaries — when NOT to use this</div>
+                            <ul style={styles.list2}>
+                              {boundaries.slice(0, 3).map((b, i) => (
+                                <li key={i}>{b}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <div style={styles.metaRow}>
+                          <span style={styles.methodTag}>
+                            {r.method ? METHOD_LABEL[r.method] ?? r.method : ""}
+                          </span>
+                          {r.context_function && (
+                            <span style={styles.metaTag}>{r.context_function}</span>
+                          )}
+                        </div>
+
+                        <div style={styles.authorRow}>
+                          <span style={styles.authorName}>
+                            {r.author?.display_name || "Org member"}
+                          </span>
+                          {r.author?.persona && (
+                            <span style={styles.personaTag}>
+                              {PERSONA_LABEL[r.author.persona] ?? r.author.persona}
                             </span>
                           )}
-                          {r.is_mine && <span style={styles.mineBadge}>Yours</span>}
-                          <span style={styles.matchBadge}>
-                            {matchLabel(similarity)} · {Math.round(similarity * 100)}%
-                          </span>
-                        </span>
-                      </div>
-
-                      <h2 style={styles.cardTitle}>{asText(f.name) || "(framework pending)"}</h2>
-                      <p style={styles.cardTagline}>{asText(f.tagline)}</p>
-
-                      {signals.length > 0 && (
-                        <div style={styles.field}>
-                          <div style={styles.fieldLabel}>Signals</div>
-                          <ul style={styles.list2}>
-                            {signals.slice(0, 3).map((s, i) => (
-                              <li key={i}>{s}</li>
-                            ))}
-                          </ul>
+                          <span style={styles.openLink}>Open framework →</span>
                         </div>
-                      )}
+                      </a>
 
-                      {thePlay && (
-                        <div style={styles.field}>
-                          <div style={styles.fieldLabel}>The play</div>
-                          <p style={styles.fieldBody}>{thePlay}</p>
-                        </div>
-                      )}
-
-                      {boundaries.length > 0 && (
-                        <div style={styles.field}>
-                          <div style={styles.fieldLabel}>Boundaries — when NOT to use this</div>
-                          <ul style={styles.list2}>
-                            {boundaries.slice(0, 3).map((b, i) => (
-                              <li key={i}>{b}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      <div style={styles.metaRow}>
-                        <span style={styles.methodTag}>
-                          {r.method ? METHOD_LABEL[r.method] ?? r.method : ""}
-                        </span>
-                        {r.context_function && (
-                          <span style={styles.metaTag}>{r.context_function}</span>
+                      {/* ── P-8 SIGNAL 7 (explicit) — the capture control ──
+                          Outside the <a> on purpose: a button nested inside an
+                          anchor is invalid HTML and its click would race the
+                          navigation. Copy is DRAFT, pending Brian's sign-off —
+                          see the block at the top of this file. */}
+                      <div style={styles.helpRow}>
+                        {wasHelpful ? (
+                          <span style={styles.helpThanks}>{HELPED_CONFIRMED}</span>
+                        ) : (
+                          <>
+                            <span style={styles.helpPrompt}>{HELPED_PROMPT}</span>
+                            <button
+                              type="button"
+                              style={styles.helpButton}
+                              onClick={() => {
+                                // Optimistic, always. The control must never
+                                // be able to show the user an error — see the
+                                // P-8 note at the top of this file.
+                                setHelped((prev) => ({ ...prev, [key]: true }));
+                                sendRetrievalSignal("helped", r, idx + 1, askedFor, results.length);
+                              }}
+                            >
+                              {HELPED_BUTTON}
+                            </button>
+                          </>
                         )}
                       </div>
-
-                      <div style={styles.authorRow}>
-                        <span style={styles.authorName}>
-                          {r.author?.display_name || "Org member"}
-                        </span>
-                        {r.author?.persona && (
-                          <span style={styles.personaTag}>
-                            {PERSONA_LABEL[r.author.persona] ?? r.author.persona}
-                          </span>
-                        )}
-                        <span style={styles.openLink}>Open framework →</span>
-                      </div>
-                    </a>
+                    </div>
                   </ResultBoundary>
                 );
               })}
@@ -614,6 +735,8 @@ const styles: Record<string, React.CSSProperties> = {
   emptyTitle: { fontSize: "15px", color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 460 },
   resultsHeading: { fontSize: "14px", color: "var(--muted)", margin: "0 0 14px", fontWeight: 600 },
   list: { display: "flex", flexDirection: "column", gap: 16 },
+  // P-8: the card and its capture control travel together as one unit.
+  cardShell: { display: "flex", flexDirection: "column", gap: 6 },
   card: {
     display: "block",
     background: "var(--white)",
@@ -623,6 +746,29 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
     color: "inherit",
   },
+  // P-8 capture control — deliberately quiet. It sits under the card, in
+  // muted type, and never competes with the framework itself.
+  helpRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "0 4px",
+    minHeight: 26,
+    flexWrap: "wrap",
+  },
+  helpPrompt: { fontSize: "12px", color: "var(--muted)" },
+  helpButton: {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: "var(--accent-deep)",
+    background: "var(--accent-soft)",
+    border: "1px solid var(--leaf-light)",
+    borderRadius: 999,
+    padding: "3px 12px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  helpThanks: { fontSize: "12px", color: "var(--accent-deep)", lineHeight: 1.4 },
   cardTop: {
     display: "flex",
     justifyContent: "space-between",

@@ -5,6 +5,12 @@
 // simply gets an empty result set back from Supabase, which renders as the
 // empty state below. The named person themselves has no read policy on this
 // table at all and never sees this page's data under any circumstance.
+//
+// P-8 Phase 1: the acknowledge/dismiss write moved from a direct client update
+// to POST /api/coaching/[id]/status. Behaviour is unchanged — same columns,
+// same values, same UI — but the ledger write that now rides along with it has
+// to happen server-side, because learning_signals has no client insert policy
+// and must never get one (a client-writable ledger is a forgeable ledger).
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import BrandHeader from '@/components/BrandHeader';
@@ -71,17 +77,21 @@ export default function CoachingPage() {
   }
 
   async function setStatus(id: string, status: 'acknowledged' | 'dismissed') {
-    // RLS (is_manager_of) already scopes this update to the caller's own
-    // direct reports' rows — no API route needed for a same-privilege write.
-    const { error } = await supabase
-      .from('retraining_signals')
-      .update({
-        status,
-        acknowledged_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-    if (!error) {
-      setSignals((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+    // The route re-checks authorization the same way this page's read is
+    // scoped — through retraining_signals' own is_manager_of() RLS — and makes
+    // the identical two-column write. The optimistic UI update below is
+    // unchanged, so this page looks and behaves exactly as it did before.
+    try {
+      const res = await fetch(`/api/coaching/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        setSignals((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+      }
+    } catch {
+      // Same as before: a failed write leaves the card where it was.
     }
   }
 
