@@ -18,9 +18,9 @@ THE THREE ALTITUDES — the SAME format at three levels, not three different for
 Every altitude keeps the format's own section structure above. A drill stays a drill at exec altitude (a shorter one, framed as what is being drilled and why).
 
 LENGTH DISCIPLINE (hard limits — a training nobody finishes teaches nobody):
-- "floor": at most 400 words. Every line has to earn its place on a shop floor.
-- "supervisor": at most 350 words.
-- "exec": at most 150 words. Under a minute to read, or it does not get read.
+- "floor": at most 300 words. Every line has to earn its place on a shop floor.
+- "supervisor": at most 250 words.
+- "exec": at most 120 words. Under a minute to read, or it does not get read.
 Say each thing once. Do not restate the situation in every section.
 
 WRITING FORMAT: plain text only — NO markdown syntax (no #, no **, no backticks). Structure with SHORT ALL-CAPS section headers on their own line, numbered steps (1. 2. 3.) and simple dashes for lists. Blank line between sections.

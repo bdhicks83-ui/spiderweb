@@ -1494,6 +1494,15 @@ export async function scoreTeachback(
   }, 5);
 }
 
+
+// ⚠️ P-7 SERVERLESS BUDGET (measured on the deployed app, July 26): Vercel
+// kills the invocation at 60s with FUNCTION_INVOCATION_TIMEOUT, and
+// maxDuration=60 is already the ceiling on this plan. That makes an internal
+// RETRY actively harmful here: attempt 1 finishing at ~35s means attempt 2
+// cannot possibly return, so a retry converts a recoverable "try again"
+// into a dead connection the user reads as a network failure. Every P-7
+// model call therefore runs ONE attempt and fails open — the route returns a
+// clean retryable error and the leader clicks again.
 // ─────────────────────────────────────────────────────────────────────────
 // P-7 — On-Demand Training Studio helpers (Builds 1-4).
 //
@@ -1616,7 +1625,7 @@ export async function understandTrainingIssue(
           ? parsed.understanding_note.trim().replace(/\s*\n+\s*/g, " ").slice(0, 300)
           : "",
     };
-  });
+  }, 1);
 }
 
 // ─── Build 2 — the L&D Format Agent ────────────────────────────────────────
@@ -1756,7 +1765,7 @@ export async function recommendTrainingFormat(
           ? parsed.grounding_caution.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400)
           : null,
     };
-  }, 2);
+  }, 1);
 }
 
 // ─── Build 3 — generation IN the chosen format ─────────────────────────────
@@ -1806,7 +1815,7 @@ export async function generateFormatTraining(
     if (!text) return null;
     const parsed = parseJsonLoose(text);
     return isTrainingArtifact(parsed) ? parsed : null;
-  }, 2);
+  }, 1);
 }
 
 // ─── Build 4 — format-aware re-recommendation ──────────────────────────────
@@ -1892,5 +1901,5 @@ export async function recommendNextFormat(
           ? parsed.not_a_training_problem.trim().replace(/\s*\n+\s*/g, " ").slice(0, 400)
           : null,
     };
-  }, 2);
+  }, 1);
 }
