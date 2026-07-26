@@ -1785,6 +1785,19 @@ export type FormatTrainingInput = {
 // Reuses the P-4B TrainingArtifact shape + validator: same three altitudes,
 // different structure INSIDE them. The rung-shaped generator (generateTraining)
 // is untouched and still serves the detected path.
+// ⚠️ TEMPORARY DIAGNOSTIC (P-7, July 26). Serverless logs are not reachable
+// from the verification loop, so a failed generation reports WHY through the
+// route's error body instead of dying silently. Remove once generation is
+// stable. Module-level is safe here: a serverless invocation handles one
+// request, and nothing user-identifying is stored.
+export let lastFormatGenerationDiagnostic: {
+  stopReason: string | null;
+  blockTypes: string;
+  textLength: number;
+  snippet: string;
+  error: string | null;
+} | null = null;
+
 export type TrainingFloorArtifact = {
   strategy: string;
   title: string;
@@ -1821,15 +1834,39 @@ export async function generateFormatTraining(
     frameworks: input.frameworks,
   });
   return withRetries("generateFormatTraining", async () => {
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 2500,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const text = firstText(msg.content as { type: string; text?: string }[]);
-    if (!text) return null;
-    const parsed = parseJsonLoose(text);
-    return isTrainingFloorArtifact(parsed) ? parsed : null;
+    try {
+      const msg = await anthropic.messages.create({
+        model: "claude-sonnet-5",
+        max_tokens: 2500,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const text = firstText(msg.content as { type: string; text?: string }[]);
+      lastFormatGenerationDiagnostic = {
+        stopReason: msg.stop_reason ?? null,
+        blockTypes: (msg.content as { type: string }[]).map((b) => b.type).join(","),
+        textLength: text.length,
+        snippet: text.slice(0, 240),
+        error: null,
+      };
+      if (!text) return null;
+      const parsed = parseJsonLoose(text);
+      if (!isTrainingFloorArtifact(parsed)) {
+        lastFormatGenerationDiagnostic.error = parsed
+          ? `parsed but failed shape check; keys=${Object.keys(parsed as object).join("|")}`
+          : "JSON did not parse";
+        return null;
+      }
+      return parsed;
+    } catch (err) {
+      lastFormatGenerationDiagnostic = {
+        stopReason: null,
+        blockTypes: "",
+        textLength: 0,
+        snippet: "",
+        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      };
+      throw err;
+    }
   }, 1);
 }
 

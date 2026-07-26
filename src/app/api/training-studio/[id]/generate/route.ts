@@ -34,6 +34,7 @@ import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import {
   generateFormatTraining,
+  lastFormatGenerationDiagnostic,
   reframeTrainingAltitude,
   type TrainingAltitude,
 } from "@/lib/claude";
@@ -235,7 +236,10 @@ export async function POST(
     if (!artifact) {
       // Fail open — nothing half-built is stored.
       return NextResponse.json(
-        { error: "The training generator flaked — nothing was stored. Try again." },
+        {
+          error: "The training generator flaked — nothing was stored. Try again.",
+          diagnostic: lastFormatGenerationDiagnostic,
+        },
         { status: 502 }
       );
     }
