@@ -529,3 +529,32 @@ The original P0 ladder was 1 Situate · 2 Classify · 3 Call · 4 Signal · 5 Re
 **Deliberately left alone:** `/ask` and `/simulate` each contain one /upload link, but both pages are orphans — no demo-spine page links to them, so a demo audience cannot reach them by clicking. `/resume`'s "Go approve some" link (page itself now unlinked). All API routes, components, DB tables.
 
 **Result:** `tsc --noEmit` clean. All six features' pages/routes confirmed still present in the repo post-edit. Local only at time of this entry — commit/push runs from Brian's PowerShell.
+
+### July 26–27, 2026 — Ad-prep Job 1: demo-data cleanliness audit (LIVE Supabase)
+
+**Context:** Brian is producing a 90-second screen-capture ad. Every row on camera has to read like a real company's data. Audit ran against the LIVE database via read-only scripts (`scripts/audit-ad-demo.mjs` through `audit-ad-3.mjs`), with two guarded fix scripts.
+
+**Fixed (live):**
+- **Record `86f54b48` (Tom Whitfield's die-changeover recurrence)** was `status=complete` with `framework=null` and no embedding — a visible hole in `/library` and invisible to retrieval. Ran the REAL frame-pattern pipeline on it (copy-don't-import harness, same as seed-p4a.mjs), framed as **"The No-Gate Check"**, embedded, written back. It now ranks in retrieval results (0.75–0.80 range).
+- **Deleted Tom's empty abandoned active session `e7dfcbb6`** (guarded delete: only if status=active AND framework null AND all prose fields empty — guard passed).
+
+**Deliberately NOT deleted — ⚠️ CRITICAL standing gotcha:** the `bdhicks83+test1@gmail.com` account looks like a pure test artifact (29 sources, 0 insights, 0 pattern_records of its own) — **but its 29 `sources` rows are the PARENT rows of 1,248 of the database's 1,272 insights**, insights owned by the MAIN account via `insights.source_id ON DELETE CASCADE`. Deleting the account would cascade-destroy the entire live insight web. Discovered when the first delete attempt hit the FK; confirmed via `audit-test1-deps.mjs` / `audit-test1-visibility.mjs`. The +test1 email lives only in auth and renders on none of the ad's on-camera surfaces. **NEVER delete this account without first re-parenting its sources.**
+
+**Verified intact (live):**
+- **Die-changeover conflict storyline:** one `framework_conflicts` row, status **OPEN** — Priya Nair's "The No-Exceptions Gate" vs. Angela Brooks' "The Quarantined Restart Play", both sides full operator-grade prose, real expert names, entity maps, and qa_pairs.
+- **Retrieval (authed path, real RLS, threshold 0.75):** all 6 candidate plain-language queries return a die-changeover framework #1 with the expert's name. **Best query for the shoot (0.850 top similarity, 4 results):** *"We had a quality escape right after a die changeover on the press line — should we release the next production run before first-piece inspection clears?"* — top result "The Quarantined Restart Play" — Angela Brooks.
+- **Sign-out button:** already shipped by P-5 on `/dashboard` and `/settings` — nothing to build.
+
+**Found and deliberately left alone:** the word "test" inside "The Flexibility Trade" boundaries and "dummy" inside David Chen's record `28eb9f10` are both legitimate manufacturing usage in context (inspection tests / dummy runs), not placeholder text — verified by reading the surrounding prose. Brian's personal abandoned active record `6203c5dd` is outside the demo org and appears on no ad surface.
+
+### July 27, 2026 — Ad-prep Job 2: Remotion brand system built + first render passed (LOCAL)
+
+**Context:** Reusable title/brand component system for the 90-sec ad and every derivative cut. Local render only — Remotion cannot run on Vercel serverless (known, accepted).
+
+**Built (`src/remotion/brand/`):** `tokens.ts` (verbatim mirror of `src/styles/theme.css` — copy-don't-import; Remotion's Chromium never loads the app stylesheet) · `motion.ts` (restrained ease-out timing, nothing springy — enterprise register, deliberately overriding Brian's motion-heavy *website* preference for ad titles) · `Mark.tsx` (logo lockup) · `OpeningTitle` · `LowerThird` · `EndCard` · `CaptionTrack` (burned-in captions — mandatory, cold outbound is watched muted) · `ScreenFrame` (placeholder slate / footage wrapper). Plus `src/remotion/ad/ad-script.ts` — **the ONE file Brian edits**: all beats, lines, and caption cues with absolute timings; components hardcode no copy — and `Ad90.tsx` assembling the four beats. `Ad90` registered in `Root.tsx`; `npm run render:ad` added to package.json.
+
+**Two decisions worth recording:**
+- **`LOGO_SRC` ships as `null`.** Remotion's `<Img>` HARD-FAILS a render on a missing `staticFile()` path (no fallback), so the system renders a typographic wordmark until Brian drops `HUMANBLOOMlogofinal.png` at **`public/brand/`** and flips one line in `tokens.ts` (instructions are in the file). This keeps `render:ad` green today.
+- **Caption/script copy is placeholder** written to the real storyline — `AD-SCRIPT-90sec-2026-07-26.md` lives in the Claude project, not the repo. Timings are laid out at a 90-second read cadence; Brian pastes real lines over them in `ad-script.ts` only.
+
+**Result (LOCAL):** `npm run render:ad` produced `out/humanbloom-ad-90.mp4` (1920×1080 / 30fps / 90s, ~6.3 MB) with opening title, four numbered lower thirds, burned-in captions, and end card over placeholder slates. `tsc --noEmit` clean. Uncommitted at time of entry — commit runs from Brian's PowerShell.

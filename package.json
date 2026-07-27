@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "remotion:studio": "remotion studio src/remotion/index.ts",
-    "render:test": "node scripts/render-test.mjs"
+    "render:test": "node scripts/render-test.mjs",
+    "render:ad": "remotion render src/remotion/index.ts Ad90 out/humanbloom-ad-90.mp4 --overwrite"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

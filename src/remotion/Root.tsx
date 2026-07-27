@@ -8,9 +8,21 @@ import {
   InsightVideoProps,
   WIDTH,
 } from "./InsightVideo";
+import { Ad90 } from "./ad/Ad90";
+import { TOTAL_SEC } from "./ad/ad-script";
+import { VIDEO } from "./brand/tokens";
 
 export const RemotionRoot: React.FC = () => {
   return (
+    <>
+    <Composition
+      id="Ad90"
+      component={Ad90}
+      width={VIDEO.width}
+      height={VIDEO.height}
+      fps={VIDEO.fps}
+      durationInFrames={TOTAL_SEC * VIDEO.fps}
+    />
     <Composition
       id="InsightVideo"
       component={InsightVideo}
@@ -37,5 +49,6 @@ export const RemotionRoot: React.FC = () => {
         };
       }}
     />
+    </>
   );
 };
