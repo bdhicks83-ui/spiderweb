@@ -586,12 +586,12 @@ export default function RetrievePage() {
                                 outline = early signal. N always shown. */}
                             {effLevel === "proven" && (
                               <span style={styles.provenBadge} title={provenTitle(effN)}>
-                                ✓ {PROVEN_BADGE} · N={effN}
+                                ✓ {PROVEN_BADGE}
                               </span>
                             )}
                             {effLevel === "early" && (
                               <span style={styles.earlyBadge} title={earlyTitle(effN)}>
-                                {EARLY_BADGE} · N={effN}
+                                {EARLY_BADGE}
                               </span>
                             )}
                             {contested.length > 0 && (

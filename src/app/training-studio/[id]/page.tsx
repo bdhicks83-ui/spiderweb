@@ -89,10 +89,10 @@ function trackRecordLine(tr: TrackRecord, formatKey: string): string | null {
   }
   if (r.pending > 0) parts.push(`${r.pending} still under watch`);
   if (r.overridden_away > 0) {
-    parts.push(`leaders picked differently ${r.overridden_away}× when it was recommended`);
+    parts.push(`leaders chose another format ${r.overridden_away}× when this was recommended`);
   }
-  const thin = tr.maturity === "early" && resolved > 0 ? " — early evidence, too few to lean on" : "";
-  return `What's worked here: ${parts.join(" · ")} (N=${resolved})${thin}.`;
+  const thin = tr.maturity === "early" && resolved > 0 ? " — still early, too soon to lean on this" : "";
+  return `What's worked here: ${parts.join(" · ")}${thin}.`;
 }
 
 type Altitude = { title: string; body: string };
