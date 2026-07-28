@@ -109,6 +109,38 @@ const provenTitle = (n: number) =>
 const earlyTitle = (n: number) =>
   `Early signal — some evidence this works (${n} data point${n === 1 ? "" : "s"}), not enough to call it proven yet.`;
 const RANKED_HIGHER_PREFIX = "Why this ranks higher:";
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ⚠️⚠️ P-9 KNOWLEDGE-GAP ALERT — DRAFT CUSTOMER-FACING COPY, PENDING BRIAN ⚠️⚠️
+//
+// This replaces the old honest-but-dead-end empty state. THE FRAME IS THE WHOLE
+// POINT: a search with no match is not a failure of the product and must never
+// read like one. It means somebody with a live problem went to the team's brain
+// and the answer is sitting in a colleague's head, uncaptured. That is the most
+// precise demand signal this system can produce, and the person staring at it is
+// the one best placed to say "actually, I know this."
+//
+// Tone: amber (attention), NOT red (error) — the same treatment as contested
+// frameworks and Coaching Watch. Track B register: plain language, no
+// Vine/Trellis plant metaphors, no "SOP", no AI-product framing. Land the point
+// ONCE and stop.
+// ═════════════════════════════════════════════════════════════════════════════
+const GAP_COPY = {
+  title: "No one's codified this yet — that's worth fixing.",
+  body:
+    "Nothing in your team's brain covers this. That's not a dead end: it means this piece of judgment lives in someone's head and nowhere else. Flag it so your team can see what's missing — or answer it now, if the answer is yours.",
+  flag: "Flag this as a gap",
+  answer: "Answer it now",
+  flagging: "Flagging…",
+  flagged: "Flagged. Your team can see it now — and you'll be told when someone fills it in.",
+  flaggedRepeat: (n: number) =>
+    `Flagged. This has been asked ${n} times now — it's near the top of the queue.`,
+  seeQueue: "See the gaps queue →",
+  myQuestions: "Track it in your questions →",
+  flagFailed: "Couldn't flag that just now. Try again — your search is still here.",
+  nearMiss: (sim: number) =>
+    `Closest thing your team has codified came in at ${Math.round(sim * 100)}% — below the bar for a confident match.`,
+};
 // Training-derived provenance (Part A records surfacing in retrieval):
 const PROVENANCE_LABEL = "Codified from training";
 const provenanceLine = (formatName: string, names: string[]) =>
@@ -161,6 +193,14 @@ type Result = {
   codified_from?: Provenance | null;
 };
 
+// P-9 — the gap-flag control's state, kept OUT of `view` on purpose: flagging a
+// gap must never be able to change which of the six view branches is painting.
+type GapState =
+  | { kind: "idle" }
+  | { kind: "flagging" }
+  | { kind: "flagged"; gapId: string; askedCount: number }
+  | { kind: "error"; message: string };
+
 // The page is in exactly one of these at any moment. `view` is the SINGLE
 // source of truth for what paints — there is no combination of state that
 // renders nothing.
@@ -168,7 +208,10 @@ type View =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "results"; results: Result[]; askedFor: string }
-  | { kind: "noMatch"; message: string }
+  // P-9: the empty state now carries the QUESTION and the near-miss score, so
+  // the gap alert can flag the exact words the person typed. Losing the query
+  // here would mean asking them to retype it to report the gap.
+  | { kind: "noMatch"; message: string; askedFor: string; topSimilarity: number | null }
   | { kind: "error"; message: string; code?: string }
   | { kind: "unexpected"; detail: string };
 
@@ -289,6 +332,10 @@ export default function RetrievePage() {
   const [placeholder] = useState(
     () => SITUATION_PLACEHOLDERS[Math.floor(Math.random() * SITUATION_PLACEHOLDERS.length)]
   );
+  // P-9 — the gap alert's own state for the CURRENT empty search. Reset on
+  // every new search alongside `view`, so a flag never carries over onto a
+  // different question.
+  const [gapState, setGapState] = useState<GapState>({ kind: "idle" });
 
   useEffect(() => {
     (async () => {
@@ -339,6 +386,53 @@ export default function RetrievePage() {
     }
   }
 
+  // ── P-9 — FLAG THE GAP ─────────────────────────────────────────────────────
+  // Turns the dead end into a row the whole org can see. Two exits from the
+  // same call, because the person staring at an unanswered question is either
+  // the wrong person to answer it (flag it, move on) or exactly the right one
+  // (answer it now) — and making them guess which button means what would cost
+  // us the second case entirely.
+  //
+  // `andAnswer` claims the gap and hands off to /codify with the question
+  // carried in the URL, so the interview starts with the colleague's actual
+  // words on screen rather than a blank page.
+  async function flagGap(question: string, topSimilarity: number | null, andAnswer: boolean) {
+    if (gapState.kind === "flagging") return;
+    setGapState({ kind: "flagging" });
+    try {
+      const res = await fetch("/api/gaps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, top_similarity: topSimilarity }),
+      });
+      const data = (await res.json()) as Record<string, unknown>;
+      log(`POST /api/gaps → HTTP ${res.status}`, data);
+      if (!res.ok) {
+        setGapState({ kind: "error", message: asText(data?.error) || GAP_COPY.flagFailed });
+        return;
+      }
+      const gapId = asText(data?.gap_id);
+      if (andAnswer && gapId) {
+        // The claim is advisory — if it fails the gap simply stays open and the
+        // capture still happens. Never block the handoff on it.
+        try {
+          await fetch(`/api/gaps/${gapId}/claim`, { method: "POST" });
+        } catch {
+          // intentionally silent
+        }
+        router.push(`/codify?gap=${gapId}`);
+        return;
+      }
+      setGapState({
+        kind: "flagged",
+        gapId,
+        askedCount: asNumber(data?.asked_count) || 1,
+      });
+    } catch {
+      setGapState({ kind: "error", message: GAP_COPY.flagFailed });
+    }
+  }
+
   async function search() {
     // Breadcrumbs on the SUBMIT path itself — a "dead button" report is only
     // diagnosable if the console shows exactly how far the click got.
@@ -351,6 +445,7 @@ export default function RetrievePage() {
     setLoading(true);
     setView({ kind: "loading" });
     setHelped({});
+    setGapState({ kind: "idle" });
 
     try {
       log("POSTing /api/retrieve");
@@ -398,9 +493,15 @@ export default function RetrievePage() {
       const rawResults = (data as { results?: unknown }).results;
 
       if (data.noMatch === true) {
+        const near = (data as { topSimilarity?: unknown }).topSimilarity;
         setView({
           kind: "noMatch",
           message: asText(data.message) || "Nothing codified on this yet.",
+          // P-9: carry the question through so the gap can be flagged in the
+          // person's own words, and the near-miss so the alert can be honest
+          // about how close the library got.
+          askedFor,
+          topSimilarity: typeof near === "number" && Number.isFinite(near) ? near : null,
         });
         return;
       }
@@ -466,6 +567,9 @@ export default function RetrievePage() {
         <div style={styles.headerRow}>
           <h1 style={styles.title}>🔍 Ask your team&apos;s brain</h1>
           <div style={styles.headerLinks}>
+            <a href="/gaps" style={styles.headerLink}>
+              🧩 Gaps
+            </a>
             <a href="/library" style={styles.headerLink}>
               📚 Library
             </a>
@@ -519,15 +623,74 @@ export default function RetrievePage() {
           </div>
         )}
 
+        {/* ── P-9 — THE KNOWLEDGE-GAP ALERT ──────────────────────────────────
+            Was: a quiet "nothing codified on this yet" card with a generic
+            link to /codify. That was honest and it was a dead end — the most
+            valuable trigger in the system rendered as a shrug.
+
+            Now: a highlighted amber panel (attention, never error-red) that
+            names what just happened as a discovered gap, and gives the person
+            two real exits — flag it for the team, or answer it themselves with
+            their question carried into the capture session.
+
+            ⭐ THE SYSTEM DOES NOT ANSWER ITS OWN GAP. There is no "generate a
+            framework" button here and there never will be: fabricating the
+            missing expertise is the one thing this product exists not to do. A
+            human fills it, and their name goes on it. ── */}
         {view.kind === "noMatch" && (
-          <div style={styles.empty}>
-            <div style={styles.emptyEmoji}>
-              <Daisy size={40} />
+          <div style={styles.gapAlert}>
+            <div style={styles.gapTop}>
+              <Daisy size={28} />
+              <span style={styles.gapLabel}>A gap worth filling</span>
             </div>
-            <p style={styles.emptyTitle}>{view.message}</p>
-            <a href="/codify" style={styles.newLink}>
-              Codify a framework for this →
-            </a>
+            <p style={styles.gapTitle}>{GAP_COPY.title}</p>
+            <p style={styles.gapBody}>{GAP_COPY.body}</p>
+            <p style={styles.gapQuestion}>&ldquo;{view.askedFor}&rdquo;</p>
+            {view.topSimilarity !== null && (
+              <p style={styles.gapNearMiss}>{GAP_COPY.nearMiss(view.topSimilarity)}</p>
+            )}
+
+            {gapState.kind === "flagged" ? (
+              <div style={styles.gapDone}>
+                <p style={styles.gapDoneText}>
+                  {gapState.askedCount > 1
+                    ? GAP_COPY.flaggedRepeat(gapState.askedCount)
+                    : GAP_COPY.flagged}
+                </p>
+                <div style={styles.gapDoneLinks}>
+                  <a href="/gaps" style={styles.newLink}>
+                    {GAP_COPY.seeQueue}
+                  </a>
+                  <a href="/gaps/mine" style={styles.newLink}>
+                    {GAP_COPY.myQuestions}
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={styles.gapActions}>
+                  <button
+                    type="button"
+                    style={styles.gapPrimary}
+                    disabled={gapState.kind === "flagging"}
+                    onClick={() => flagGap(view.askedFor, view.topSimilarity, false)}
+                  >
+                    {gapState.kind === "flagging" ? GAP_COPY.flagging : GAP_COPY.flag}
+                  </button>
+                  <button
+                    type="button"
+                    style={styles.gapSecondary}
+                    disabled={gapState.kind === "flagging"}
+                    onClick={() => flagGap(view.askedFor, view.topSimilarity, true)}
+                  >
+                    {GAP_COPY.answer}
+                  </button>
+                </div>
+                {gapState.kind === "error" && (
+                  <p style={styles.gapError}>{gapState.message}</p>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -828,6 +991,66 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   emptyEmoji: { fontSize: "34px" },
+  // ── P-9 gap alert. AMBER, not red: this is attention, not an error. Same
+  // token family as the contested badge and Coaching Watch, deliberately.
+  gapAlert: {
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
+    borderRadius: 14,
+    padding: "20px 22px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  gapTop: { display: "flex", alignItems: "center", gap: 8, marginBottom: 2 },
+  gapLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: "var(--warn-strong)",
+  },
+  gapTitle: { fontSize: "17px", fontWeight: 700, color: "var(--pine)", margin: 0, lineHeight: 1.4 },
+  gapBody: { fontSize: "14px", color: "var(--warn-text)", margin: "2px 0 0", lineHeight: 1.6 },
+  gapQuestion: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "var(--pine)",
+    background: "var(--warn-chip-bg)",
+    border: "1px solid var(--warn-border)",
+    borderRadius: 10,
+    padding: "10px 12px",
+    margin: "10px 0 0",
+    lineHeight: 1.5,
+  },
+  gapNearMiss: { fontSize: "12px", color: "var(--warn-text)", margin: "8px 0 0" },
+  gapActions: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 },
+  gapPrimary: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "var(--white)",
+    background: "var(--growth)",
+    border: "none",
+    borderRadius: 8,
+    padding: "10px 18px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  gapSecondary: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "var(--warn-strong)",
+    background: "var(--white)",
+    border: "1px solid var(--warn-border)",
+    borderRadius: 8,
+    padding: "10px 18px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  gapError: { fontSize: "13px", color: "var(--danger)", margin: "10px 0 0" },
+  gapDone: { marginTop: 14 },
+  gapDoneText: { fontSize: "14px", fontWeight: 600, color: "var(--warn-strong)", margin: "0 0 10px", lineHeight: 1.55 },
+  gapDoneLinks: { display: "flex", gap: 18, flexWrap: "wrap" },
   emptyTitle: { fontSize: "15px", color: "var(--pine-soft)", margin: 0, lineHeight: 1.5, maxWidth: 460 },
   resultsHeading: { fontSize: "14px", color: "var(--muted)", margin: "0 0 14px", fontWeight: 600 },
   list: { display: "flex", flexDirection: "column", gap: 16 },

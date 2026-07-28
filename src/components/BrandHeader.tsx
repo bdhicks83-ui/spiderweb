@@ -7,6 +7,7 @@
 // NOTE: the component/export names (BrandHeader, Daisy) are code identifiers —
 // the identifier rename is parked by standing decision; only visuals changed.
 import { useState, type CSSProperties } from 'react';
+import GapBadge from '@/components/GapBadge';
 
 const LOGO_SRC = '/brand/viridescent-horizontal.png';
 
@@ -37,6 +38,12 @@ export function Daisy({ size = 22 }: { size?: number }) {
 }
 
 const styles: Record<string, CSSProperties> = {
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
   wrap: {
     display: 'flex',
     alignItems: 'center',
@@ -59,21 +66,28 @@ export default function BrandHeader() {
   const [logoMissing, setLogoMissing] = useState(false);
 
   return (
-    <a href="/dashboard" style={styles.wrap}>
-      {logoMissing ? (
-        <>
-          <Daisy />
-          <span>Viridescent</span>
-        </>
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={LOGO_SRC}
-          alt="Viridescent"
-          style={styles.logo}
-          onError={() => setLogoMissing(true)}
-        />
-      )}
-    </a>
+    // P-9: the mark and the "your question was answered" badge travel together
+    // as the app's nav row. GapBadge renders NOTHING when there is nothing to
+    // say, so on every page where nobody has answered your question this is
+    // visually identical to what shipped before.
+    <div style={styles.row}>
+      <a href="/dashboard" style={styles.wrap}>
+        {logoMissing ? (
+          <>
+            <Daisy />
+            <span>Viridescent</span>
+          </>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={LOGO_SRC}
+            alt="Viridescent"
+            style={styles.logo}
+            onError={() => setLogoMissing(true)}
+          />
+        )}
+      </a>
+      <GapBadge />
+    </div>
   );
 }

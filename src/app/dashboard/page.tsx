@@ -309,6 +309,19 @@ export default function DashboardPage() {
           <a href="/training-studio" style={styles.resumeBannerLink}>Create training →</a>
         </div>
 
+        {/* P-9 — the shared gaps queue. Org-wide by design: anyone can see what
+            the team can't answer, and anyone can pick one up. No routing in v1. */}
+        <div style={styles.resumeBanner}>
+          <div>
+            <h2 style={styles.resumeBannerTitle}>🧩 Gaps worth filling</h2>
+            <p style={styles.resumeBannerSub}>
+              Questions your team asked that nobody has codified yet — and the ones you asked,
+              waiting on an answer.
+            </p>
+          </div>
+          <a href="/gaps" style={styles.resumeBannerLink}>Open the queue →</a>
+        </div>
+
         {/* New — manager-only coaching watch. Visible link for everyone, but
             RLS (is_manager_of()) means it renders empty for anyone with no
             direct reports on file — same "link is safe to show, RLS is the

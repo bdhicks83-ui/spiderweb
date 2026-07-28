@@ -69,6 +69,13 @@ export default function TrainingStudioPage() {
   const [experience, setExperience] = useState<AudienceExperience | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<string | null>(null);
+  // P-9 — arriving from a filled gap (/training-studio?gap=<id>). The issue box
+  // is pre-seeded with the question a colleague actually asked, and the
+  // resulting request is linked back so the original asker sees the training
+  // next to the framework. window.location instead of useSearchParams: the
+  // latter would force this whole client page into a Suspense boundary.
+  const [gapId, setGapId] = useState<string | null>(null);
+  const [gapQuestion, setGapQuestion] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -101,6 +108,33 @@ export default function TrainingStudioPage() {
     })();
   }, [router, load]);
 
+  // P-9 gap prefill. Silent on any failure — a missing prefill must never stop
+  // someone creating training the normal way.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("gap");
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/gaps/${id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const q = data?.gap?.question;
+        if (cancelled || typeof q !== "string") return;
+        setGapId(id);
+        setGapQuestion(q);
+        // Only seed an EMPTY box — never overwrite something already typed.
+        setIssueText((prev) => (prev.trim() ? prev : q));
+      } catch {
+        // intentionally silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const submit = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -128,6 +162,19 @@ export default function TrainingStudioPage() {
       // in separate requests so neither one runs long enough to time out.
       setStep("Choosing the format…");
       await fetch(`/api/training-studio/${data.id}/recommend`, { method: "POST" });
+      // P-9 — close the link back to the gap so the original asker is pointed
+      // at the training as well as the framework. Advisory: never blocks.
+      if (gapId) {
+        try {
+          await fetch(`/api/gaps/${gapId}/training`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ training_request_id: data.id }),
+          });
+        } catch {
+          // intentionally silent
+        }
+      }
       router.push(`/training-studio/${data.id}`);
     } catch {
       setError("Could not open the request.");
@@ -171,6 +218,19 @@ export default function TrainingStudioPage() {
         {canCreate ? (
           <div style={styles.formCard}>
             <h2 style={styles.formTitle}>Create training</h2>
+
+            {/* P-9 — DRAFT customer-facing copy, pending Brian. */}
+            {gapQuestion && (
+              <div style={styles.gapNote}>
+                <span style={styles.gapNoteLabel}>From a filled gap</span>
+                <p style={styles.gapNoteText}>
+                  Someone asked this and your team has now codified the answer. Turning it into
+                  training is the optional second step — the same judgment, reshaped for the people
+                  who need to absorb it.
+                </p>
+                <p style={styles.gapNoteQuestion}>&ldquo;{gapQuestion}&rdquo;</p>
+              </div>
+            )}
 
             <label style={styles.label} htmlFor="issue">
               What&apos;s going wrong?
@@ -350,6 +410,23 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   formTitle: { fontSize: "18px", margin: "0 0 6px" },
+  // P-9 — amber, consistent with the gap alert and the gaps queue.
+  gapNote: {
+    background: "var(--warn-bg)",
+    border: "1px solid var(--warn-border)",
+    borderRadius: 10,
+    padding: "12px 14px",
+    margin: "0 0 8px",
+  },
+  gapNoteLabel: {
+    fontSize: "10px",
+    fontWeight: 700,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+    color: "var(--warn-strong)",
+  },
+  gapNoteText: { fontSize: "13px", color: "var(--warn-text)", margin: "6px 0 8px", lineHeight: 1.55 },
+  gapNoteQuestion: { fontSize: "13px", fontWeight: 600, color: "var(--pine)", margin: 0, lineHeight: 1.5 },
   label: {
     fontSize: "12px",
     fontWeight: 700,

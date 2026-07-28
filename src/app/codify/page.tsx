@@ -8,6 +8,10 @@
 
 import { useEffect, useState } from 'react';
 import BrandHeader from '@/components/BrandHeader';
+// P-9 — renders only when /codify is opened with ?gap=<id> from the gap alert
+// or the gaps queue. Keeps the colleague's actual question on screen for the
+// whole interview, so nobody ends up answering from memory two clicks later.
+import GapAnswerBanner from '@/components/GapAnswerBanner';
 import {
   TRIGGER_TYPES,
   METHODS,
@@ -382,6 +386,7 @@ export default function CodifyPage() {
       <div style={styles.container}>
         <BrandHeader />
         <h1 style={styles.title}>Codify a pattern</h1>
+        <GapAnswerBanner />
         <p style={styles.subtitle}>
           A short interview about a situation worth capturing. Answer in your own
           words — at the end you get a branded framework you could reuse or hand

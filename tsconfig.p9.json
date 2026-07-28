@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/knowledge-gaps.ts",
+    "src/lib/learning-ledger.ts",
+    "src/lib/pattern-embedding.ts",
+    "src/lib/voyage.ts",
+    "src/app/api/gaps/route.ts",
+    "src/app/api/gaps/[id]/route.ts",
+    "src/app/api/gaps/[id]/claim/route.ts",
+    "src/app/api/gaps/[id]/resolve/route.ts",
+    "src/app/api/gaps/[id]/training/route.ts",
+    "src/app/api/gaps/mine/route.ts",
+    "src/app/gaps/page.tsx",
+    "src/app/gaps/mine/page.tsx",
+    "src/components/GapBadge.tsx",
+    "src/components/GapAnswerBanner.tsx",
+    "src/components/BrandHeader.tsx",
+    "src/app/retrieve/page.tsx",
+    "src/app/codify/page.tsx",
+    "src/app/training-studio/page.tsx",
+    "src/app/dashboard/page.tsx"
+  ]
+}

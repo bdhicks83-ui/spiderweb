@@ -111,6 +111,17 @@ export const LEARNING_SIGNAL_TYPES = [
   "retrieval_result_used",
   "retrieval_result_opened",
   "efficacy_outcome",
+  // ─── P-9 — THE KNOWLEDGE-GAP LOOP (the demand side) ───
+  // 8. knowledge_gap_opened — somebody asked the team's brain something and
+  //    nothing cleared the 0.75 retrieval threshold. Negative evidence about
+  //    RETRIEVAL COVERAGE, never about a person: the org has not codified this
+  //    yet. The single most precise demand signal in the product, because it is
+  //    timestamped and phrased in the asker's own words.
+  //    knowledge_gap_filled — somebody closed it with a codified framework.
+  // Mirrored in the signal_type check constraint in
+  // supabase/p9-knowledge-gaps.sql — change one, change both.
+  "knowledge_gap_opened",
+  "knowledge_gap_filled",
 ] as const;
 
 export type LearningSignalType = (typeof LEARNING_SIGNAL_TYPES)[number];
