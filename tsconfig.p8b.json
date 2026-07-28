@@ -8,6 +8,8 @@
     "next-env.d.ts",
     "src/lib/graph-codify.ts",
     "src/lib/retrieval-effectiveness.ts",
+    "src/lib/format-prior.ts",
+    "src/app/api/training-studio/[id]/recommend/route.ts",
     "src/lib/learning-ledger.ts",
     "src/lib/training-studio.ts",
     "src/lib/training-formats.ts",

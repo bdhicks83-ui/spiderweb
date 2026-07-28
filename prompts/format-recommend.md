@@ -26,6 +26,11 @@ THE AUDIENCE: {{audience}}
 WHAT THE ORGANIZATION HAS ALREADY CODIFIED ON THIS TERRITORY (the material the training would be built from — if this is thin, a format that depends on rich expert reasoning will not deliver, and you should say so):
 {{grounding}}
 
+WHAT HAS ACTUALLY WORKED IN THIS ORGANIZATION (the format-outcome log: real deliveries, verdicts from the efficacy watch on live floor records, and where leaders overrode past recommendations):
+{{track_record}}
+
+THE PRIOR RULE: the track record is evidence, not a verdict. The WEIGHT line inside it is binding — early evidence must never override the fit rules, established evidence may break ties between otherwise-fitting formats. An outcome marked leader-enhanced credits the leader's change as much as the format. When the record informs your pick, say so in the rationale in plain language with the count; when it doesn't, don't mention it.
+
 THE FORMAT LIBRARY — recommend from these keys ONLY:
 {{format_catalog}}
 

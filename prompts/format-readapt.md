@@ -30,6 +30,9 @@ THE ISSUE:
 WHAT THE EFFICACY LOOP SAW:
 {{efficacy_note}}
 
+WHAT HAS ACTUALLY WORKED IN THIS ORGANIZATION (the format-outcome log — use it the same way: evidence, not a verdict; its WEIGHT line is binding; leader-enhanced outcomes credit the format cautiously; name the count in your rationale only when it informs the pick):
+{{track_record}}
+
 THE FORMAT LIBRARY — recommend from these keys ONLY, and do NOT return a format that appears in "already tried" unless every remaining format is a worse fit AND you say why in the rationale:
 {{format_catalog}}
 

@@ -24,6 +24,11 @@ import { TRAINING_FORMATS, isTrainingFormatKey } from "@/lib/training-formats";
 import { runEfficacyLoop } from "@/lib/prescription";
 import { describeEntities, resolveFormatAttempt } from "@/lib/training-studio";
 import { codifyTrainingToGraph } from "@/lib/graph-codify";
+import {
+  computeFormatPrior,
+  formatPriorForPrompt,
+  storedTrackRecord,
+} from "@/lib/format-prior";
 
 export const maxDuration = 60;
 
@@ -212,6 +217,13 @@ export async function POST(
       strategy: "(unrecorded)",
     };
 
+    // ── P-7 Build 5: the re-recommendation also sees the org's track record.
+    //    (This attempt still reads as 'pending' here — it is closed out as
+    //    did_not_land just below; the prompt already carries the recurrence
+    //    directly via efficacy_note, so nothing is double-counted.)
+    //    Null-safe — degrades to no record. ──
+    const orgPrior = await computeFormatPrior(service, request.org_id, request.issue_type);
+
     const readapt = await recommendNextFormat({
       priorFormatKey: priorFormat,
       triedFormatKeys,
@@ -224,6 +236,7 @@ export async function POST(
       audience: request.audience_summary,
       subjectEntities: describeEntities(request.subject_entities || []),
       efficacyNote: rx.efficacy_note ?? "The problem recurred after delivery.",
+      trackRecord: formatPriorForPrompt(orgPrior),
     });
 
     // Close out the failed attempt either way — the miss IS the learning
@@ -287,6 +300,8 @@ export async function POST(
           })),
       ],
       previous: request.recommendations ?? null,
+      // P-7 Build 5 — the same evidence the agent saw, for the cards.
+      track_record: storedTrackRecord(orgPrior),
     };
 
     const { error: updError } = await service

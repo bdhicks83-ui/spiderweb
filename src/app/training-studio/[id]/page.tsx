@@ -32,6 +32,26 @@ type Ranked = {
   citations: string[];
 };
 
+// P-7 Build 5 — the org's format track record, exactly as the API stores it
+// on recommendations.track_record (src/lib/format-prior.ts). N always shown.
+type TrackRecordEntry = {
+  format_key: string;
+  attempts: number;
+  effective: number;
+  did_not_land: number;
+  pending: number;
+  enhanced_effective: number;
+  overridden_away: number;
+};
+
+type TrackRecord = {
+  scope: "issue_type" | "org_wide";
+  issue_type: string | null;
+  resolved_total: number;
+  maturity: "early" | "established";
+  by_format: TrackRecordEntry[];
+} | null;
+
 type Recommendations = {
   headline?: string;
   tradeoff?: string | null;
@@ -41,7 +61,39 @@ type Recommendations = {
   why_the_last_one_did_not_land?: string | null;
   not_a_training_problem?: string | null;
   ranked?: Ranked[];
+  track_record?: TrackRecord;
 } | null;
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (P-7 Build 5)
+// The "what's worked here" line under a format card. Honesty rules baked in:
+// the count (N) always shows, an early record says it's too thin to lean on,
+// a leader-enhanced outcome is credited out loud, and cross-issue evidence
+// says it's cross-issue. Track B register — plain, no plant metaphors.
+// ═════════════════════════════════════════════════════════════════════════════
+function trackRecordLine(tr: TrackRecord, formatKey: string): string | null {
+  if (!tr) return null;
+  const r = tr.by_format.find((e) => e.format_key === formatKey);
+  if (!r) return null;
+  const resolved = r.effective + r.did_not_land;
+  if (resolved === 0 && r.pending === 0) return null;
+  const scope = tr.scope === "issue_type" ? "on this kind of issue" : "across all issues here";
+  const parts: string[] = [];
+  if (resolved > 0) {
+    parts.push(`landed ${r.effective} of ${resolved} ${scope}`);
+    if (r.enhanced_effective > 0) {
+      parts.push(
+        `${r.enhanced_effective} of those ${r.enhanced_effective === 1 ? "was" : "were"} leader-improved`
+      );
+    }
+  }
+  if (r.pending > 0) parts.push(`${r.pending} still under watch`);
+  if (r.overridden_away > 0) {
+    parts.push(`leaders picked differently ${r.overridden_away}× when it was recommended`);
+  }
+  const thin = tr.maturity === "early" && resolved > 0 ? " — early evidence, too few to lean on" : "";
+  return `What's worked here: ${parts.join(" · ")} (N=${resolved})${thin}.`;
+}
 
 type Altitude = { title: string; body: string };
 
@@ -348,6 +400,12 @@ export default function TrainingStudioDetailPage({
                   Grounded in: {primary.citations.join(" · ")}
                 </p>
               )}
+              {/* P-7 Build 5 — the org's own evidence, N always shown */}
+              {trackRecordLine(rec?.track_record ?? null, primary.format_key) && (
+                <p style={styles.trackRecordLine}>
+                  {trackRecordLine(rec?.track_record ?? null, primary.format_key)}
+                </p>
+              )}
             </button>
 
             {rec?.tradeoff && (
@@ -380,6 +438,12 @@ export default function TrainingStudioDetailPage({
                     <p style={styles.formatOptionWhySmall}>{alt.rationale}</p>
                     {alt.citations.length > 0 && (
                       <p style={styles.citations}>Grounded in: {alt.citations.join(" · ")}</p>
+                    )}
+                    {/* P-7 Build 5 — the org's own evidence, N always shown */}
+                    {trackRecordLine(rec?.track_record ?? null, alt.format_key) && (
+                      <p style={styles.trackRecordLine}>
+                        {trackRecordLine(rec?.track_record ?? null, alt.format_key)}
+                      </p>
                     )}
                   </button>
                 ))}
@@ -815,6 +879,15 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "3px 9px",
   },
   citations: { fontSize: "12px", color: "var(--muted)", margin: "8px 0 0", lineHeight: 1.5 },
+  // P-7 Build 5 — the org's own track record under a format card. Quiet green,
+  // same register as the effectiveness evidence on /retrieve.
+  trackRecordLine: {
+    fontSize: "12px",
+    color: "var(--growth-deep)",
+    margin: "8px 0 0",
+    lineHeight: 1.5,
+    fontWeight: 600,
+  },
   tradeoff: { fontSize: "13px", color: "var(--pine-soft)", margin: "4px 0 0", lineHeight: 1.5 },
   groundingLine: { fontSize: "12px", color: "var(--muted)", margin: "8px 0 0", lineHeight: 1.5 },
   cautionText: {

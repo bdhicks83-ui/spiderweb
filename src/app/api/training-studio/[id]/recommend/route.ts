@@ -27,6 +27,11 @@ import {
   groundingForIssue,
   groundingSummary,
 } from "@/lib/training-studio";
+import {
+  computeFormatPrior,
+  formatPriorForPrompt,
+  storedTrackRecord,
+} from "@/lib/format-prior";
 
 export const maxDuration = 60;
 
@@ -91,6 +96,12 @@ export async function POST(
       )}`
     );
 
+    // ── P-7 Build 5: the org's own format track record informs the agent.
+    //    Null-safe by contract — a prior outage degrades to "no record" and
+    //    the recommendation proceeds on the fit rules alone. ──
+    const prior = await computeFormatPrior(service, request.org_id, request.issue_type);
+    const trackRecord = storedTrackRecord(prior);
+
     const recommendation = await recommendTrainingFormat({
       issueText: request.issue_text,
       issueRestated: request.issue_restated ?? request.issue_text,
@@ -99,6 +110,7 @@ export async function POST(
       subjectEntities: describeEntities(request.subject_entities || []),
       audience: request.audience_summary,
       grounding: compactGrounding(grounding),
+      trackRecord: formatPriorForPrompt(prior),
     });
 
     if (!recommendation) {
@@ -132,6 +144,9 @@ export async function POST(
           grounding_summary: groundingSummary(grounding),
           capture_first: grounding.captureFirst,
           ranked: stored,
+          // P-7 Build 5 — what the agent saw, stored so the leader sees the
+          // same evidence on the cards (explainable, never hidden scoring).
+          track_record: trackRecord,
         },
         recommended_format: recommendation.primaryFormat,
         recommended_at: new Date().toISOString(),
@@ -150,6 +165,7 @@ export async function POST(
       tradeoff: recommendation.tradeoff,
       grounding_caution: recommendation.groundingCaution,
       capture_first: grounding.captureFirst,
+      track_record: trackRecord,
       message: `Recommended: ${TRAINING_FORMATS[recommendation.primaryFormat].name}. You can take it or choose a different format — the choice is yours either way.`,
     });
   } catch (err) {

@@ -1667,6 +1667,10 @@ export type FormatRecommendationInput = {
   /** The org's codified material on this territory — thin grounding is a real
    *  input to the recommendation, not a detail. */
   grounding: string;
+  /** P-7 Build 5 — the org's format track record (formatPriorForPrompt()).
+   *  Optional so callers without a prior still work; the prompt carries its
+   *  own minimum-N caution inside this block. */
+  trackRecord?: string;
 };
 
 // Drop any citation that isn't in the closed catalog. An agent that invents
@@ -1697,6 +1701,9 @@ export async function recommendTrainingFormat(
     subject_entities: input.subjectEntities,
     audience: input.audience,
     grounding: input.grounding,
+    track_record:
+      input.trackRecord ??
+      "(no format outcomes recorded in this organization yet — recommend purely from the fit rules above)",
     format_catalog: formatCatalogForPrompt(),
   });
   // 4000 and two attempts, not 8000 and three: the agent now returns THREE
@@ -1962,6 +1969,8 @@ export type FormatReadaptInput = {
   audience: string;
   subjectEntities: string;
   efficacyNote: string;
+  /** P-7 Build 5 — the org's format track record (formatPriorForPrompt()). */
+  trackRecord?: string;
 };
 
 export async function recommendNextFormat(
@@ -1983,6 +1992,9 @@ export async function recommendNextFormat(
     audience: input.audience,
     subject_entities: input.subjectEntities,
     efficacy_note: input.efficacyNote,
+    track_record:
+      input.trackRecord ??
+      "(no format outcomes recorded in this organization yet — recommend purely from the adaptation rule above)",
     format_catalog: formatCatalogForPrompt(),
   });
   // The re-recommendation is a few sentences plus citations - 2000 is ample,
