@@ -21,7 +21,7 @@ export type EndCardProps = {
 export const EndCard: React.FC<EndCardProps> = ({
   url = URL_TEXT,
   kicker,
-  background = BRAND.black,
+  background = BRAND.deepForest,
   markHeight = 96,
 }) => (
   <AbsoluteFill
@@ -34,7 +34,7 @@ export const EndCard: React.FC<EndCardProps> = ({
       gap: 40,
     }}
   >
-    <Mark height={markHeight} color={BRAND.onInk} />
+    <Mark height={markHeight} color={BRAND.onDark} />
 
     <div
       style={{
@@ -49,7 +49,7 @@ export const EndCard: React.FC<EndCardProps> = ({
           style={{
             fontFamily: FONT.serif,
             fontSize: 30,
-            color: BRAND.onInkSoft,
+            color: BRAND.onDarkSoft,
             letterSpacing: "0.005em",
           }}
         >
@@ -62,7 +62,7 @@ export const EndCard: React.FC<EndCardProps> = ({
           fontSize: 26,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
-          color: BRAND.leafLight,
+          color: BRAND.newLeafLight,
         }}
       >
         {url}

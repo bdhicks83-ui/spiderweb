@@ -16,12 +16,19 @@ export type ResumeData = {
   strengths: string[];
 };
 
+// Viridescent palette. @react-pdf/renderer resolves styles in its own PDF
+// layout engine and never sees the DOM, so CSS custom properties are
+// unavailable here — these are hex literals mirrored VERBATIM from
+// src/styles/theme.css (same copy-don't-import doctrine as
+// src/remotion/brand/tokens.ts). Change a value in theme.css → change it here.
 const COLORS = {
-  ink: "#111111",
-  sub: "#555555",
-  faint: "#888888",
-  rule: "#dddddd",
-  accent: "#166534",
+  ink: "#1b4d49", // --pine
+  sub: "#33625d", // --pine-soft
+  faint: "#52706c", // --muted
+  rule: "#d7ded6", // --line
+  accent: "#2f7a56", // --growth
+  accentBg: "#e0ede4", // --growth-soft
+  accentBorder: "#a9cf8e", // --ok-border
 };
 
 const styles = StyleSheet.create({
@@ -109,9 +116,9 @@ const styles = StyleSheet.create({
   tag: {
     fontSize: 8.5,
     color: COLORS.accent,
-    backgroundColor: "#f0fdf4",
+    backgroundColor: COLORS.accentBg,
     borderWidth: 0.75,
-    borderColor: "#bbf7d0",
+    borderColor: COLORS.accentBorder,
     borderRadius: 3,
     paddingVertical: 2.5,
     paddingHorizontal: 7,
@@ -145,7 +152,7 @@ export function ResumeDocument({ data }: { data: ResumeData }) {
   const headerMeta = [data.title, data.subtitle].filter(Boolean);
 
   return (
-    <Document title={`${data.name} — Resume`} author="Humanbloom">
+    <Document title={`${data.name} — Resume`} author="Viridescent">
       <Page size="LETTER" style={styles.page}>
         <View>
           <Text style={styles.name}>{data.name}</Text>
@@ -194,7 +201,7 @@ export function ResumeDocument({ data }: { data: ResumeData }) {
         </View>
 
         <Text style={styles.footer} fixed>
-          Built with Humanbloom — capture and prove your expertise at spiderweb-nine.vercel.app
+          Built with Viridescent — capture and prove your expertise at spiderweb-nine.vercel.app
         </Text>
       </Page>
     </Document>

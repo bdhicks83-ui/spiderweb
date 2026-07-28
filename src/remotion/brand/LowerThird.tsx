@@ -30,7 +30,7 @@ export const LowerThird: React.FC<LowerThirdProps> = ({
   text,
   inSec = 0.4,
   holdSec = 3.6,
-  accent = BRAND.leafLight,
+  accent = BRAND.newLeafLight,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -92,7 +92,7 @@ export const LowerThird: React.FC<LowerThirdProps> = ({
               fontSize: 46,
               lineHeight: 1.15,
               letterSpacing: "0.005em",
-              color: BRAND.onInk,
+              color: BRAND.onDark,
               whiteSpace: "nowrap",
             }}
           >

@@ -1,5 +1,5 @@
 import React from "react";
-import { Composition } from "remotion";
+import { Composition, Still } from "remotion";
 import { getAudioDurationInSeconds } from "@remotion/media-utils";
 import {
   FPS,
@@ -11,6 +11,13 @@ import {
 import { Ad90 } from "./ad/Ad90";
 import { TOTAL_SEC } from "./ad/ad-script";
 import { VIDEO } from "./brand/tokens";
+import {
+  AppIcon,
+  LogoHorizontal,
+  LogoStacked,
+  LogoStackedReversed,
+  OgImage,
+} from "./brand/LogoStills";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -49,6 +56,20 @@ export const RemotionRoot: React.FC = () => {
         };
       }}
     />
+    {/* Logo stills — rendered to public/brand/*.png via `npx remotion still` */}
+    <Still id="LogoHorizontal" component={LogoHorizontal} width={960} height={208} />
+    <Still id="LogoStacked" component={LogoStacked} width={640} height={640} />
+    <Still
+      id="LogoStackedReversed"
+      component={LogoStackedReversed}
+      width={640}
+      height={640}
+    />
+    <Still id="AppIcon32" component={AppIcon} width={32} height={32} />
+    <Still id="AppIcon180" component={AppIcon} width={180} height={180} />
+    <Still id="AppIcon192" component={AppIcon} width={192} height={192} />
+    <Still id="AppIcon512" component={AppIcon} width={512} height={512} />
+    <Still id="OgImage" component={OgImage} width={1200} height={630} />
     </>
   );
 };

@@ -1,0 +1,23 @@
+﻿ΓòÉΓòÉΓòÉ Demo org: "Meridian Precision Manufacturing (DEMO)" (0722f2f8-ecff-4ae3-81ea-1350454e9d54) ΓòÉΓòÉΓòÉ
+Total pattern_records (any status): 23
+
+By status:
+  complete: 23
+
+status='complete' ΓÇö this is exactly what /library and /api/library count: 23
+
+Complete records by trigger_type:
+  concern: 4
+  broke: 5
+  friction: 5
+  win: 7
+  judgment: 2
+
+Complete records by author:
+  Angela Brooks: 4
+  Tom Whitfield: 5
+  David Chen: 4
+  Elena Ruiz: 5
+  Priya Nair: 5
+
+Γ£ô diagnostic complete (nothing was written). Library count = 23.

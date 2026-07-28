@@ -15,7 +15,7 @@ import ApproveFrameworkButton from "@/components/ApproveFrameworkButton";
 import MarketingHome from "@/components/MarketingHome";
 
 export const metadata: Metadata = {
-  title: "Humanbloom — Your AI Company. Built Around You.",
+  title: "Viridescent — Knowledge That Appreciates",
   description: "The Operating System for Human Expertise.",
 };
 
@@ -72,14 +72,14 @@ export default async function Dashboard() {
 
   return (
     <main>
-      <h1>Humanbloom</h1>
+      <h1>Viridescent</h1>
       <p>
         Logged in as {user.email} ·{" "}
         <span
           style={{
-            background: "#eef2ff",
-            color: "#4338ca",
-            border: "1px solid #c7d2fe",
+            background: "var(--growth-soft)",
+            color: "var(--growth-deep)",
+            border: "1px solid var(--ok-border)",
             borderRadius: 999,
             padding: "0.15rem 0.6rem",
             fontSize: "0.8rem",
@@ -102,11 +102,11 @@ export default async function Dashboard() {
           gap: "1rem",
           marginTop: "1.5rem",
           padding: "1rem 1.25rem",
-          background: "#0f172a",
-          border: "1px solid #1e293b",
+          background: "var(--deep-forest)",
+          border: "1px solid var(--dark-line)",
           borderRadius: 12,
           textDecoration: "none",
-          color: "#fff",
+          color: "var(--on-dark)",
         }}
       >
         <span>
@@ -116,7 +116,7 @@ export default async function Dashboard() {
           <span
             style={{
               display: "block",
-              color: "#94a3b8",
+              color: "var(--on-dark-soft)",
               fontSize: "0.85rem",
               marginTop: "0.15rem",
             }}
@@ -125,7 +125,7 @@ export default async function Dashboard() {
             that need your context.
           </span>
         </span>
-        <span style={{ color: "#7dd3fc", fontWeight: 600, whiteSpace: "nowrap" }}>
+        <span style={{ color: "var(--new-leaf)", fontWeight: 600, whiteSpace: "nowrap" }}>
           Open →
         </span>
       </Link>
@@ -146,10 +146,10 @@ export default async function Dashboard() {
             const isUnlocked = unlocked.has(dept.key);
 
             const cardStyle: React.CSSProperties = {
-              border: "1px solid #e5e5e5",
+              border: "1px solid var(--line)",
               borderRadius: 8,
               padding: "1.25rem",
-              background: isUnlocked ? "#fff" : "#f5f5f4",
+              background: isUnlocked ? "var(--white)" : "var(--paper-2)",
               opacity: isUnlocked ? 1 : 0.65,
               display: "flex",
               flexDirection: "column",
@@ -170,14 +170,14 @@ export default async function Dashboard() {
                   {!isUnlocked && <span style={{ fontSize: "1.1rem" }}>🔒</span>}
                 </div>
                 <p style={{ fontWeight: 600, margin: 0 }}>{dept.name}</p>
-                <p style={{ color: "#666", fontSize: "0.85rem", margin: 0 }}>
+                <p style={{ color: "var(--pine-soft)", fontSize: "0.85rem", margin: 0 }}>
                   {dept.description}
                 </p>
                 {isUnlocked ? (
                   dept.href ? (
                     <p
                       style={{
-                        color: "#4338ca",
+                        color: "var(--growth)",
                         fontSize: "0.85rem",
                         fontWeight: 600,
                         margin: "auto 0 0",
@@ -188,7 +188,7 @@ export default async function Dashboard() {
                   ) : (
                     <p
                       style={{
-                        color: "#999",
+                        color: "var(--muted)",
                         fontSize: "0.8rem",
                         margin: "auto 0 0",
                       }}
@@ -199,7 +199,7 @@ export default async function Dashboard() {
                 ) : (
                   <p
                     style={{
-                      color: "#92400e",
+                      color: "var(--warn-text)",
                       fontSize: "0.8rem",
                       fontWeight: 600,
                       margin: "auto 0 0",
@@ -242,13 +242,13 @@ export default async function Dashboard() {
         </h2>
 
         {clustersError && (
-          <p style={{ color: "#b91c1c" }}>
+          <p style={{ color: "var(--danger)" }}>
             Couldn&apos;t load patterns: {clustersError.message}
           </p>
         )}
 
         {!clustersError && (!clusters || clusters.length === 0) && (
-          <p style={{ color: "#888" }}>
+          <p style={{ color: "var(--muted)" }}>
             No patterns detected yet. Keep capturing and approving insights —
             this section fills in on its own.
           </p>
@@ -263,7 +263,7 @@ export default async function Dashboard() {
               <div
                 key={cluster.hub_insight_id}
                 style={{
-                  border: "1px solid #e5e5e5",
+                  border: "1px solid var(--line)",
                   borderRadius: 8,
                   padding: "1.25rem",
                   marginBottom: "1rem",
@@ -283,9 +283,9 @@ export default async function Dashboard() {
                   {isApproved && (
                     <span
                       style={{
-                        background: "#dcfce7",
-                        color: "#15803d",
-                        border: "1px solid #86efac",
+                        background: "var(--ok-bg)",
+                        color: "var(--ok-text)",
+                        border: "1px solid var(--ok-border)",
                         borderRadius: 999,
                         padding: "0.15rem 0.6rem",
                         fontSize: "0.75rem",
@@ -298,7 +298,7 @@ export default async function Dashboard() {
                   )}
                 </div>
                 <p style={{ marginBottom: "0.75rem" }}>{cluster.hub_content}</p>
-                <ul style={{ marginLeft: "1.25rem", color: "#444" }}>
+                <ul style={{ marginLeft: "1.25rem", color: "var(--pine)" }}>
                   {cluster.member_contents.map((content: string, i: number) => (
                     <li key={i} style={{ marginBottom: "0.4rem" }}>
                       {content}
@@ -311,17 +311,17 @@ export default async function Dashboard() {
                     style={{
                       marginTop: "1rem",
                       padding: "1rem",
-                      background: isApproved ? "#f2f9f2" : "#fafaf5",
+                      background: isApproved ? "var(--ok-bg)" : "var(--paper-2)",
                       border: isApproved
-                        ? "1px solid #bbdcbb"
-                        : "1px solid #e0ddd0",
+                        ? "1px solid var(--ok-border)"
+                        : "1px solid var(--line)",
                       borderRadius: 6,
                     }}
                   >
                     <p
                       style={{
                         fontSize: "0.75rem",
-                        color: isApproved ? "#15803d" : "#888",
+                        color: isApproved ? "var(--ok-text)" : "var(--muted)",
                         fontWeight: isApproved ? 600 : 400,
                         marginBottom: "0.25rem",
                       }}
@@ -333,10 +333,10 @@ export default async function Dashboard() {
                     <p style={{ fontWeight: 600, marginBottom: "0.35rem" }}>
                       {framework.name}
                     </p>
-                    <p style={{ color: "#555", marginBottom: "0.6rem", fontStyle: "italic" }}>
+                    <p style={{ color: "var(--pine-soft)", marginBottom: "0.6rem", fontStyle: "italic" }}>
                       {framework.description}
                     </p>
-                    <p style={{ color: "#333", whiteSpace: "pre-wrap" }}>
+                    <p style={{ color: "var(--pine)", whiteSpace: "pre-wrap" }}>
                       {framework.writeup}
                     </p>
                   </div>

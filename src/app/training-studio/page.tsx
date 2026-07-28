@@ -41,15 +41,15 @@ type StudioRow = {
 };
 
 const STATUS_CHIP: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  new: { label: "reading the issue", color: "var(--ink-soft)", bg: "var(--paper-2)", border: "var(--line)" },
-  recommended: { label: "format recommended", color: "var(--accent-deep)", bg: "var(--accent-soft)", border: "var(--leaf-light)" },
+  new: { label: "reading the issue", color: "var(--pine-soft)", bg: "var(--paper-2)", border: "var(--line)" },
+  recommended: { label: "format recommended", color: "var(--growth-deep)", bg: "var(--growth-soft)", border: "var(--new-leaf-light)" },
   generated: { label: "draft ready for you", color: "var(--warn-text)", bg: "var(--warn-bg)", border: "var(--warn-border)" },
-  deployed: { label: "out and watched", color: "var(--accent-deep)", bg: "var(--white)", border: "var(--accent)" },
+  deployed: { label: "out and watched", color: "var(--growth-deep)", bg: "var(--white)", border: "var(--growth)" },
   closed: { label: "proven", color: "var(--ok-text)", bg: "var(--ok-bg)", border: "var(--ok-border)" },
 };
 
 const EFFICACY_CHIP: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  watching: { label: "👁 watching", color: "var(--accent-deep)", bg: "var(--white)", border: "var(--accent)" },
+  watching: { label: "👁 watching", color: "var(--growth-deep)", bg: "var(--white)", border: "var(--growth)" },
   escalated: { label: "🔺 didn't land — new format suggested", color: "var(--danger)", bg: "var(--danger-bg)", border: "var(--danger-border)" },
   effective: { label: "✅ it held", color: "var(--ok-text)", bg: "var(--ok-bg)", border: "var(--ok-border)" },
 };
@@ -364,7 +364,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "12px 14px",
     fontSize: "15px",
     fontFamily: "var(--font-sans)",
-    color: "var(--ink)",
+    color: "var(--pine)",
     background: "var(--paper)",
     border: "1px solid var(--line)",
     borderRadius: 10,
@@ -380,7 +380,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 12px",
     fontSize: "14px",
     fontFamily: "var(--font-sans)",
-    color: "var(--ink)",
+    color: "var(--pine)",
     background: "var(--paper)",
     border: "1px solid var(--line)",
     borderRadius: 10,
@@ -389,7 +389,7 @@ const styles: Record<string, React.CSSProperties> = {
   choiceChip: {
     fontSize: "13px",
     fontWeight: 600,
-    color: "var(--ink-soft)",
+    color: "var(--pine-soft)",
     background: "var(--paper-2)",
     border: "1px solid var(--line)",
     borderRadius: 999,
@@ -397,9 +397,9 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   choiceChipOn: {
-    color: "var(--accent-deep)",
-    background: "var(--accent-soft)",
-    borderColor: "var(--accent)",
+    color: "var(--growth-deep)",
+    background: "var(--growth-soft)",
+    borderColor: "var(--growth)",
   },
   primaryButton: {
     marginTop: 10,
@@ -407,7 +407,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
     fontWeight: 600,
     color: "var(--white)",
-    background: "var(--accent)",
+    background: "var(--growth)",
     border: "none",
     borderRadius: 8,
     padding: "10px 18px",
@@ -420,7 +420,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 14,
     padding: "18px 20px",
   },
-  gateText: { fontSize: "14px", color: "var(--ink-soft)", margin: 0, lineHeight: 1.6 },
+  gateText: { fontSize: "14px", color: "var(--pine-soft)", margin: 0, lineHeight: 1.6 },
   sectionTitle: {
     fontSize: "13px",
     textTransform: "uppercase" as const,
@@ -456,15 +456,15 @@ const styles: Record<string, React.CSSProperties> = {
   formatChip: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "var(--accent-deep)",
-    background: "var(--accent-soft)",
-    border: "1px solid var(--leaf-light)",
+    color: "var(--growth-deep)",
+    background: "var(--growth-soft)",
+    border: "1px solid var(--new-leaf-light)",
     borderRadius: 999,
     padding: "3px 9px",
   },
   overrideChip: {
     fontSize: "11px",
-    color: "var(--ink-soft)",
+    color: "var(--pine-soft)",
     background: "var(--paper-2)",
     border: "1px solid var(--line)",
     borderRadius: 999,
@@ -496,7 +496,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column" as const,
     gap: 2,
   },
-  formatCardName: { fontSize: "14px", fontWeight: 700, color: "var(--ink)" },
+  formatCardName: { fontSize: "14px", fontWeight: 700, color: "var(--pine)" },
   formatCardEffort: { fontSize: "11px", color: "var(--muted)" },
-  formatCardLine: { fontSize: "12px", color: "var(--ink-soft)", margin: "4px 0 0", lineHeight: 1.5 },
+  formatCardLine: { fontSize: "12px", color: "var(--pine-soft)", margin: "4px 0 0", lineHeight: 1.5 },
 };

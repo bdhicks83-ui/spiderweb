@@ -61,9 +61,9 @@ export default function DraftFrameworkButton({
         style={{
           padding: "0.4rem 0.9rem",
           borderRadius: 6,
-          border: approved ? "1px solid #b91c1c" : "1px solid #333",
-          background: busy ? "#eee" : approved ? "#fff" : "#111",
-          color: busy ? "#888" : approved ? "#b91c1c" : "#fff",
+          border: approved ? "1px solid var(--danger)" : "1px solid var(--pine)",
+          background: busy ? "var(--paper-2)" : approved ? "var(--white)" : "var(--pine)",
+          color: busy ? "var(--muted)" : approved ? "var(--danger)" : "var(--white)",
           cursor: busy ? "wait" : "pointer",
           fontSize: "0.9rem",
         }}
@@ -71,7 +71,7 @@ export default function DraftFrameworkButton({
         {label}
       </button>
       {error && (
-        <p style={{ color: "#b91c1c", marginTop: "0.5rem", fontSize: "0.85rem" }}>
+        <p style={{ color: "var(--danger)", marginTop: "0.5rem", fontSize: "0.85rem" }}>
           {error}
         </p>
       )}

@@ -22,7 +22,7 @@ export type MarkProps = {
 
 export const Mark: React.FC<MarkProps> = ({
   height = 44,
-  color = BRAND.onInk,
+  color = BRAND.onDark,
   style,
 }) => {
   if (LOGO_SRC) {
@@ -49,7 +49,7 @@ export const Mark: React.FC<MarkProps> = ({
           width: height * 0.42,
           height: height * 0.42,
           borderRadius: "50% 50% 50% 0",
-          background: BRAND.leaf,
+          background: BRAND.newLeaf,
           display: "block",
           transform: "rotate(-45deg)",
         }}

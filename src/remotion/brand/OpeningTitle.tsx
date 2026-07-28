@@ -37,7 +37,7 @@ export const OpeningTitle: React.FC<OpeningTitleProps> = ({
   lines,
   staggerSec = 1.1,
   leadInSec = 0.5,
-  background = BRAND.black,
+  background = BRAND.deepForest,
   fontSize = 76,
   showMark = true,
 }) => {
@@ -75,7 +75,7 @@ export const OpeningTitle: React.FC<OpeningTitleProps> = ({
                 fontSize: line.soft ? fontSize * 0.52 : fontSize,
                 lineHeight: 1.22,
                 letterSpacing: "0.005em",
-                color: line.soft ? BRAND.onInkSoft : BRAND.onInk,
+                color: line.soft ? BRAND.onDarkSoft : BRAND.onDark,
                 maxWidth: 1360,
                 marginTop: i === 0 ? 0 : line.soft ? 28 : 14,
                 ...riseStyle(p, RISE_PX),
@@ -96,7 +96,7 @@ export const OpeningTitle: React.FC<OpeningTitleProps> = ({
             ...riseStyle(markIn, 14),
           }}
         >
-          <Mark height={38} color={BRAND.onInk} />
+          <Mark height={38} color={BRAND.onDark} />
         </div>
       )}
     </AbsoluteFill>

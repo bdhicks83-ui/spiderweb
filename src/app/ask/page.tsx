@@ -244,7 +244,7 @@ export default function AskPage() {
         <p style={styles.subtitle}>
           It asks a few questions first, then recommends — grounded only in
           insights you&apos;ve captured and approved.{' '}
-          <a href="/simulate" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>
+          <a href="/simulate" style={{ color: 'var(--growth)', textDecoration: 'none', fontWeight: 600 }}>
             Simulate a decision instead →
           </a>
         </p>
@@ -454,15 +454,16 @@ export default function AskPage() {
 // Strong claims read near-black with a solid underline; thin ones fade to grey.
 function shadeStyle(score: number): React.CSSProperties {
   const s = Math.max(0, Math.min(1, score));
-  // Interpolate grey (#94a3b8) → near-black (#0f172a).
+  // Interpolate muted (#52706c) → pine (#1b4d49). Literal hexes required —
+  // JS can't lerp CSS vars; values mirror src/styles/theme.css.
   const lerp = (a: number, b: number) => Math.round(a + (b - a) * s);
-  const r = lerp(0x94, 0x0f);
-  const g = lerp(0xa3, 0x17);
-  const b = lerp(0xb8, 0x2a);
+  const r = lerp(0x52, 0x1b);
+  const g = lerp(0x70, 0x4d);
+  const b = lerp(0x6c, 0x49);
   const color = `rgb(${r}, ${g}, ${b})`;
   return {
     color,
-    borderBottom: `2px solid rgba(37, 99, 235, ${0.12 + s * 0.5})`,
+    borderBottom: `2px solid rgba(47, 122, 86, ${0.12 + s * 0.5})`, // --growth
     paddingBottom: '1px',
   };
 }
@@ -481,7 +482,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'center',
     padding: '48px 24px',
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
   },
   examplesBlock: {
     display: 'flex',
@@ -491,8 +492,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   exampleCard: {
     padding: '14px 16px',
-    backgroundColor: '#eff6ff',
-    border: '1px solid #bfdbfe',
+    backgroundColor: 'var(--growth-soft)',
+    border: '1px solid var(--ok-border)',
     borderRadius: '10px',
     display: 'flex',
     flexDirection: 'column',
@@ -501,21 +502,21 @@ const styles: Record<string, React.CSSProperties> = {
   exampleLabel: {
     fontSize: '12px',
     fontWeight: 700,
-    color: '#1d4ed8',
+    color: 'var(--growth-deep)',
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
   exampleIllustrates: {
     margin: '2px 0 6px',
     fontSize: '13px',
-    color: '#1e3a8a',
+    color: 'var(--growth-deep)',
     fontStyle: 'italic',
   },
   exampleRow: {
     margin: 0,
     fontSize: '14px',
     lineHeight: 1.5,
-    color: '#1e293b',
+    color: 'var(--pine)',
   },
   exampleRowKey: {
     fontWeight: 700,
@@ -527,34 +528,34 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap',
     gap: '10px',
     padding: '14px 18px',
-    backgroundColor: '#f0fdf4',
-    border: '1px solid #bbf7d0',
+    backgroundColor: 'var(--ok-bg)',
+    border: '1px solid var(--ok-border)',
     borderRadius: '12px',
   },
   gapText: {
     fontSize: '14px',
-    color: '#166534',
+    color: 'var(--ok-text)',
     lineHeight: 1.5,
   },
   gapLink: {
     fontSize: '14px',
     fontWeight: 600,
-    color: '#15803d',
+    color: 'var(--growth-deep)',
     textDecoration: 'none',
     whiteSpace: 'nowrap',
   },
   heatmapLegend: {
     margin: '12px 0 0',
     fontSize: '12px',
-    color: '#94a3b8',
+    color: 'var(--muted)',
     lineHeight: 1.5,
   },
   legendStrong: {
-    color: '#0f172a',
+    color: 'var(--pine)',
     fontWeight: 700,
   },
   legendWeak: {
-    color: '#94a3b8',
+    color: 'var(--muted)',
     fontWeight: 600,
   },
   container: {
@@ -571,7 +572,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   subtitle: {
     fontSize: '15px',
-    color: '#666',
+    color: 'var(--pine-soft)',
     margin: 0,
   },
   transcript: {
@@ -590,14 +591,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   bubbleYou: {
     alignSelf: 'flex-end',
-    backgroundColor: '#111',
-    color: '#fff',
+    backgroundColor: 'var(--deep-forest)',
+    color: 'var(--on-dark)',
   },
   bubbleWeb: {
     alignSelf: 'flex-start',
-    backgroundColor: '#f2f2f2',
-    color: '#111',
-    border: '1px solid #e0e0e0',
+    backgroundColor: 'var(--paper-2)',
+    color: 'var(--pine)',
+    border: '1px solid var(--line)',
   },
   bubbleLabel: {
     fontSize: '11px',
@@ -620,7 +621,7 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     padding: '12px 16px',
     fontSize: '16px',
-    border: '1px solid #ccc',
+    border: '1px solid var(--line)',
     borderRadius: '8px',
     outline: 'none',
   },
@@ -628,41 +629,41 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '12px 24px',
     fontSize: '16px',
     fontWeight: 600,
-    color: '#fff',
-    backgroundColor: '#111',
+    color: 'var(--white)',
+    backgroundColor: 'var(--growth)',
     border: 'none',
     borderRadius: '8px',
     cursor: 'pointer',
   },
   askButtonDisabled: {
-    backgroundColor: '#999',
+    backgroundColor: 'var(--muted)',
     cursor: 'default',
   },
   loadingText: {
-    color: '#666',
+    color: 'var(--pine-soft)',
     fontSize: '15px',
   },
   errorText: {
-    color: '#c0392b',
+    color: 'var(--danger)',
     fontSize: '15px',
     margin: 0,
   },
   noMatchCard: {
     padding: '20px',
-    backgroundColor: '#f7f7f7',
-    border: '1px solid #e0e0e0',
+    backgroundColor: 'var(--paper-2)',
+    border: '1px solid var(--line)',
     borderRadius: '12px',
   },
   noMatchText: {
     margin: 0,
-    color: '#555',
+    color: 'var(--pine-soft)',
     fontSize: '15px',
     lineHeight: 1.6,
   },
   answerCard: {
     padding: '24px',
-    backgroundColor: '#fff',
-    border: '1px solid #e0e0e0',
+    backgroundColor: 'var(--white)',
+    border: '1px solid var(--line)',
     borderRadius: '12px',
     boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
   },
@@ -683,7 +684,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
-    color: '#555',
+    color: 'var(--pine-soft)',
   },
   prosConsList: {
     margin: 0,
@@ -695,18 +696,18 @@ const styles: Record<string, React.CSSProperties> = {
   proItem: {
     fontSize: '15px',
     lineHeight: 1.6,
-    color: '#1a7f37',
+    color: 'var(--ok-text)',
   },
   conItem: {
     fontSize: '15px',
     lineHeight: 1.6,
-    color: '#b35900',
+    color: 'var(--warn-strong)',
   },
   gapsText: {
     marginTop: '16px',
     marginBottom: 0,
     fontSize: '14px',
-    color: '#777',
+    color: 'var(--muted)',
     fontStyle: 'italic',
     lineHeight: 1.6,
   },
@@ -714,13 +715,13 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '16px',
     marginBottom: 0,
     fontSize: '13px',
-    color: '#888',
+    color: 'var(--muted)',
   },
   sourcesToggle: {
     marginTop: '8px',
     padding: 0,
     fontSize: '13px',
-    color: '#2563eb',
+    color: 'var(--growth)',
     background: 'none',
     border: 'none',
     cursor: 'pointer',
@@ -736,8 +737,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sourceItem: {
     padding: '12px',
-    backgroundColor: '#fafafa',
-    border: '1px solid #eee',
+    backgroundColor: 'var(--paper-2)',
+    border: '1px solid var(--line)',
     borderRadius: '8px',
     display: 'flex',
     flexDirection: 'column',
@@ -745,26 +746,26 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sourceExcerpt: {
     fontSize: '14px',
-    color: '#333',
+    color: 'var(--pine)',
     lineHeight: 1.5,
   },
   sourceSimilarity: {
     fontSize: '12px',
-    color: '#999',
+    color: 'var(--muted)',
   },
   formatBar: {
     display: 'flex',
     flexDirection: 'column',
     gap: '10px',
     padding: '16px 20px',
-    backgroundColor: '#f7f7f7',
-    border: '1px solid #e0e0e0',
+    backgroundColor: 'var(--paper-2)',
+    border: '1px solid var(--line)',
     borderRadius: '12px',
   },
   formatLabel: {
     fontSize: '13px',
     fontWeight: 600,
-    color: '#555',
+    color: 'var(--pine-soft)',
   },
   formatButtons: {
     display: 'flex',
@@ -775,14 +776,14 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '10px 16px',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#111',
-    backgroundColor: '#fff',
-    border: '1px solid #ccc',
+    color: 'var(--pine)',
+    backgroundColor: 'var(--white)',
+    border: '1px solid var(--line)',
     borderRadius: '8px',
     cursor: 'pointer',
   },
   formatButtonActive: {
-    borderColor: '#111',
+    borderColor: 'var(--growth)',
     fontWeight: 600,
     cursor: 'default',
   },

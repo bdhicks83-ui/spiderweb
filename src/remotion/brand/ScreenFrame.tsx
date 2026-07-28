@@ -29,7 +29,7 @@ export const ScreenFrame: React.FC<ScreenFrameProps> = ({
 }) => {
   if (src) {
     return (
-      <AbsoluteFill style={{ background: BRAND.black }}>
+      <AbsoluteFill style={{ background: BRAND.deepForest }}>
         <OffthreadVideo
           src={staticFile(src)}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
@@ -80,7 +80,7 @@ export const ScreenFrame: React.FC<ScreenFrameProps> = ({
           style={{
             fontFamily: FONT.serif,
             fontSize: 58,
-            color: BRAND.ink,
+            color: BRAND.pine,
             lineHeight: 1.18,
           }}
         >
@@ -91,7 +91,7 @@ export const ScreenFrame: React.FC<ScreenFrameProps> = ({
             style={{
               fontFamily: FONT.sans,
               fontSize: 26,
-              color: BRAND.inkSoft,
+              color: BRAND.pineSoft,
               lineHeight: 1.4,
             }}
           >

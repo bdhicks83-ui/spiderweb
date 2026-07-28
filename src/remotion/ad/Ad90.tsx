@@ -39,7 +39,7 @@ export const Ad90: React.FC = () => {
   const f = (sec: number) => Math.round(sec * fps);
 
   return (
-    <AbsoluteFill style={{ background: BRAND.black }}>
+    <AbsoluteFill style={{ background: BRAND.deepForest }}>
       {/* Opening title */}
       <Sequence from={0} durationInFrames={f(OPENING_SEC)} name="Opening title">
         <OpeningTitle lines={OPENING_LINES} />

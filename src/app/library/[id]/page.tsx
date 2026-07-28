@@ -254,7 +254,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "13px",
     color: "var(--muted)",
   },
-  authorName: { fontWeight: 700, color: "var(--ink)" },
+  authorName: { fontWeight: 700, color: "var(--pine)" },
   personaTag: {
     background: "var(--paper-2)",
     borderRadius: 999,
@@ -265,9 +265,9 @@ const styles: Record<string, React.CSSProperties> = {
   mineBadge: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "var(--accent-deep)",
-    background: "var(--accent-soft)",
-    border: "1px solid var(--leaf-light)",
+    color: "var(--growth-deep)",
+    background: "var(--growth-soft)",
+    border: "1px solid var(--new-leaf-light)",
     borderRadius: 999,
     padding: "2px 8px",
   },
@@ -299,7 +299,7 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
   },
   title: { fontSize: "30px", margin: "4px 0 4px" },
-  tagline: { fontSize: "16px", color: "var(--ink-soft)", margin: "0 0 28px" },
+  tagline: { fontSize: "16px", color: "var(--pine-soft)", margin: "0 0 28px" },
   section: { marginBottom: 24 },
   sectionTitle: {
     fontSize: "13px",

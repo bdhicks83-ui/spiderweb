@@ -29,17 +29,18 @@ type State =
   | { phase: 'done'; result: Result };
 
 const CONFIDENCE_STYLE: Record<Confidence, { bg: string; fg: string; border: string }> = {
-  high: { bg: '#f0fdf4', fg: '#166534', border: '#bbf7d0' },
-  medium: { bg: '#fffbeb', fg: '#92400e', border: '#fde68a' },
-  low: { bg: '#fef2f2', fg: '#991b1b', border: '#fecaca' },
+  high: { bg: 'var(--ok-bg)', fg: 'var(--ok-text)', border: 'var(--ok-border)' },
+  medium: { bg: 'var(--warn-bg)', fg: 'var(--warn-text)', border: 'var(--warn-border)' },
+  low: { bg: 'var(--danger-bg)', fg: 'var(--danger)', border: 'var(--danger-border)' },
 };
 
 // Same heatmap mapping as /ask: 0..1 grounding → colour + underline.
 function shadeStyle(score: number): React.CSSProperties {
   const s = Math.max(0, Math.min(1, score));
   const lerp = (a: number, b: number) => Math.round(a + (b - a) * s);
-  const color = `rgb(${lerp(0x94, 0x0f)}, ${lerp(0xa3, 0x17)}, ${lerp(0xb8, 0x2a)})`;
-  return { color, borderBottom: `2px solid rgba(37, 99, 235, ${0.12 + s * 0.5})`, paddingBottom: '1px' };
+  // Muted (#52706c) → pine (#1b4d49); literals mirror src/styles/theme.css (JS can't lerp CSS vars).
+  const color = `rgb(${lerp(0x52, 0x1b)}, ${lerp(0x70, 0x4d)}, ${lerp(0x6c, 0x49)})`;
+  return { color, borderBottom: `2px solid rgba(47, 122, 86, ${0.12 + s * 0.5})`, paddingBottom: '1px' }; // --growth
 }
 
 export default function SimulatePage() {
@@ -189,36 +190,36 @@ export default function SimulatePage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  wrapper: { minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '48px 24px', fontFamily: 'system-ui, sans-serif' },
+  wrapper: { minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '48px 24px', fontFamily: 'var(--font-sans)' },
   container: { width: '100%', maxWidth: '640px', display: 'flex', flexDirection: 'column', gap: '16px' },
   title: { fontSize: '28px', fontWeight: 700, margin: 0 },
-  subtitle: { fontSize: '15px', color: '#666', margin: 0, lineHeight: 1.6 },
-  modeLink: { color: '#2563eb', textDecoration: 'none', fontWeight: 600 },
+  subtitle: { fontSize: '15px', color: 'var(--pine-soft)', margin: 0, lineHeight: 1.6 },
+  modeLink: { color: 'var(--growth)', textDecoration: 'none', fontWeight: 600 },
   inputRow: { display: 'flex', gap: '8px', marginTop: '4px' },
-  input: { flex: 1, padding: '12px 16px', fontSize: '16px', border: '1px solid #ccc', borderRadius: '8px', outline: 'none' },
-  runButton: { padding: '12px 24px', fontSize: '16px', fontWeight: 600, color: '#fff', backgroundColor: '#111', border: 'none', borderRadius: '8px', cursor: 'pointer' },
-  runButtonDisabled: { backgroundColor: '#999', cursor: 'default' },
-  scenarioEcho: { display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px 16px', backgroundColor: '#111', color: '#fff', borderRadius: '12px', fontSize: '15px', lineHeight: 1.5 },
+  input: { flex: 1, padding: '12px 16px', fontSize: '16px', border: '1px solid var(--line)', borderRadius: '8px', outline: 'none' },
+  runButton: { padding: '12px 24px', fontSize: '16px', fontWeight: 600, color: 'var(--white)', backgroundColor: 'var(--growth)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  runButtonDisabled: { backgroundColor: 'var(--muted)', cursor: 'default' },
+  scenarioEcho: { display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px 16px', backgroundColor: 'var(--deep-forest)', color: 'var(--on-dark)', borderRadius: '12px', fontSize: '15px', lineHeight: 1.5 },
   scenarioLabel: { fontSize: '11px', fontWeight: 600, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.04em' },
-  loadingText: { color: '#666', fontSize: '15px' },
-  errorText: { color: '#c0392b', fontSize: '15px', margin: 0 },
+  loadingText: { color: 'var(--pine-soft)', fontSize: '15px' },
+  errorText: { color: 'var(--danger)', fontSize: '15px', margin: 0 },
   confidenceBanner: { padding: '14px 18px', border: '1px solid', borderRadius: '12px', fontSize: '15px', fontWeight: 600, lineHeight: 1.5 },
-  answerCard: { padding: '24px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
+  answerCard: { padding: '24px', backgroundColor: 'var(--white)', border: '1px solid var(--line)', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
   answerText: { margin: 0, fontSize: '16px', lineHeight: 1.7, whiteSpace: 'pre-wrap' },
-  heatmapLegend: { margin: '12px 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: 1.5 },
-  legendStrong: { color: '#0f172a', fontWeight: 700 },
-  legendWeak: { color: '#94a3b8', fontWeight: 600 },
+  heatmapLegend: { margin: '12px 0 0', fontSize: '12px', color: 'var(--muted)', lineHeight: 1.5 },
+  legendStrong: { color: 'var(--pine)', fontWeight: 700 },
+  legendWeak: { color: 'var(--muted)', fontWeight: 600 },
   examplesBlock: { display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' },
-  exampleCard: { padding: '14px 16px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '4px' },
-  exampleLabel: { fontSize: '12px', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  exampleIllustrates: { margin: '2px 0 6px', fontSize: '13px', color: '#1e3a8a', fontStyle: 'italic' },
-  exampleRow: { margin: 0, fontSize: '14px', lineHeight: 1.5, color: '#1e293b' },
-  basedOn: { marginTop: '16px', marginBottom: 0, fontSize: '13px', color: '#888' },
-  sourcesToggle: { marginTop: '8px', padding: 0, fontSize: '13px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' },
+  exampleCard: { padding: '14px 16px', backgroundColor: 'var(--growth-soft)', border: '1px solid var(--ok-border)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '4px' },
+  exampleLabel: { fontSize: '12px', fontWeight: 700, color: 'var(--growth-deep)', textTransform: 'uppercase', letterSpacing: '0.04em' },
+  exampleIllustrates: { margin: '2px 0 6px', fontSize: '13px', color: 'var(--growth-deep)', fontStyle: 'italic' },
+  exampleRow: { margin: 0, fontSize: '14px', lineHeight: 1.5, color: 'var(--pine)' },
+  basedOn: { marginTop: '16px', marginBottom: 0, fontSize: '13px', color: 'var(--muted)' },
+  sourcesToggle: { marginTop: '8px', padding: 0, fontSize: '13px', color: 'var(--growth)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' },
   sourceList: { margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' },
-  sourceItem: { padding: '12px', backgroundColor: '#fafafa', border: '1px solid #eee', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '4px' },
-  sourceExcerpt: { fontSize: '14px', color: '#333', lineHeight: 1.5 },
-  sourceSimilarity: { fontSize: '12px', color: '#999' },
-  noMatchCard: { padding: '20px', backgroundColor: '#f7f7f7', border: '1px solid #e0e0e0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' },
-  noMatchText: { margin: 0, color: '#555', fontSize: '15px', lineHeight: 1.6 },
+  sourceItem: { padding: '12px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '4px' },
+  sourceExcerpt: { fontSize: '14px', color: 'var(--pine)', lineHeight: 1.5 },
+  sourceSimilarity: { fontSize: '12px', color: 'var(--muted)' },
+  noMatchCard: { padding: '20px', backgroundColor: 'var(--paper-2)', border: '1px solid var(--line)', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  noMatchText: { margin: 0, color: 'var(--pine-soft)', fontSize: '15px', lineHeight: 1.6 },
 };

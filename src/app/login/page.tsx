@@ -4,7 +4,35 @@
 // (Same flow either way — the magic link creates the account if it doesn't exist.)
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import BrandHeader from "@/components/BrandHeader";
+
+// Stacked lockup (mark above wordmark) for the centered login card — distinct
+// from BrandHeader's horizontal nav lockup used elsewhere. Falls back to a
+// plain wordmark so a missing asset can never render a broken image.
+function LoginMark() {
+  const [logoMissing, setLogoMissing] = useState(false);
+  return logoMissing ? (
+    <span style={loginMarkStyles.fallback}>Viridescent</span>
+  ) : (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/viridescent-stacked.png"
+      alt="Viridescent"
+      style={loginMarkStyles.logo}
+      onError={() => setLogoMissing(true)}
+    />
+  );
+}
+
+const loginMarkStyles: Record<string, React.CSSProperties> = {
+  logo: { height: "72px", width: "auto", display: "block" },
+  fallback: {
+    fontFamily: "var(--font-serif)",
+    fontSize: "22px",
+    fontWeight: 600,
+    letterSpacing: "0.02em",
+    color: "var(--pine)",
+  },
+};
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -44,7 +72,7 @@ export default function Login() {
   if (sent) {
     return (
       <div style={styles.wrapper}>
-        <BrandHeader />
+        <LoginMark />
         <div style={styles.card}>
           <h1 style={styles.title}>Check your email 📬</h1>
           <p style={styles.help}>Magic link sent to {email}. Click it and you&apos;re in.</p>
@@ -56,7 +84,7 @@ export default function Login() {
   if (signup) {
     return (
       <div style={styles.wrapper}>
-        <BrandHeader />
+        <LoginMark />
         <div style={styles.card}>
           <h1 style={styles.title}>Start free today 🌸</h1>
           <p style={styles.help}>
@@ -84,7 +112,7 @@ export default function Login() {
 
   return (
     <div style={styles.wrapper}>
-      <BrandHeader />
+      <LoginMark />
       <div style={styles.card}>
         <h1 style={styles.title}>Log in</h1>
 
@@ -122,10 +150,10 @@ const styles: Record<string, React.CSSProperties> = {
   title: { fontSize: '24px', fontWeight: 700, margin: 0 },
   form: { display: 'flex', flexDirection: 'column', gap: '10px' },
   input: { padding: '10px 12px', fontSize: '15px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
-  primary: { padding: '10px 16px', fontSize: '15px', fontWeight: 600, color: 'var(--white)', background: 'var(--accent)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
-  ghost: { padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--ink)', background: 'var(--white)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer' },
+  primary: { padding: '10px 16px', fontSize: '15px', fontWeight: 600, color: 'var(--white)', background: 'var(--growth)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  ghost: { padding: '10px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--pine)', background: 'var(--white)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer' },
   divider: { fontSize: '13px', color: 'var(--muted)', textAlign: 'center', margin: 0 },
   subtle: { fontSize: '13px', color: 'var(--muted)', margin: 0, lineHeight: 1.5 },
-  help: { fontSize: '14px', color: 'var(--ink-soft)', margin: 0, lineHeight: 1.5 },
+  help: { fontSize: '14px', color: 'var(--pine-soft)', margin: 0, lineHeight: 1.5 },
   error: { fontSize: '13px', color: 'var(--danger)', margin: 0 },
 };

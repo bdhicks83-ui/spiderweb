@@ -7,6 +7,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { BRAND, FONT } from "./brand/tokens";
 
 export const FPS = 30;
 export const WIDTH = 1920;
@@ -81,12 +82,11 @@ const Caption: React.FC<{ text: string; duration: number }> = ({
     >
       <p
         style={{
-          fontFamily:
-            "'Helvetica Neue', Helvetica, Arial, sans-serif",
+          fontFamily: FONT.sans,
           fontSize: 64,
           fontWeight: 600,
           lineHeight: 1.35,
-          color: "#f5f5f0",
+          color: BRAND.paper,
           textAlign: "center",
           opacity: fadeIn * fadeOut,
           transform: `translateY(${rise}px)`,
@@ -109,8 +109,9 @@ export const InsightVideo: React.FC<InsightVideoProps> = ({
   const speechFrames = Math.max(durationInFrames - FPS, FPS);
   const timings = sentenceTimings(sentences, speechFrames);
 
+  // Brand rule: dark surfaces are Deep Forest, never black.
   return (
-    <AbsoluteFill style={{ backgroundColor: "#0c0c10" }}>
+    <AbsoluteFill style={{ backgroundColor: BRAND.deepForest }}>
       <Audio src={audioUrl} />
       {sentences.map((sentence, i) => (
         <Sequence
@@ -130,11 +131,11 @@ export const InsightVideo: React.FC<InsightVideoProps> = ({
       >
         <p
           style={{
-            fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+            fontFamily: FONT.sans,
             fontSize: 28,
             letterSpacing: 6,
             textTransform: "uppercase",
-            color: "#8a8a93",
+            color: BRAND.onDarkMuted,
             margin: 0,
           }}
         >

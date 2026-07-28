@@ -1,6 +1,6 @@
 "use client";
 
-// MarketingHome — Human Bloom animated marketing homepage.
+// MarketingHome — Viridescent animated marketing homepage.
 // Rendered by src/app/page.tsx when there is no session.
 // Uses a full-viewport fixed scroll container so it escapes the 640px
 // body constraint in layout.tsx without touching the dashboard's layout.
@@ -15,7 +15,9 @@
 // - 4-stage pinned scroll narrative: Capture -> Approve -> Connect -> Deliver
 // - Pricing: horizontal pinned-scroll tier scrub
 // - Type: Space Grotesk (display) + Inter (UI), single ink, tight tracking
-// - Dark theme: near-black, mint #00f0a8, violet #8b6ef7
+// - Dark theme: Deep Forest ground (never black), New Leaf accents. Every
+//   colour resolves to a token in src/styles/theme.css via the local aliases
+//   declared at the top of the CSS block below — no hexes live in this file.
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -43,7 +45,7 @@ const DEPARTMENTS = [
     emoji: "🧠",
     name: "Knowledge",
     desc: "Capture, approve, and connect your insights. The core loop — live today.",
-    accent: "#00f0a8",
+    accent: "var(--new-leaf)",
     tier: "Free",
     chips: ["Capture", "Approve", "Connect", "Draft"],
     live: true,
@@ -52,7 +54,7 @@ const DEPARTMENTS = [
     emoji: "🎯",
     name: "Chief of Staff",
     desc: "Your operational right hand. Priorities, follow-ups, decisions that stick.",
-    accent: "#f7b955",
+    accent: "var(--new-leaf)",
     tier: "Professional",
     chips: ["Priorities", "Follow-ups", "Decisions"],
     live: false,
@@ -61,7 +63,7 @@ const DEPARTMENTS = [
     emoji: "🔬",
     name: "Research",
     desc: "Deep dives and synthesis on demand, grounded in your own thinking.",
-    accent: "#6ea8fe",
+    accent: "var(--new-leaf)",
     tier: "Professional",
     chips: ["Deep dives", "Synthesis", "Sources"],
     live: false,
@@ -70,7 +72,7 @@ const DEPARTMENTS = [
     emoji: "🚀",
     name: "Project Acceleration",
     desc: "Move initiatives from stuck to shipped with your playbooks applied.",
-    accent: "#ff6b6b",
+    accent: "var(--new-leaf)",
     tier: "Executive",
     chips: ["Playbooks", "Milestones", "Momentum"],
     live: false,
@@ -79,7 +81,7 @@ const DEPARTMENTS = [
     emoji: "💼",
     name: "Commercialization",
     desc: "Turn frameworks into products, offers, and revenue.",
-    accent: "#b586f7",
+    accent: "var(--new-leaf)",
     tier: "Executive",
     chips: ["Offers", "Pricing", "Revenue"],
     live: false,
@@ -88,7 +90,7 @@ const DEPARTMENTS = [
     emoji: "🧭",
     name: "Career Intelligence",
     desc: "Positioning, trajectory, and legacy — managed like an asset.",
-    accent: "#4fd1c5",
+    accent: "var(--new-leaf)",
     tier: "Legacy",
     chips: ["Positioning", "Trajectory", "Legacy"],
     live: false,
@@ -97,7 +99,7 @@ const DEPARTMENTS = [
     emoji: "✉️",
     name: "Communication",
     desc: "Messaging, writing, and outreach in your voice, not a template's.",
-    accent: "#f78fb3",
+    accent: "var(--new-leaf)",
     tier: "Professional",
     chips: ["Messaging", "Writing", "Outreach"],
     live: false,
@@ -109,7 +111,7 @@ const STAGES = [
     n: "01",
     emoji: "📥",
     title: "Capture",
-    desc: "Drop in screenshots, notes, and documents — anything. Claude-powered extraction turns raw material into structured insights automatically.",
+    desc: "Drop in screenshots, notes, and documents — anything. Extraction turns raw material into structured insights automatically.",
   },
   {
     n: "02",
@@ -147,7 +149,7 @@ const TIERS: {
     price: "$0",
     cadence: "forever",
     tagline: "Start building your knowledge web.",
-    accent: "#00f0a8",
+    accent: "var(--new-leaf)",
     cta: "Start Free",
     unlocks: [
       "Knowledge department",
@@ -160,7 +162,7 @@ const TIERS: {
     price: "$49",
     cadence: "/mo",
     tagline: "Your first working departments.",
-    accent: "#6ea8fe",
+    accent: "var(--new-leaf)",
     cta: "Go Professional",
     unlocks: [
       "Everything in Free",
@@ -174,7 +176,7 @@ const TIERS: {
     price: "$149",
     cadence: "/mo",
     tagline: "Ship it and sell it.",
-    accent: "#b586f7",
+    accent: "var(--new-leaf)",
     cta: "Go Executive",
     featured: true,
     unlocks: [
@@ -188,7 +190,7 @@ const TIERS: {
     price: "$299",
     cadence: "/mo",
     tagline: "Manage your expertise as an asset.",
-    accent: "#f7b955",
+    accent: "var(--new-leaf)",
     cta: "Go Legacy",
     unlocks: [
       "Everything in Executive",
@@ -201,7 +203,7 @@ const TIERS: {
     price: "$499+",
     cadence: "/mo",
     tagline: "For teams and organizations.",
-    accent: "#f78fb3",
+    accent: "var(--new-leaf)",
     cta: "Talk to us",
     unlocks: [
       "Everything in Legacy",
@@ -212,8 +214,8 @@ const TIERS: {
   },
 ];
 
-const HEADLINE_1 = "Your AI Company.";
-const HEADLINE_2 = "Built Around You.";
+const HEADLINE_1 = "Knowledge That";
+const HEADLINE_2 = "Appreciates.";
 
 // ─────────────────────────── tiny components ───────────────────────────
 
@@ -505,8 +507,8 @@ export default function MarketingHome() {
               vbias((pts[i].y + pts[j].y) / 2);
             ctx.strokeStyle =
               (i + j) % 2 === 0
-                ? `rgba(0, 240, 168, ${a})`
-                : `rgba(139, 110, 247, ${a})`;
+                ? `rgba(140, 192, 106, ${a})` // --new-leaf
+                : `rgba(47, 122, 86, ${a})`; // --growth
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(pts[i].x, pts[i].y);
@@ -518,7 +520,7 @@ export default function MarketingHome() {
 
       // Dots
       for (const p of pts) {
-        ctx.fillStyle = `rgba(190, 200, 215, ${0.55 * vbias(p.y)})`;
+        ctx.fillStyle = `rgba(247, 248, 246, ${0.55 * vbias(p.y)})`; // --paper
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fill();
@@ -715,7 +717,7 @@ export default function MarketingHome() {
       {/* ─── Nav ─── */}
       <nav className={`hb-nav ${scrolled ? "hb-nav-scrolled" : ""}`}>
         <a href="#top" className="hb-logo">
-          <span className="hb-logo-mark">🌸</span> Humanbloom
+          <span className="hb-logo-mark">🌱</span> Viridescent
         </a>
         <div
           className="hb-nav-links hb-goo-nav"
@@ -768,9 +770,9 @@ export default function MarketingHome() {
           <span className="hb-h1-line hb-gradient">{HEADLINE_2}</span>
         </h1>
         <p className="hb-sub">
-          Humanbloom turns what you already know into an AI company that works
-          for you — seven departments, one source of truth: your expertise. You
-          approve everything. It remembers everything.
+          Viridescent turns what you already know into a working system of
+          expertise — seven departments, one source of truth: you. You approve
+          everything. It remembers everything.
         </p>
         <div className="hb-hero-ctas">
           <Magnetic href="/login?mode=signup" className="hb-btn hb-btn-lg">
@@ -825,8 +827,8 @@ export default function MarketingHome() {
           Seven departments. <span className="hb-gradient">One brain: yours.</span>
         </h2>
         <p className="hb-section-sub hb-reveal">
-          Every department runs on the knowledge web you approve — not generic
-          AI output. Invisible complexity, visible results.
+          Every department runs on the knowledge web you approve — your
+          expertise, not generic output. Invisible complexity, visible results.
         </p>
         <div className="hb-grid">
           {DEPARTMENTS.map((d, i) => (
@@ -901,7 +903,7 @@ export default function MarketingHome() {
       {/* ─── Footer ─── */}
       <footer className="hb-footer">
         <p>
-          <span className="hb-logo-mark">🌸</span> Humanbloom · The Operating
+          <span className="hb-logo-mark">🌱</span> Viridescent · The Operating
           System for Human Expertise
         </p>
         <p className="hb-footer-links">
@@ -918,20 +920,27 @@ export default function MarketingHome() {
 
 const CSS = `
 .hb-root {
-  --mint: #00f0a8;
-  --violet: #8b6ef7;
-  --bg: #050508;
-  --ink: #e8eaf0;
-  --muted: #9aa0b0;
-  --card: rgba(255, 255, 255, 0.03);
-  --line: rgba(255, 255, 255, 0.08);
+  /* Local aliases → Viridescent tokens (src/styles/theme.css). This page is
+     the app's one large dark surface, so the ground is Deep Forest — never
+     black — and text/accent roles come from the on-dark tokens. Aliased
+     rather than inlined so the rules below stay readable; no new hues.
+     --muted and --line deliberately SHADOW theme.css's light-ground values:
+     inside this dark container they need on-dark equivalents. */
+  --bg: var(--deep-forest);
+  --ink: var(--on-dark);
+  --muted: var(--on-dark-soft);
+  --leaf: var(--new-leaf);
+  --leaf-soft: var(--new-leaf-light);
+  --card: rgba(255, 255, 255, 0.04);
+  --line: var(--dark-line);
   position: fixed;
   inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
   background:
-    radial-gradient(1100px 500px at 80% -10%, rgba(139, 110, 247, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 10% 10%, rgba(0, 240, 168, 0.07), transparent 55%),
+    /* rgba forms of --growth and --new-leaf; gradients can't take var() alpha */
+    radial-gradient(1100px 500px at 80% -10%, rgba(47, 122, 86, 0.30), transparent 60%),
+    radial-gradient(900px 500px at 10% 10%, rgba(140, 192, 106, 0.10), transparent 55%),
     var(--bg);
   color: var(--ink);
   font-family: var(--font-inter), system-ui, sans-serif;
@@ -945,14 +954,14 @@ const CSS = `
 /* Custom cursor */
 .hb-cursor-dot {
   position: fixed; top: -4px; left: -4px; width: 8px; height: 8px;
-  border-radius: 50%; background: var(--mint);
-  box-shadow: 0 0 12px var(--mint), 0 0 28px rgba(0, 240, 168, 0.6);
+  border-radius: 50%; background: var(--leaf);
+  box-shadow: 0 0 12px var(--leaf), 0 0 28px rgba(140, 192, 106, 0.6); /* --new-leaf */
   z-index: 9999; pointer-events: none; will-change: transform;
 }
 .hb-cursor-ring {
   position: fixed; top: -18px; left: -18px; width: 36px; height: 36px;
-  border: 1.5px solid rgba(139, 110, 247, 0.8); border-radius: 50%;
-  box-shadow: 0 0 18px rgba(139, 110, 247, 0.35);
+  border: 1.5px solid rgba(198, 221, 176, 0.8); border-radius: 50%; /* --new-leaf-light */
+  box-shadow: 0 0 18px rgba(198, 221, 176, 0.35);
   z-index: 9998; pointer-events: none; will-change: transform;
   transition: border-color 0.25s;
 }
@@ -966,7 +975,7 @@ const CSS = `
   border-bottom: 1px solid transparent;
 }
 .hb-nav-scrolled {
-  background: rgba(5, 5, 8, 0.72);
+  background: rgba(14, 47, 44, 0.78); /* --deep-forest */
   backdrop-filter: blur(14px);
   border-bottom-color: var(--line);
 }
@@ -974,7 +983,7 @@ const CSS = `
   font-family: var(--font-display), sans-serif; font-size: 1.15rem; font-weight: 600;
   color: var(--ink); text-decoration: none; letter-spacing: -0.01em;
 }
-.hb-logo-mark { filter: drop-shadow(0 0 8px rgba(0, 240, 168, 0.5)); }
+.hb-logo-mark { filter: drop-shadow(0 0 8px rgba(140, 192, 106, 0.5)); } /* --new-leaf */
 .hb-nav-links { display: flex; gap: 0.35rem; }
 /* Goo/metaball pill hover (Phase 3) */
 .hb-goo-nav { position: relative; }
@@ -984,7 +993,9 @@ const CSS = `
   padding: 0.5rem 1rem; border-radius: 999px;
   transition: color 0.25s;
 }
-.hb-goo-nav a:hover, .hb-goo-nav a:focus-visible { color: var(--ink); }
+/* The goo pill screen-blends to a light New Leaf under the link, so the
+   hovered label flips to the dark ground colour to stay legible. */
+.hb-goo-nav a:hover, .hb-goo-nav a:focus-visible { color: var(--deep-forest); }
 .hb-goo-layer {
   position: absolute; inset: 0; z-index: 1;
   filter: url(#hb-goo); pointer-events: none;
@@ -992,7 +1003,7 @@ const CSS = `
 }
 .hb-goo-blob {
   position: absolute; top: 0; left: 0; height: 100%; width: 0;
-  border-radius: 999px; background: #00f0a8;
+  border-radius: 999px; background: var(--leaf);
   will-change: transform, width;
 }
 .hb-goo-defs { position: absolute; width: 0; height: 0; pointer-events: none; }
@@ -1001,17 +1012,19 @@ const CSS = `
   color: var(--ink); text-decoration: none; font-size: 0.92rem;
   transition: color 0.25s;
 }
-.hb-signin:hover { color: var(--mint); }
+.hb-signin:hover { color: var(--leaf); }
 
 /* Buttons */
 .hb-magnet { display: inline-block; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
 .hb-btn {
-  background: linear-gradient(120deg, var(--mint), #37d9b8 55%, var(--violet) 140%);
-  color: #04110c; font-weight: 700; text-decoration: none; border-radius: 999px;
-  box-shadow: 0 0 24px rgba(0, 240, 168, 0.35), 0 4px 18px rgba(0, 0, 0, 0.45);
+  /* Both stops stay light so the Deep Forest label holds contrast across the
+     whole button (6.8:1 on --new-leaf, 9.9:1 on --new-leaf-light). */
+  background: linear-gradient(120deg, var(--leaf), var(--leaf-soft) 130%);
+  color: var(--deep-forest); font-weight: 700; text-decoration: none; border-radius: 999px;
+  box-shadow: 0 0 24px rgba(140, 192, 106, 0.35), 0 4px 18px rgba(0, 0, 0, 0.45);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s;
 }
-.hb-btn:hover { box-shadow: 0 0 42px rgba(0, 240, 168, 0.55), 0 6px 22px rgba(0, 0, 0, 0.5); }
+.hb-btn:hover { box-shadow: 0 0 42px rgba(140, 192, 106, 0.55), 0 6px 22px rgba(0, 0, 0, 0.5); }
 .hb-btn-sm { padding: 0.55rem 1.15rem; font-size: 0.88rem; }
 .hb-btn-lg { padding: 0.95rem 1.9rem; font-size: 1.05rem; }
 .hb-btn-ghost {
@@ -1019,7 +1032,7 @@ const CSS = `
   border: 1px solid var(--line); border-radius: 999px; font-size: 1rem;
   transition: border-color 0.3s, color 0.3s, background 0.3s;
 }
-.hb-btn-ghost:hover { border-color: var(--violet); color: #cfc4ff; background: rgba(139, 110, 247, 0.08); }
+.hb-btn-ghost:hover { border-color: var(--leaf-soft); color: var(--leaf-soft); background: rgba(198, 221, 176, 0.10); }
 
 /* Hero */
 .hb-hero {
@@ -1028,7 +1041,7 @@ const CSS = `
   text-align: center; padding: 7rem clamp(1.2rem, 5vw, 3rem) 4rem;
 }
 .hb-eyebrow {
-  color: var(--mint); font-size: 0.85rem; letter-spacing: 0.22em;
+  color: var(--leaf); font-size: 0.85rem; letter-spacing: 0.22em;
   text-transform: uppercase; margin: 0 0 1.4rem; font-weight: 600;
 }
 .hb-h1 {
@@ -1040,13 +1053,13 @@ const CSS = `
 /* SplitText word wrappers — each word rises + fades in on load */
 .hb-word { display: inline-block; will-change: transform, opacity; }
 .hb-gradient {
-  background: linear-gradient(100deg, var(--mint), var(--violet));
+  background: linear-gradient(100deg, var(--leaf), var(--leaf-soft));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 /* Keep the gradient per-word once SplitText wraps them (background-clip:text
    doesn't survive across split child spans otherwise). */
 .hb-gradient .hb-word {
-  background: linear-gradient(100deg, var(--mint), var(--violet));
+  background: linear-gradient(100deg, var(--leaf), var(--leaf-soft));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .hb-sub {
@@ -1059,7 +1072,7 @@ const CSS = `
 .hb-scroll-hint { margin-top: 4rem; }
 .hb-scroll-hint span {
   display: block; width: 1px; height: 56px;
-  background: linear-gradient(var(--mint), transparent);
+  background: linear-gradient(var(--leaf), transparent);
   animation: hb-drip 1.8s ease-in-out infinite;
 }
 @keyframes hb-drip { 0% { transform: scaleY(0); transform-origin: top; } 55% { transform: scaleY(1); transform-origin: top; } 100% { transform: scaleY(0); transform-origin: bottom; } }
@@ -1072,7 +1085,7 @@ const CSS = `
   text-align: center; padding: 0 clamp(1.2rem, 5vw, 3rem);
 }
 .hb-kicker {
-  color: var(--violet); font-size: 0.82rem; letter-spacing: 0.22em;
+  color: var(--leaf-soft); font-size: 0.82rem; letter-spacing: 0.22em;
   text-transform: uppercase; font-weight: 600; margin: 0 0 1rem;
 }
 .hb-stage-wrap { position: relative; width: min(680px, 100%); height: 300px; }
@@ -1085,7 +1098,7 @@ const CSS = `
 }
 .hb-stage-on { opacity: 1; transform: translateY(0) scale(1); }
 .hb-stage-n {
-  font-size: 0.95rem; color: var(--mint); letter-spacing: 0.3em; margin: 0 0 0.6rem;
+  font-size: 0.95rem; color: var(--leaf); letter-spacing: 0.3em; margin: 0 0 0.6rem;
   font-weight: 600;
 }
 .hb-stage-emoji { letter-spacing: 0; margin-left: 0.4rem; }
@@ -1097,9 +1110,9 @@ const CSS = `
 .hb-stage-dots { display: flex; gap: 0.6rem; margin-top: 2.2rem; }
 .hb-dot {
   width: 34px; height: 4px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12); transition: background 0.4s;
+  background: var(--dark-line); transition: background 0.4s;
 }
-.hb-dot-on { background: linear-gradient(90deg, var(--mint), var(--violet)); }
+.hb-dot-on { background: linear-gradient(90deg, var(--leaf), var(--leaf-soft)); }
 .hb-stage-loop { color: var(--muted); font-size: 0.85rem; margin-top: 1.6rem; letter-spacing: 0.04em; }
 
 /* Sections */
@@ -1125,7 +1138,7 @@ const CSS = `
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.35s,
     opacity 0.7s, box-shadow 0.35s;
   will-change: transform; transform-style: preserve-3d;
-  --gx: 50%; --gy: 50%; --accent: var(--mint);
+  --gx: 50%; --gy: 50%; --accent: var(--leaf);
 }
 .hb-card::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
@@ -1157,7 +1170,7 @@ const CSS = `
   color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
   padding: 0.2rem 0.6rem;
 }
-.hb-badge-live { color: #04110c; background: var(--mint); border-color: var(--mint); font-weight: 700; }
+.hb-badge-live { color: var(--deep-forest); background: var(--leaf); border-color: var(--leaf); font-weight: 700; }
 .hb-card-name { font-family: var(--font-display), sans-serif; font-size: 1.25rem; font-weight: 600; margin: 0.9rem 0 0.4rem; letter-spacing: -0.015em; }
 .hb-card-desc { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin: 0; }
 
@@ -1183,7 +1196,7 @@ const CSS = `
 .hb-card-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.9rem; }
 .hb-chip {
   font-size: 0.72rem; line-height: 1; padding: 0.32rem 0.6rem; border-radius: 999px;
-  color: color-mix(in srgb, var(--accent) 80%, #ffffff);
+  color: color-mix(in srgb, var(--accent) 80%, var(--white));
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
@@ -1220,7 +1233,7 @@ const CSS = `
   display: flex; flex-direction: column; text-align: left;
   border: 1px solid var(--line); border-radius: 20px;
   background: var(--card); padding: 1.8rem;
-  --accent: var(--mint); opacity: 0.5;
+  --accent: var(--leaf); opacity: 0.5;
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
     border-color 0.4s, box-shadow 0.4s, opacity 0.4s;
 }
@@ -1238,7 +1251,7 @@ const CSS = `
 }
 .hb-tier-flag {
   font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
-  color: #04110c; background: var(--accent); border-radius: 999px; padding: 0.24rem 0.6rem;
+  color: var(--deep-forest); background: var(--accent); border-radius: 999px; padding: 0.24rem 0.6rem;
 }
 .hb-tier-name { font-family: var(--font-display), sans-serif; font-size: 1.5rem; font-weight: 600; margin: 0.7rem 0 0; letter-spacing: -0.02em; }
 .hb-tier-price { font-size: 2.3rem; font-weight: 700; margin: 0.3rem 0 0; letter-spacing: -0.02em; color: var(--ink); }
@@ -1253,7 +1266,7 @@ const CSS = `
 .hb-tier-cta { display: block; text-align: center; }
 .hb-hscroll-progress { display: flex; justify-content: center; gap: 0.5rem; margin-top: clamp(1.4rem, 4vh, 2.6rem); }
 .hb-hdot { width: 8px; height: 8px; border-radius: 999px; background: var(--line); transition: background 0.3s, transform 0.3s; }
-.hb-hdot-on { background: var(--mint); transform: scale(1.15); }
+.hb-hdot-on { background: var(--leaf); transform: scale(1.15); }
 
 /* Footer */
 .hb-footer {
@@ -1263,7 +1276,7 @@ const CSS = `
 }
 .hb-footer p { margin: 0.3rem 0; }
 .hb-footer-links a { color: var(--muted); text-decoration: none; transition: color 0.25s; }
-.hb-footer-links a:hover { color: var(--mint); }
+.hb-footer-links a:hover { color: var(--leaf); }
 
 /* Anchor offset for fixed nav */
 #departments, #pricing, #how { scroll-margin-top: 70px; }

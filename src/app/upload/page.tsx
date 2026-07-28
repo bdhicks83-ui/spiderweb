@@ -265,7 +265,7 @@ export default function UploadPage() {
         disabled={phase === "submitting"}
       />
       {file && (
-        <p style={{ fontSize: 13, color: "#666" }}>
+        <p style={{ fontSize: 13, color: "var(--pine-soft)" }}>
           {file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf"
             ? "📄 PDF — every page will be read."
             : "🖼️ Image — text will be read from it."}
@@ -288,7 +288,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: "16px",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
     textAlign: "center",
     padding: "24px",
   },
@@ -296,8 +296,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: "36px",
     height: "36px",
     borderRadius: "50%",
-    border: "4px solid #e5e5e5",
-    borderTopColor: "#555",
+    border: "4px solid var(--line)",
+    borderTopColor: "var(--growth)",
     animation: "upload-spin 0.8s linear infinite",
   },
   waitHeading: {
@@ -311,8 +311,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     border: "none",
     borderRadius: "10px",
-    backgroundColor: "#22c55e",
-    color: "#fff",
+    backgroundColor: "var(--growth)",
+    color: "var(--white)",
     cursor: "pointer",
   },
   quietButton: {
@@ -320,12 +320,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "13px",
     border: "none",
     background: "none",
-    color: "#888",
+    color: "var(--muted)",
     textDecoration: "underline",
     cursor: "pointer",
   },
   statusText: {
-    color: "#ef4444",
+    color: "var(--danger)",
     fontSize: "14px",
     margin: 0,
   },

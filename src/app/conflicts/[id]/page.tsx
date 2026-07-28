@@ -409,7 +409,7 @@ const styles: Record<string, React.CSSProperties> = {
   panelAuthor: {
     fontSize: "13px",
     fontWeight: 700,
-    color: "var(--ink)",
+    color: "var(--pine)",
     display: "flex",
     alignItems: "center",
     gap: 8,
@@ -426,7 +426,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   panelTitle: { fontSize: "17px", margin: "0 0 4px" },
   panelTitleLink: { color: "inherit", textDecoration: "none" },
-  panelTagline: { fontSize: "13px", color: "var(--ink-soft)", margin: "0 0 12px", lineHeight: 1.4 },
+  panelTagline: { fontSize: "13px", color: "var(--pine-soft)", margin: "0 0 12px", lineHeight: 1.4 },
   panelSection: { marginBottom: 12 },
   panelLabel: {
     fontSize: "11px",
@@ -465,7 +465,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   radio: { marginTop: 3 },
   optionLabel: { fontWeight: 700 },
-  optionDescription: { color: "var(--ink-soft)" },
+  optionDescription: { color: "var(--pine-soft)" },
   supersedePick: {
     background: "var(--paper-2)",
     border: "1px solid var(--line)",

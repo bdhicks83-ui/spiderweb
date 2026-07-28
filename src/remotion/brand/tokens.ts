@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Humanbloom motion-brand tokens.
+   Viridescent motion-brand tokens.
 
    VERBATIM MIRROR of src/styles/theme.css — copy-don't-import, same doctrine
    as buildEmbeddingText in the seed scripts. Remotion renders in its own
@@ -7,33 +7,33 @@
    properties are unavailable here. If theme.css changes, change this too.
 
    Nothing in this file is invented. Every hex below appears in theme.css.
+   Brand rule: dark surfaces use deepForest, never #000 — the old film-black
+   opening/end-card background is retired with the Humanbloom palette.
    ───────────────────────────────────────────────────────────────────────── */
 
 export const BRAND = {
-  // Landing-page tokens — verbatim from theme.css
-  ink: "#0c2e3b",
-  inkSoft: "#2c4a54",
-  paper: "#fef9f6",
-  paper2: "#f4ece4",
-  line: "#ddd2c7",
-  accent: "#4e7e70",
-  accentDeep: "#3c6255",
-  accentSoft: "#dfe9df",
-  leaf: "#6b9e76",
-  leafLight: "#a3bda0",
-  muted: "#6a7b78",
+  // Viridescent base palette — verbatim from theme.css
+  deepForest: "#0e2f2c",
+  pine: "#1b4d49",
+  growth: "#2f7a56",
+  newLeaf: "#8cc06a",
+  paper: "#f7f8f6",
+
+  // Derived tints/shades — verbatim from theme.css
+  pineSoft: "#33625d",
+  paper2: "#ecf0ec",
+  line: "#d7ded6",
+  growthDeep: "#256345",
+  growthSoft: "#e0ede4",
+  newLeafLight: "#c6ddb0",
+  muted: "#52706c",
   white: "#ffffff",
 
-  // Derived — text/lines on dark surfaces (verbatim from theme.css)
-  onInk: "#ffffff",
-  onInkSoft: "rgba(255, 255, 255, 0.78)",
-  onInkMuted: "rgba(255, 255, 255, 0.55)",
-  inkLine: "rgba(255, 255, 255, 0.16)",
-
-  // Film black. The handoff specifies full-frame BLACK for the opening, not
-  // the app's --ink. Kept as its own token so the choice is explicit and
-  // swappable to `ink` in one place if Brian wants the brand-tinted version.
-  black: "#000000",
+  // Derived — text/lines on dark (deepForest) surfaces (verbatim from theme.css)
+  onDark: "#ffffff",
+  onDarkSoft: "rgba(255, 255, 255, 0.78)",
+  onDarkMuted: "rgba(255, 255, 255, 0.55)",
+  darkLine: "rgba(255, 255, 255, 0.16)",
 } as const;
 
 /* Type ---------------------------------------------------------------------
@@ -65,16 +65,15 @@ export const SAFE = {
 } as const;
 
 /* Logo ---------------------------------------------------------------------
-   DROP THE LOGO HERE:  public/brand/HUMANBLOOMlogofinal.png
-   Then change the line below to:
-       export const LOGO_SRC: string | null = "brand/HUMANBLOOMlogofinal.png";
-
-   Left null so `npm run render:ad` succeeds TODAY. Remotion's <Img> hard-fails
-   a render when a staticFile() path is missing — it does not fall back — so a
-   null here renders the typographic wordmark instead and the render always
-   completes. One-line change, no other edits needed.
+   public/brand/viridescent-stacked-reversed.png exists (verified on disk) —
+   the reversed stacked variant, since the ad's title/end cards sit on
+   deepForest. If the PNG is ever removed, set this back to null: Remotion's
+   <Img> hard-fails a render when a staticFile() path is missing — it does not
+   fall back — and null renders the typographic wordmark instead.
    -------------------------------------------------------------------------- */
-export const LOGO_SRC: string | null = null;
+export const LOGO_SRC: string | null = "brand/viridescent-stacked-reversed.png";
 
-export const URL_TEXT = "humanbloom.com";
-export const WORDMARK = "Humanbloom";
+/* End-card line under the mark. The Viridescent domain is NOT confirmed —
+   do not put a guessed URL on camera. Tagline until Brian supplies one. */
+export const URL_TEXT = "KNOWLEDGE THAT APPRECIATES";
+export const WORDMARK = "Viridescent";

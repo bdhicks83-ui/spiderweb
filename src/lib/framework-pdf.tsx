@@ -3,8 +3,8 @@
 // builder (@react-pdf/renderer — no Chromium/Remotion on Vercel).
 //
 // Co-branding posture (leaning, not locked — see MASTER-STATE.md): the
-// framework carries the CONSULTANT'S name; "Powered by Human Bloom" rides in
-// the footer. Wording is founder-approval territory — keep changes to the
+// framework carries the CONSULTANT'S name; the Viridescent attribution rides
+// in the footer. Wording is founder-approval territory — keep changes to the
 // footer/attribution lines flagged for Brian.
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { FrameworkArtifact } from "@/lib/elicitation";
@@ -16,17 +16,22 @@ export type FrameworkPdfData = {
   contextLine: string | null; // e.g. "Manufacturing · Finance · 200–1000 people"
 };
 
+// Viridescent palette. @react-pdf/renderer resolves styles in its own PDF
+// layout engine and never sees the DOM, so CSS custom properties are
+// unavailable here — these are hex literals mirrored VERBATIM from
+// src/styles/theme.css (same copy-don't-import doctrine as
+// src/remotion/brand/tokens.ts). Change a value in theme.css → change it here.
 const COLORS = {
-  ink: "#111111",
-  sub: "#555555",
-  faint: "#888888",
-  rule: "#dddddd",
-  accent: "#166534", // Human Bloom green (matches resume PDF)
-  accentBg: "#f0fdf4",
-  accentBorder: "#bbf7d0",
-  warn: "#9a3412", // boundaries — "when NOT to use"
-  warnBg: "#fff7ed",
-  warnBorder: "#fed7aa",
+  ink: "#1b4d49", // --pine
+  sub: "#33625d", // --pine-soft
+  faint: "#52706c", // --muted
+  rule: "#d7ded6", // --line
+  accent: "#2f7a56", // --growth
+  accentBg: "#e0ede4", // --growth-soft
+  accentBorder: "#a9cf8e", // --ok-border
+  warn: "#8a5a20", // --warn-text — boundaries, "when NOT to use"
+  warnBg: "#fdf3e0", // --warn-bg
+  warnBorder: "#ecd9a8", // --warn-border
 };
 
 const styles = StyleSheet.create({
@@ -218,7 +223,7 @@ export function FrameworkDocument({ data }: { data: FrameworkPdfData }) {
         </View>
 
         <Text style={styles.footer} fixed>
-          {`${f.name} is proprietary methodology of ${data.consultantName} — codified with Humanbloom`}
+          {`${f.name} is proprietary methodology of ${data.consultantName} — codified with Viridescent`}
         </Text>
       </Page>
     </Document>

@@ -1,0 +1,22 @@
+﻿
+=== 1. EMBEDDING COVERAGE ===
+Complete records: 25 ┬╖ with embedding: 25 ┬╖ missing: 0
+Γ£à every complete record is embedded
+
+=== 2. POSITIVE RETRIEVAL (changeover / QC) ===
+  Γû▓ clears 0.850  The Quarantined Restart Play  ΓÇö Angela Brooks
+  Γû▓ clears 0.841  The No-Exceptions Gate  ΓÇö Priya Nair
+  Γû▓ clears 0.754  The Cold-Start Convergence  ΓÇö David Chen
+  ┬╖ below 0.749  The Monitorable Margin Call  ΓÇö Tom Whitfield
+  ┬╖ below 0.747  The Pin-Not-the-Person Play  ΓÇö Priya Nair
+Γ£à 3 framework(s) surface above 0.75
+
+=== 3. NEGATIVE RETRIEVAL (unrelated) ===
+  top similarity: 0.687 (threshold 0.75)
+Γ£à correctly returns "nothing codified" (top below threshold)
+
+=== 4. CONTESTED BADGE STATUS ===
+Γ£à 1 OPEN conflict(s) ΓÇö a contested badge WILL render in results
+
+=== SUMMARY: ALL CHECKS PASSED Γ£à ===
+

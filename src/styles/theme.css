@@ -1,35 +1,48 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Humanbloom brand theme — SINGLE SOURCE OF TRUTH for the app's palette.
-   Tokens copied verbatim from the marketing landing page. Every page's
-   inline style object references these via var(--…); change a color here
-   and it cascades app-wide.
+   Viridescent brand theme — SINGLE SOURCE OF TRUTH for the app's palette.
+   Five base hues; every other color below is a tint/shade mixed from them.
+   Every page's inline style object references these via var(--…); change a
+   color here and it cascades app-wide.
+
+   ⚠️ src/remotion/brand/tokens.ts is a VERBATIM MIRROR of this file
+   (Remotion never loads the app stylesheet). Change a value here → change
+   it there too.
+
+   Contrast (WCAG): pine/paper 8.9:1 AAA · white/deep-forest 14.4:1 AAA ·
+   white/growth 5.2:1 AA · growth/paper 4.9:1 AA · muted/paper 5.1:1 AA ·
+   new-leaf/deep-forest 6.8:1 AA. Verified 2026-07-27.
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Landing-page tokens — verbatim, do not re-pick */
-  --ink: #0c2e3b;
-  --ink-soft: #2c4a54;
-  --paper: #fef9f6;
-  --paper-2: #f4ece4;
-  --line: #ddd2c7;
-  --accent: #4e7e70;
-  --accent-deep: #3c6255;
-  --accent-soft: #dfe9df;
-  --leaf: #6b9e76;
-  --leaf-light: #a3bda0;
-  --muted: #6a7b78;
+  /* Viridescent base palette — verbatim, do not re-pick */
+  --deep-forest: #0e2f2c; /* darkest ground, dark surfaces */
+  --pine: #1b4d49;        /* primary text, headings */
+  --growth: #2f7a56;      /* primary action, accents, links */
+  --new-leaf: #8cc06a;    /* highlights, rules, accent-on-dark, success */
+  --paper: #f7f8f6;       /* light ground */
+
+  /* Derived tints/shades — mixed from the five bases only, no new hues */
+  --pine-soft: #33625d;      /* secondary text */
+  --paper-2: #ecf0ec;        /* secondary light ground */
+  --line: #d7ded6;           /* hairlines, borders */
+  --growth-deep: #256345;    /* hover/pressed primary */
+  --growth-soft: #e0ede4;    /* pale action tint */
+  --new-leaf-light: #c6ddb0; /* pale highlight */
+  --muted: #52706c;          /* muted text (5.1:1 on paper) */
   --white: #ffffff;
 
-  /* Derived — text/lines on dark (--ink) surfaces */
-  --on-ink: #ffffff;
-  --on-ink-soft: rgba(255, 255, 255, 0.78);
-  --on-ink-muted: rgba(255, 255, 255, 0.55);
-  --ink-line: rgba(255, 255, 255, 0.16);
+  /* Derived — text/lines on dark (--deep-forest) surfaces */
+  --on-dark: #ffffff;
+  --on-dark-soft: rgba(255, 255, 255, 0.78);
+  --on-dark-muted: rgba(255, 255, 255, 0.55);
+  --dark-line: rgba(255, 255, 255, 0.16);
 
-  /* Semantic status — harmonized with the palette, meaning preserved */
-  --ok-text: #3c6255;
-  --ok-bg: #dfe9df;
-  --ok-border: #a3bda0;
+  /* Semantic status. Success is brand-derived; warn/danger are functional
+     status hues (amber/red), deliberately outside the five brand bases —
+     meaning would be lost in green. */
+  --ok-text: #256345;
+  --ok-bg: #e0ede4;
+  --ok-border: #a9cf8e;
   --warn-text: #8a5a20;
   --warn-strong: #b45309;
   --warn-bg: #fdf3e0;
@@ -50,19 +63,19 @@ html {
 
 body {
   background: var(--paper);
-  color: var(--ink);
+  color: var(--pine);
   font-family: var(--font-sans);
 }
 
 /* Headings: serif, editorial — matches the landing page. Color inherits so
-   headings on dark (--ink) surfaces stay light. */
+   headings on dark (--deep-forest) surfaces stay light. */
 h1, h2, h3 {
   font-family: var(--font-serif);
   letter-spacing: 0.01em;
 }
 
 a {
-  color: var(--accent);
+  color: var(--growth);
 }
 
 /* Calm hover affordance without per-element :hover styles (pages use inline

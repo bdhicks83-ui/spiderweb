@@ -558,3 +558,23 @@ The original P0 ladder was 1 Situate · 2 Classify · 3 Call · 4 Signal · 5 Re
 - **Caption/script copy is placeholder** written to the real storyline — `AD-SCRIPT-90sec-2026-07-26.md` lives in the Claude project, not the repo. Timings are laid out at a 90-second read cadence; Brian pastes real lines over them in `ad-script.ts` only.
 
 **Result (LOCAL):** `npm run render:ad` produced `out/humanbloom-ad-90.mp4` (1920×1080 / 30fps / 90s, ~6.3 MB) with opening title, four numbered lower thirds, burned-in captions, and end card over placeholder slates. `tsc --noEmit` clean. Uncommitted at time of entry — commit runs from Brian's PowerShell.
+
+### July 27, 2026 — Viridescent rebrand session 3: close-out. Handoff state was STALE — Jobs 1–3 were already complete in the tree; this session verified them, flipped `LOGO_SRC` live, fixed one type error, and cleared the gate.
+
+**Context:** Session-3 handoff listed 4 files with 33 stray hexes (Job 1), 6 user-visible "Humanbloom" survivors (Job 2), and logo assets "not started" (Job 3). Fresh greps against the tree disproved all three lists — a prior session evidently finished the work after the handoff was written.
+
+**Verified already done (LOCAL, by grep + file reads this session):**
+- **Palette:** zero stray hexes in `src/` outside the deliberate set — `theme.css`, its verbatim mirrors (`remotion/brand/tokens.ts`, `framework-pdf.tsx`, `resume-pdf.tsx` — react-pdf/Remotion can't read CSS vars, each carries the change-one-change-both comment), and the two explanatory comments in `ask/page.tsx:457` / `simulate/page.tsx:41`. `MarketingHome.tsx` neon palette fully converted to `var(--*)` tokens; `InsightVideo.tsx` imports `BRAND` from `brand/tokens.ts`.
+- **Naming:** every user-visible string is Viridescent — `layout.tsx` titles/OG/twitter, `.docx` `creator`, resume-PDF `author` + "Built with Viridescent" footer, framework-PDF "codified with Viridescent" footer, all four `ad-script.ts` caption lines, `Mark.tsx` wordmark (renders `WORDMARK = "Viridescent"` from tokens). Remaining "Humanbloom/Human Bloom" hits are code comments only (deliberate, cosmetic).
+- **Logo assets:** all 8 PNGs exist in `public/brand/` (generated from `remotion/brand/LogoStills.tsx` — horizontal, stacked, stacked-reversed, app-icon 32/180/192/512, og-image) and are wired: `layout.tsx` icons + OG/twitter images, `manifest.webmanifest` (192/512, deepForest theme color), `BrandHeader.tsx` (horizontal), `login/page.tsx` (stacked).
+
+**New work this session (LOCAL):**
+- **Flipped `LOGO_SRC`** in `src/remotion/brand/tokens.ts` from `null` → `"brand/viridescent-stacked-reversed.png"` — the July-27 Job-2 entry left it null only because the PNG didn't exist yet; it now exists (verified on disk), so the ad renders the real mark instead of the typographic fallback. Comment updated with the revert instruction.
+- **Fixed a pre-existing TS error** in `LogoStills.tsx`: the `Stacked` helper typed its `sprout` prop as `typeof LIGHT_SPROUT`, whose fields narrow to literal hex types (BRAND is `as const`), so passing `DARK_SPROUT` failed TS2322. Widened the prop to `{ stem: string; leftLeaf: string; rightLeaf: string }`.
+- **Gate:** `npx tsc --noEmit` clean after both changes.
+
+**Browser-verified (LOCAL dev server, `npm run dev`):** homepage renders as Viridescent (title "Viridescent — Knowledge That Appreciates"); `/login` loads `viridescent-stacked.png` (200); all 8 `public/brand/` assets + `/manifest.webmanifest` fetch 200; rendered head links point at the new icon/manifest paths. One dev-only console note: a hydration-mismatch warning on `/` about the `<body>` inline style (camelCase vs. resolved longhand) — dev console noise, no visual effect, not camera-visible.
+
+**Job 4 camera-readiness — code-level pass CLEAN, authenticated walk BLOCKED on login:** greps across `/library`, `/conflicts`, `/retrieve`, `/training-studio`, `/win-column`, `/dashboard`, `/settings` found no email rendering (no `+test` can appear), no Humanbloom, no lorem/placeholder text, and sign-out present on both `/dashboard` and `/settings`. The visual walk of authenticated surfaces needs a logged-in session — standing rule: Claude never types passwords; Brian logs in once (local or live) and Claude drives from there. Live still shows the OLD branding until this work is committed + deployed from Brian's PowerShell.
+
+**Deliberately left (unchanged from prior entries):** code comments naming Humanbloom/Human Bloom · `hb-foundation.css` filename + header · `spiderweb-nine.vercel.app` · repo/DB/Inngest identifiers · `out/humanbloom-ad-90.mp4` in package.json · DECISION-LOG/MASTER-STATE history · `.claude/*`, `memory/*` · the `+test1` account (see the July-26 CRITICAL cascade gotcha).

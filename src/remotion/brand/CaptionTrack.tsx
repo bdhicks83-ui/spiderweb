@@ -94,7 +94,7 @@ export const CaptionTrack: React.FC<CaptionTrackProps> = ({
                 fontWeight: 500,
                 lineHeight: 1.34,
                 letterSpacing: "0.002em",
-                color: BRAND.onInk,
+                color: BRAND.onDark,
                 textAlign: "center",
                 textWrap: "balance",
               }}

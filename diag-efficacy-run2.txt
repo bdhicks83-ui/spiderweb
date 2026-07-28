@@ -1,0 +1,28 @@
+﻿
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+PRESCRIPTION 5fa45135-dca8-4999-8f88-ae5502762289
+  source_type   : entity_signal
+  gap_summary   : Error class "Tolerance failure ΓÇö post-restart clamping drift" recurs across 3 records from
+  delivered_at  : 2026-07-15T01:15:21.91+00:00
+  efficacy      : escalated
+  conflict_id   : (none)
+  founding recs : ["28eb9f10-fa0d-4ce3-9b65-b72fa82ff585","37fcee84-f199-4ef4-be71-8506f3418a4b","7968b017-8be4-4291-9f7e-4cc833f6382e"]
+  subject keys  : error_class|tolerance failure post restart clamping drift
+  ΓåÆ 3 record(s) match (broke/friction + entity + after delivered_at):
+    ΓÇó 37fcee84-f199-4ef4-be71-8506f3418a4b
+        created_at : 2026-07-17T01:12:19.709+00:00  (FOUNDING)
+        trigger    : broke
+        matched on : error_class:Tolerance failure ΓÇö post-restart clamping drift
+        context    : Sr. Manager of Maintenance was called to 3rd-shift machining after CNC Line 5 fa
+    ΓÇó 7968b017-8be4-4291-9f7e-4cc833f6382e
+        created_at : 2026-07-22T01:12:19.709+00:00  (FOUNDING)
+        trigger    : friction
+        matched on : error_class:Tolerance failure ΓÇö post-restart clamping drift
+        context    : VP Operations reviewed weekly scrap reports and found 3rd-shift machining's firs
+    ΓÇó 7b4216be-ab6d-4b63-bba2-e69d30a59def
+        created_at : 2026-07-21T01:16:42.571+00:00  (not founding)
+        trigger    : broke
+        matched on : error_class:Tolerance failure ΓÇö post-restart clamping drift
+        context    : Sr. Manager of Maintenance was called back to 3rd-shift machining after CNC Line
+
+Γ£ô diagnostic complete (nothing was written).

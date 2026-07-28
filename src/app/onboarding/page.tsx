@@ -334,7 +334,7 @@ export default function OnboardingPage() {
   if (phase === "persona") {
     return (
       <div style={styles.page}>
-        <h1 style={styles.h1}>Welcome to Humanbloom 🌸</h1>
+        <h1 style={styles.h1}>Welcome to Viridescent 🌱</h1>
         <p style={styles.subtitle}>Which best describes you?</p>
         <div style={styles.goalGrid}>
           {PERSONAS.map((p) => (
@@ -360,7 +360,7 @@ export default function OnboardingPage() {
   if (phase === "fork") {
     return (
       <div style={styles.page}>
-        <h1 style={styles.h1}>What are you hoping to get out of Humanbloom?</h1>
+        <h1 style={styles.h1}>What are you hoping to get out of Viridescent?</h1>
         <div style={styles.goalGrid}>
           {GOALS.map((goal) => (
             <button
@@ -457,7 +457,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 560,
     margin: "0 auto",
     padding: "48px 24px",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   },
   h1: {
     fontSize: "28px",
@@ -465,7 +465,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   subtitle: {
     fontSize: "17px",
-    color: "#444",
+    color: "var(--pine-soft)",
     marginBottom: 24,
   },
   goalGrid: {
@@ -480,9 +480,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "18px 16px",
     fontSize: "16px",
     textAlign: "left",
-    border: "1px solid #e5e5e5",
+    border: "1px solid var(--line)",
     borderRadius: 12,
-    background: "#fff",
+    background: "var(--white)",
     cursor: "pointer",
   },
   goalEmoji: {
@@ -493,14 +493,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   personaHelp: {
     fontSize: "13px",
-    color: "#888",
+    color: "var(--muted)",
     fontWeight: 400,
   },
   trackBadge: {
     display: "inline-block",
-    background: "#eef2ff",
-    color: "#4338ca",
-    border: "1px solid #c7d2fe",
+    background: "var(--growth-soft)",
+    color: "var(--growth-deep)",
+    border: "1px solid var(--ok-border)",
     borderRadius: 999,
     padding: "0.15rem 0.6rem",
     fontSize: "0.8rem",
@@ -508,7 +508,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 16,
   },
   progress: {
-    color: "#888",
+    color: "var(--muted)",
     fontSize: "13px",
     margin: "0 0 8px",
   },
@@ -522,12 +522,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "15px",
     padding: 12,
     borderRadius: 8,
-    border: "1px solid #d4d4d4",
+    border: "1px solid var(--line)",
     fontFamily: "inherit",
     boxSizing: "border-box",
   },
   hint: {
-    color: "#888",
+    color: "var(--muted)",
     fontSize: "13px",
     margin: "0 0 10px",
   },
@@ -539,15 +539,15 @@ const styles: Record<string, React.CSSProperties> = {
   optionButton: {
     padding: "10px 14px",
     fontSize: "14px",
-    border: "1px solid #d4d4d4",
+    border: "1px solid var(--line)",
     borderRadius: 999,
-    background: "#fff",
+    background: "var(--white)",
     cursor: "pointer",
   },
   optionSelected: {
-    background: "#eef2ff",
-    borderColor: "#4338ca",
-    color: "#4338ca",
+    background: "var(--growth-soft)",
+    borderColor: "var(--growth)",
+    color: "var(--growth-deep)",
     fontWeight: 600,
   },
   navRow: {
@@ -562,8 +562,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     border: "none",
     borderRadius: "10px",
-    backgroundColor: "#22c55e",
-    color: "#fff",
+    backgroundColor: "var(--growth)",
+    color: "var(--white)",
     cursor: "pointer",
   },
   quietButton: {
@@ -571,12 +571,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "13px",
     border: "none",
     background: "none",
-    color: "#888",
+    color: "var(--muted)",
     textDecoration: "underline",
     cursor: "pointer",
   },
   errorText: {
-    color: "#ef4444",
+    color: "var(--danger)",
     fontSize: "14px",
     marginTop: 12,
   },
@@ -587,7 +587,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: "16px",
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
     textAlign: "center",
     padding: "24px",
   },
@@ -595,8 +595,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: "36px",
     height: "36px",
     borderRadius: "50%",
-    border: "4px solid #e5e5e5",
-    borderTopColor: "#555",
+    border: "4px solid var(--line)",
+    borderTopColor: "var(--growth)",
     animation: "onboarding-spin 0.8s linear infinite",
   },
   waitHeading: {

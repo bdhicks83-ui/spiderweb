@@ -41,9 +41,9 @@ export default function ApproveFrameworkButton({
         style={{
           padding: "0.4rem 0.9rem",
           borderRadius: 6,
-          border: "1px solid #15803d",
-          background: busy ? "#eee" : "#15803d",
-          color: busy ? "#888" : "#fff",
+          border: "1px solid var(--growth)",
+          background: busy ? "var(--paper-2)" : "var(--growth)",
+          color: busy ? "var(--muted)" : "var(--white)",
           cursor: busy ? "wait" : "pointer",
           fontSize: "0.9rem",
         }}
@@ -51,7 +51,7 @@ export default function ApproveFrameworkButton({
         {busy ? "Approving…" : "Approve"}
       </button>
       {error && (
-        <p style={{ color: "#b91c1c", marginTop: "0.5rem", fontSize: "0.85rem" }}>
+        <p style={{ color: "var(--danger)", marginTop: "0.5rem", fontSize: "0.85rem" }}>
           {error}
         </p>
       )}

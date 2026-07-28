@@ -54,8 +54,8 @@ type GrowthSnapshot = {
 };
 
 const BADGE_STYLE: Record<string, { bg: string; fg: string }> = {
-  Emerging: { bg: 'rgba(255,255,255,0.14)', fg: 'var(--on-ink-soft)' },
-  Rising: { bg: 'var(--accent-soft)', fg: 'var(--accent-deep)' },
+  Emerging: { bg: 'rgba(255,255,255,0.14)', fg: 'var(--on-dark-soft)' },
+  Rising: { bg: 'var(--growth-soft)', fg: 'var(--growth-deep)' },
   Verified: { bg: 'var(--ok-bg)', fg: 'var(--ok-text)' },
   Elite: { bg: 'var(--warn-bg)', fg: 'var(--warn-text)' },
 };
@@ -657,7 +657,7 @@ function Sparkline({ values }: { values: number[] }) {
       <polyline
         points={pts.join(' ')}
         fill="none"
-        stroke="var(--leaf)"
+        stroke="var(--new-leaf)"
         strokeWidth={2.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -667,7 +667,7 @@ function Sparkline({ values }: { values: number[] }) {
           cx={pts[pts.length - 1].split(',')[0]}
           cy={pts[pts.length - 1].split(',')[1]}
           r={4}
-          fill="var(--accent)"
+          fill="var(--growth)"
         />
       )}
     </svg>
@@ -700,51 +700,51 @@ const styles: Record<string, React.CSSProperties> = {
   settingsLink: { fontSize: '13px', fontWeight: 600, color: 'var(--muted)', textDecoration: 'none' },
   signOutLink: { fontSize: '13px', fontWeight: 600, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' },
   card: { padding: '24px', backgroundColor: 'var(--white)', border: '1px solid var(--line)', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' },
-  resumeBanner: { padding: '20px 24px', backgroundColor: 'var(--ink)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' },
-  resumeBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--on-ink)' },
-  resumeBannerSub: { fontSize: '13px', color: 'var(--on-ink-soft)', margin: '4px 0 0', lineHeight: 1.5, maxWidth: '360px' },
-  resumeBannerLink: { fontSize: '14px', fontWeight: 600, color: 'var(--ink)', background: 'var(--white)', padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', whiteSpace: 'nowrap' },
+  resumeBanner: { padding: '20px 24px', backgroundColor: 'var(--deep-forest)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' },
+  resumeBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--on-dark)' },
+  resumeBannerSub: { fontSize: '13px', color: 'var(--on-dark-soft)', margin: '4px 0 0', lineHeight: 1.5, maxWidth: '360px' },
+  resumeBannerLink: { fontSize: '14px', fontWeight: 600, color: 'var(--pine)', background: 'var(--white)', padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', whiteSpace: 'nowrap' },
   cardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' },
   cardTitle: { fontSize: '17px', fontWeight: 600, margin: 0 },
   badge: { fontSize: '13px', fontWeight: 600, padding: '5px 12px', borderRadius: '9999px', border: '1px solid' },
-  notes: { margin: 0, fontSize: '14px', color: 'var(--ink-soft)', lineHeight: 1.5, background: 'var(--paper-2)', padding: '10px 12px', borderRadius: '8px' },
+  notes: { margin: 0, fontSize: '14px', color: 'var(--pine-soft)', lineHeight: 1.5, background: 'var(--paper-2)', padding: '10px 12px', borderRadius: '8px' },
   help: { margin: 0, fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5 },
-  linkButton: { alignSelf: 'flex-start', padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--ink)', background: 'var(--white)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer' },
+  linkButton: { alignSelf: 'flex-start', padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--pine)', background: 'var(--white)', border: '1px solid var(--line)', borderRadius: '8px', cursor: 'pointer' },
   form: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  label: { fontSize: '13px', fontWeight: 600, color: 'var(--ink-soft)' },
+  label: { fontSize: '13px', fontWeight: 600, color: 'var(--pine-soft)' },
   input: { padding: '10px 12px', fontSize: '15px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit' },
   textarea: { padding: '10px 12px', fontSize: '15px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
   formRow: { display: 'flex', gap: '10px', marginTop: '4px' },
-  primary: { padding: '10px 20px', fontSize: '15px', fontWeight: 600, color: 'var(--white)', background: 'var(--accent)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+  primary: { padding: '10px 20px', fontSize: '15px', fontWeight: 600, color: 'var(--white)', background: 'var(--growth)', border: 'none', borderRadius: '8px', cursor: 'pointer' },
   ghost: { padding: '10px 14px', fontSize: '14px', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
-  message: { margin: 0, fontSize: '14px', color: 'var(--ink-soft)' },
+  message: { margin: 0, fontSize: '14px', color: 'var(--pine-soft)' },
   gapBanner: { padding: '18px 20px', backgroundColor: 'var(--ok-bg)', border: '1px solid var(--ok-border)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' },
   gapBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--ok-text)' },
   gapBannerSub: { fontSize: '13px', color: 'var(--ok-text)', margin: 0, lineHeight: 1.5 },
   gapList: { listStyle: 'none', margin: '4px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' },
   gapItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', background: 'var(--white)', border: '1px solid var(--ok-border)', borderRadius: '10px', padding: '10px 12px' },
   gapQuestion: { fontSize: '14px', color: 'var(--ok-text)', fontStyle: 'italic', flex: 1, minWidth: '200px' },
-  gapItemLink: { fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', whiteSpace: 'nowrap' },
-  scoreCard: { padding: '24px', backgroundColor: 'var(--ink)', border: '1px solid var(--ink-line)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: 'var(--on-ink)' },
+  gapItemLink: { fontSize: '13px', fontWeight: 600, color: 'var(--growth)', textDecoration: 'none', whiteSpace: 'nowrap' },
+  scoreCard: { padding: '24px', backgroundColor: 'var(--deep-forest)', border: '1px solid var(--dark-line)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: 'var(--on-dark)' },
   scoreHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' },
   scoreMain: { display: 'flex', alignItems: 'baseline', gap: '8px' },
-  scoreNumber: { fontSize: '56px', fontWeight: 800, lineHeight: 1, color: 'var(--on-ink)' },
-  scoreOutOf: { fontSize: '18px', color: 'var(--on-ink-soft)', fontWeight: 600 },
-  breakdownToggle: { alignSelf: 'flex-start', padding: 0, fontSize: '13px', color: 'var(--accent-soft)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
+  scoreNumber: { fontSize: '56px', fontWeight: 800, lineHeight: 1, color: 'var(--on-dark)' },
+  scoreOutOf: { fontSize: '18px', color: 'var(--on-dark-soft)', fontWeight: 600 },
+  breakdownToggle: { alignSelf: 'flex-start', padding: 0, fontSize: '13px', color: 'var(--growth-soft)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
   breakdown: { display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '8px' },
-  linkButtonSm: { padding: '6px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--on-ink)', background: 'transparent', border: '1px solid var(--ink-line)', borderRadius: '8px', cursor: 'pointer' },
+  linkButtonSm: { padding: '6px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--on-dark)', background: 'transparent', border: '1px solid var(--dark-line)', borderRadius: '8px', cursor: 'pointer' },
   metric: { display: 'flex', flexDirection: 'column', gap: '4px' },
   metricTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  metricLabel: { fontSize: '14px', fontWeight: 600, color: 'var(--on-ink-soft)' },
-  metricPct: { fontSize: '14px', fontWeight: 700, color: 'var(--on-ink)' },
+  metricLabel: { fontSize: '14px', fontWeight: 600, color: 'var(--on-dark-soft)' },
+  metricPct: { fontSize: '14px', fontWeight: 700, color: 'var(--on-dark)' },
   metricBarTrack: { height: '8px', background: 'rgba(255,255,255,0.14)', borderRadius: '9999px', overflow: 'hidden' },
-  metricBarFill: { height: '100%', background: 'linear-gradient(90deg,var(--leaf-light),var(--leaf))', borderRadius: '9999px' },
-  metricHelp: { fontSize: '12px', color: 'var(--on-ink-muted)' },
-  growthCard: { padding: '24px', backgroundColor: 'var(--ink)', border: '1px solid var(--ink-line)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: 'var(--on-ink)' },
+  metricBarFill: { height: '100%', background: 'linear-gradient(90deg,var(--new-leaf-light),var(--new-leaf))', borderRadius: '9999px' },
+  metricHelp: { fontSize: '12px', color: 'var(--on-dark-muted)' },
+  growthCard: { padding: '24px', backgroundColor: 'var(--deep-forest)', border: '1px solid var(--dark-line)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', color: 'var(--on-dark)' },
   growthMain: { display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' },
   statusBadge: { fontSize: '13px', fontWeight: 700, padding: '4px 12px', borderRadius: '9999px', alignSelf: 'center' },
-  growthSub: { fontSize: '13px', color: 'var(--on-ink-soft)', margin: 0 },
-  growthLine: { fontSize: '15px', fontWeight: 600, color: 'var(--accent-soft)', margin: '4px 0 0' },
+  growthSub: { fontSize: '13px', color: 'var(--on-dark-soft)', margin: 0 },
+  growthLine: { fontSize: '15px', fontWeight: 600, color: 'var(--growth-soft)', margin: '4px 0 0' },
   sparkline: { display: 'block', marginTop: '6px' },
   needsCard: { padding: '20px 22px', backgroundColor: 'var(--warn-bg)', border: '1px solid var(--warn-border)', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' },
   needsTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--warn-text)' },
@@ -754,7 +754,7 @@ const styles: Record<string, React.CSSProperties> = {
   needsItemTop: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
   needsBadge: { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--warn-text)', background: 'var(--warn-chip-bg)', border: '1px solid var(--warn-border)', borderRadius: '9999px', padding: '3px 10px' },
   needsNote: { fontSize: '12px', color: 'var(--warn-text)', fontStyle: 'italic' },
-  needsContent: { fontSize: '15px', lineHeight: 1.5, color: 'var(--ink)', margin: 0 },
+  needsContent: { fontSize: '15px', lineHeight: 1.5, color: 'var(--pine)', margin: 0 },
   needsTextarea: { padding: '10px 12px', fontSize: '14px', border: '1px solid var(--line)', borderRadius: '8px', fontFamily: 'inherit', boxSizing: 'border-box', width: '100%' },
   needsRow: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
   needsSubmit: { padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--white)', background: 'var(--warn-strong)', border: 'none', borderRadius: '8px', cursor: 'pointer' },

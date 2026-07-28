@@ -1,0 +1,58 @@
+﻿
+ΓòöΓòÉΓòÉ P-7 DIAGNOSTIC ΓÇö /api/retrieve two-step read ΓòÉΓòÉΓòù
+   login under test : david.chen@meridian-demo.example
+   query            : "We had a quality escape right after a die changeover on the prΓÇª"
+   threshold        : 0.75 ┬╖ match_count 5
+
+=== 1. VOYAGE QUERY EMBED (input_type: query) ===
+Γ£à 1536-dim query vector obtained
+
+=== 2. SERVICE-ROLE RPC (RLS BYPASSED ΓÇö what verify-p3 sees) ===
+returned 5 row(s); columns present: id, similarity
+  Γû▓ clears 0.850  a960a91a-7398-4500-9b3b-6c3534d95ee8
+  Γû▓ clears 0.841  1bf7e9c8-667f-4de5-a514-5a75b002f412
+  Γû▓ clears 0.754  f6936d43-29e8-4131-bd0b-207b2d00468c
+  ┬╖ below  0.749  fe7bf403-2404-4135-9e83-bfc33e572a27
+  ┬╖ below  0.747  554c84fc-220e-431f-b568-6533e1314f3b
+ΓåÆ 3 above 0.75
+
+=== 3. SERVICE-ROLE: DO THOSE IDS RESOLVE IN pattern_records? ===
+  Γ£ö a960a91a-7398-4500-9b3b-6c3534d95ee8
+      status=complete ┬╖ org=Meridian Precision Manufacturing (DEMO) ┬╖ author=Angela Brooks
+      "The Quarantined Restart Play"
+  Γ£ö 1bf7e9c8-667f-4de5-a514-5a75b002f412
+      status=complete ┬╖ org=Meridian Precision Manufacturing (DEMO) ┬╖ author=Priya Nair
+      "The No-Exceptions Gate"
+  Γ£ö f6936d43-29e8-4131-bd0b-207b2d00468c
+      status=complete ┬╖ org=Meridian Precision Manufacturing (DEMO) ┬╖ author=David Chen
+      "The Cold-Start Convergence"
+
+=== 4. AUTHENTICATED RPC (REAL RLS ΓÇö what the ROUTE sees) ===
+signed in as David Chen (876f3bdb-87cd-4750-886e-fc8ee5cb0a0b)
+  profile org_id: 0722f2f8-ecff-4ae3-81ea-1350454e9d54 ΓåÆ Meridian Precision Manufacturing (DEMO)
+  Γû▓ clears 0.850  a960a91a-7398-4500-9b3b-6c3534d95ee8
+  Γû▓ clears 0.841  1bf7e9c8-667f-4de5-a514-5a75b002f412
+  Γû▓ clears 0.754  f6936d43-29e8-4131-bd0b-207b2d00468c
+  ┬╖ below  0.749  fe7bf403-2404-4135-9e83-bfc33e572a27
+  ┬╖ below  0.747  554c84fc-220e-431f-b568-6533e1314f3b
+ΓåÆ 3 above 0.75 (this drives noMatch in the OLD route)
+
+=== 5. AUTHENTICATED RECORD LOAD (.in('id', ids)) ΓÇö the second read ===
+matched ids: 3 ┬╖ rows loaded: 3 ┬╖ UNRESOLVED: 0
+  Γ£ö loaded   a960a91a-7398-4500-9b3b-6c3534d95ee8
+  Γ£ö loaded   1bf7e9c8-667f-4de5-a514-5a75b002f412
+  Γ£ö loaded   f6936d43-29e8-4131-bd0b-207b2d00468c
+this login can see 27 complete pattern_records total under RLS
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+VERDICT
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+OLD route would return: { noMatch: false, results: [3] }
+NEW route would return: { noMatch: false, results: [3] }
+
+≡ƒƒó The DB path is HEALTHY for this login ΓÇö the route's two reads agree.
+   If the browser still shows nothing, the failure is above the DB:
+   check the Voyage embed (section 1 / a 429), and the browser network tab
+   for the actual /api/retrieve status code and body.
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+

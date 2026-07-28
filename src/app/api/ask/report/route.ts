@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         : [];
 
     const doc = new Document({
-      creator: "Humanbloom",
+      creator: "Viridescent",
       title: question,
       sections: [
         {
