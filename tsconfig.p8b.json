@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/graph-codify.ts",
+    "src/lib/retrieval-effectiveness.ts",
+    "src/lib/learning-ledger.ts",
+    "src/lib/training-studio.ts",
+    "src/lib/training-formats.ts",
+    "src/lib/conflict.ts",
+    "src/lib/pattern-embedding.ts",
+    "src/app/api/retrieve/route.ts",
+    "src/app/api/retrieve/signal/route.ts",
+    "src/app/api/training-studio/[id]/efficacy/route.ts",
+    "src/app/api/training-studio/[id]/route.ts",
+    "src/app/retrieve/page.tsx",
+    "src/app/library/page.tsx",
+    "src/app/library/[id]/page.tsx",
+    "src/app/win-column/[person]/page.tsx",
+    "src/app/training-studio/[id]/page.tsx"
+  ]
+}

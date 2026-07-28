@@ -94,6 +94,27 @@ const supabase = createClient();
 const HELPED_PROMPT = "Was this the one you needed?";
 const HELPED_BUTTON = "Yes — this helped";
 const HELPED_CONFIRMED = "Noted — thanks. That tells your team's brain which framework actually worked here.";
+
+// ─── P-8 Phase 2 — the effectiveness signal (DRAFT, pending Brian) ───────────
+// THE THIN-DATA GUARDRAIL LIVES IN THIS WORDING. "Proven" is reserved for
+// records with a watch-verified resolution AND enough total evidence; below
+// that bar the label is "Early signal" and says so plainly. The evidence count
+// (N) is ALWAYS shown — a ranking influenced by data must display its sample
+// size (P-8 guardrail 2), and an early signal must never dress up as learned
+// intelligence.
+const PROVEN_BADGE = "Proven effective";
+const EARLY_BADGE = "Early signal";
+const provenTitle = (n: number) =>
+  `Proven effective — resolved a real recurrence, verified by the post-training watch (evidence: ${n}).`;
+const earlyTitle = (n: number) =>
+  `Early signal — some evidence this works (${n} data point${n === 1 ? "" : "s"}), not enough to call it proven yet.`;
+const RANKED_HIGHER_PREFIX = "Why this ranks higher:";
+// Training-derived provenance (Part A records surfacing in retrieval):
+const PROVENANCE_LABEL = "Codified from training";
+const provenanceLine = (formatName: string, names: string[]) =>
+  names.length > 0
+    ? `${formatName} that solved a real issue — built from frameworks by ${names.join(", ")}.`
+    : `${formatName} that solved a real issue, built from your team's codified frameworks.`;
 // ═════════════════════════════════════════════════════════════════════════════
 
 type Framework = {
@@ -106,6 +127,25 @@ type Framework = {
 
 type Contested = { conflict_id: string; other_record_id: string };
 
+// P-8 Phase 2 — the effectiveness signal, exactly as the API ships it.
+// `level` is 'proven' only past the thin-data confidence bar; `n` is the
+// evidence count and is ALWAYS displayed; `evidence` is the human-readable why.
+type Effectiveness = {
+  level: "proven" | "early";
+  n: number;
+  resolved_count: number;
+  helped_count: number;
+  evidence: unknown;
+  boost: number;
+};
+
+// P-7 Build 6 — training-derived provenance (safe display shape only).
+type Provenance = {
+  format_name: string;
+  expert_names: unknown;
+  training_request_id: string | null;
+};
+
 type Result = {
   id: string;
   similarity: number;
@@ -117,6 +157,8 @@ type Result = {
   is_mine: boolean;
   author: { display_name: string | null; persona: string | null } | null;
   contested: Contested[];
+  effectiveness?: Effectiveness | null;
+  codified_from?: Provenance | null;
 };
 
 // The page is in exactly one of these at any moment. `view` is the SINGLE
@@ -144,6 +186,9 @@ const METHOD_LABEL: Record<string, string> = {
   premortem: "Pre-mortem",
   a3: "A3 Gap Analysis",
   cdm: "Critical Decision Method",
+  // P-7 Build 6 — a record codified from a resolved training run says what it
+  // is; it never pretends an elicitation session happened.
+  training_derived: "Codified from training",
 };
 
 const PERSONA_LABEL: Record<string, string> = {
@@ -506,6 +551,17 @@ export default function RetrievePage() {
                 const wasHelpful = !!helped[key];
                 const results = view.results;
                 const askedFor = view.askedFor;
+                // P-8 Phase 2 — the effectiveness signal, defensively coerced
+                // (same discipline as `framework`: never let a shape throw).
+                const eff =
+                  r.effectiveness && typeof r.effectiveness === "object" ? r.effectiveness : null;
+                const effLevel = eff?.level === "proven" ? "proven" : eff?.level === "early" ? "early" : null;
+                const effN = eff ? asNumber(eff.n) : 0;
+                const effEvidence = eff ? asArray(eff.evidence) : [];
+                // P-7 Build 6 — training-derived provenance.
+                const prov =
+                  r.codified_from && typeof r.codified_from === "object" ? r.codified_from : null;
+                const provNames = prov ? asArray(prov.expert_names) : [];
 
                 return (
                   <ResultBoundary key={key} recordId={typeof r.id === "string" ? r.id : ""}>
@@ -525,6 +581,19 @@ export default function RetrievePage() {
                             {r.trigger_type ? TRIGGER_EMOJI[r.trigger_type] ?? "" : ""}
                           </span>
                           <span style={styles.badgeRow}>
+                            {/* P-8 Phase 2 — effectiveness, honestly graded.
+                                Fill = proven (watch-verified + enough evidence);
+                                outline = early signal. N always shown. */}
+                            {effLevel === "proven" && (
+                              <span style={styles.provenBadge} title={provenTitle(effN)}>
+                                ✓ {PROVEN_BADGE} · N={effN}
+                              </span>
+                            )}
+                            {effLevel === "early" && (
+                              <span style={styles.earlyBadge} title={earlyTitle(effN)}>
+                                {EARLY_BADGE} · N={effN}
+                              </span>
+                            )}
                             {contested.length > 0 && (
                               <span
                                 style={styles.contestedBadge}
@@ -542,6 +611,17 @@ export default function RetrievePage() {
 
                         <h2 style={styles.cardTitle}>{asText(f.name) || "(framework pending)"}</h2>
                         <p style={styles.cardTagline}>{asText(f.tagline)}</p>
+
+                        {/* P-7 Build 6 — training-derived provenance: what this
+                            was codified from and whose judgment built it. */}
+                        {prov && (
+                          <div style={styles.provenanceRow}>
+                            <span style={styles.provenanceLabel}>{PROVENANCE_LABEL}</span>
+                            <span style={styles.provenanceText}>
+                              {provenanceLine(asText(prov.format_name) || "Training", provNames)}
+                            </span>
+                          </div>
+                        )}
 
                         {signals.length > 0 && (
                           <div style={styles.field}>
@@ -567,6 +647,22 @@ export default function RetrievePage() {
                             <ul style={styles.list2}>
                               {boundaries.slice(0, 3).map((b, i) => (
                                 <li key={i}>{b}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* P-8 Phase 2 — explainability: WHY this ranks higher,
+                            in words, with the evidence count. Never shown
+                            without evidence; never hides the N. */}
+                        {effLevel && effEvidence.length > 0 && (
+                          <div style={styles.effectivenessBox}>
+                            <div style={styles.effectivenessHeading}>
+                              {RANKED_HIGHER_PREFIX}
+                            </div>
+                            <ul style={styles.effectivenessList}>
+                              {effEvidence.slice(0, 3).map((e, i) => (
+                                <li key={i}>{e}</li>
                               ))}
                             </ul>
                           </div>
@@ -804,6 +900,68 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid var(--new-leaf-light)",
     borderRadius: 999,
     padding: "2px 8px",
+  },
+  // P-8 Phase 2 — fill vs outline IS the semantic distinction (same doctrine
+  // as the prescription states): proven = green fill, early = green outline.
+  provenBadge: {
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "var(--white)",
+    background: "var(--growth)",
+    border: "1px solid var(--growth)",
+    borderRadius: 999,
+    padding: "2px 8px",
+  },
+  earlyBadge: {
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "var(--growth-deep)",
+    background: "transparent",
+    border: "1px solid var(--growth)",
+    borderRadius: 999,
+    padding: "2px 8px",
+  },
+  provenanceRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: 8,
+    flexWrap: "wrap",
+    margin: "0 0 12px",
+  },
+  provenanceLabel: {
+    fontSize: "10px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "var(--growth-deep)",
+    background: "var(--growth-soft)",
+    border: "1px solid var(--new-leaf-light)",
+    borderRadius: 999,
+    padding: "2px 8px",
+    whiteSpace: "nowrap",
+  },
+  provenanceText: { fontSize: "12px", color: "var(--pine-soft)", lineHeight: 1.4 },
+  effectivenessBox: {
+    background: "var(--growth-soft)",
+    border: "1px solid var(--new-leaf-light)",
+    borderRadius: 10,
+    padding: "8px 12px",
+    margin: "2px 0 10px",
+  },
+  effectivenessHeading: {
+    fontSize: "11px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    color: "var(--growth-deep)",
+    marginBottom: 3,
+  },
+  effectivenessList: {
+    margin: 0,
+    paddingLeft: 16,
+    fontSize: "12px",
+    lineHeight: 1.5,
+    color: "var(--pine)",
   },
   cardTitle: { fontSize: "18px", margin: "0 0 4px", fontWeight: 700 },
   cardTagline: { fontSize: "13px", color: "var(--pine-soft)", margin: "0 0 12px", lineHeight: 1.4 },

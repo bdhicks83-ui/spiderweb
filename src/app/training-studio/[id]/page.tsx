@@ -68,6 +68,10 @@ type Attempt = {
   next_format_rationale: string | null;
   enhancements: { note: string; added_by_name?: string; added_at?: string }[] | null;
   created_at: string;
+  // P-7 Build 6 — set when this attempt's winning artifact codified into the
+  // knowledge graph (a retrievable library record).
+  graph_node_id?: string | null;
+  graph_synced_at?: string | null;
 };
 
 type Detail = {
@@ -630,6 +634,19 @@ export default function TrainingStudioDetailPage({
               {data.prescription?.efficacy_note ??
                 "No repeat of the problem across the watch window."}
             </p>
+            {/* P-7 Build 6 — the loop, closed and visible: what worked is now
+                a first-class library record retrieval can surface. */}
+            {data.attempts.some((a) => a.graph_node_id) && (
+              <p style={styles.watchText}>
+                What worked is codified into your team&apos;s library —{" "}
+                <a
+                  href={`/library/${data.attempts.find((a) => a.graph_node_id)?.graph_node_id}`}
+                  style={styles.codifiedLink}
+                >
+                  open the framework →
+                </a>
+              </p>
+            )}
           </div>
         )}
 
@@ -948,6 +965,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "16px 18px",
   },
   provenLabel: { fontSize: "13px", fontWeight: 700, color: "var(--ok-text)" },
+  codifiedLink: { color: "var(--growth)", fontWeight: 600, textDecoration: "none" },
   attemptCard: {
     background: "var(--white)",
     border: "1px solid var(--line)",

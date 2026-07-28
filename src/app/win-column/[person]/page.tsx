@@ -37,6 +37,8 @@ const METHOD_LABEL: Record<string, string> = {
   premortem: "Pre-mortem",
   a3: "A3 Gap Analysis",
   cdm: "Critical Decision Method",
+  // P-7 Build 6 — records codified from a resolved Training Studio run.
+  training_derived: "Codified from training",
 };
 
 export default function WinColumnEvidencePage() {

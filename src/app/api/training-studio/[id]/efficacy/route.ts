@@ -23,6 +23,7 @@ import { lastFormatReadaptDiagnostic, recommendNextFormat } from "@/lib/claude";
 import { TRAINING_FORMATS, isTrainingFormatKey } from "@/lib/training-formats";
 import { runEfficacyLoop } from "@/lib/prescription";
 import { describeEntities, resolveFormatAttempt } from "@/lib/training-studio";
+import { codifyTrainingToGraph } from "@/lib/graph-codify";
 
 export const maxDuration = 60;
 
@@ -119,12 +120,24 @@ export async function POST(
 
     // ── Quiet across the window: it landed ──
     if (rx.efficacy_status === "effective") {
+      const outcomeNote = rx.efficacy_note ?? "Quiet across the watch window.";
       await resolveFormatAttempt(service, {
         trainingRequestId: request.id,
         attempt,
         outcome: "effective",
-        outcomeNote: rx.efficacy_note ?? "Quiet across the watch window.",
+        outcomeNote,
       });
+
+      // ── P-7 Build 6: THE LOOP CLOSES. The resolved artifact codifies into
+      //    the knowledge graph — retrievable, embedded, conflict-checked like
+      //    any framework. Never throws; a codification failure is reported in
+      //    the response, and the close-out below happens regardless. ──
+      const codify = await codifyTrainingToGraph(service, {
+        requestId: request.id,
+        attempt,
+        outcomeNote,
+      });
+
       await service
         .from("training_requests")
         .update({ status: "closed" })
@@ -134,8 +147,20 @@ export async function POST(
         efficacy_status: "effective",
         message: `It held. ${
           priorFormat ? `The ${TRAINING_FORMATS[priorFormat].name.toLowerCase()} did what it was picked for — ` : ""
-        }no repeat of the problem across the watch window, on live evidence.`,
+        }no repeat of the problem across the watch window, on live evidence.${
+          codify.codified || codify.alreadyCodified
+            ? " What worked is now codified into your team's library — retrieval can surface it the next time this comes up."
+            : ""
+        }`,
         efficacy_note: rx.efficacy_note,
+        codified: {
+          codified: codify.codified,
+          already_codified: codify.alreadyCodified,
+          record_id: codify.recordId,
+          embedded: codify.embedded,
+          conflicts: codify.conflicts,
+          note: codify.note,
+        },
         summary,
       });
     }

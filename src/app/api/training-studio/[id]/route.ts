@@ -73,6 +73,10 @@ type OutcomeRow = {
   next_format_rationale: string | null;
   enhancements: unknown;
   created_at: string;
+  // P-7 Build 6 — set when this attempt's winning artifact codified into the
+  // knowledge graph; the detail page links to the library record.
+  graph_node_id: string | null;
+  graph_synced_at: string | null;
 };
 
 export async function GET(
@@ -137,7 +141,7 @@ export async function GET(
     const { data: outRaw } = await supabase
       .from("training_format_outcomes")
       .select(
-        "attempt, chosen_format, recommended_format, was_override, override_reason, outcome, outcome_note, next_format_recommended, next_format_rationale, enhancements, created_at"
+        "attempt, chosen_format, recommended_format, was_override, override_reason, outcome, outcome_note, next_format_recommended, next_format_rationale, enhancements, created_at, graph_node_id, graph_synced_at"
       )
       .eq("training_request_id", request.id)
       .order("attempt", { ascending: true });

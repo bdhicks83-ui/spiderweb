@@ -47,8 +47,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { embedText } from "@/lib/voyage";
 import type { FrameworkArtifact } from "@/lib/elicitation";
+import {
+  computeRetrievalEffectiveness,
+  type RecordEffectiveness,
+} from "@/lib/retrieval-effectiveness";
 
 // Below this cosine similarity a "match" is noise. A wrong framework is worse
 // than an empty result (a confident wrong answer erodes trust in the brain).
@@ -67,9 +72,16 @@ const MATCH_COUNT = 5;
 
 const RESULT_COLUMNS =
   "id, user_id, org_id, created_at, trigger_type, method, context_function, " +
-  "situation_type, framework";
+  "situation_type, framework, codified_from";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type CodifiedFrom = {
+  kind?: string;
+  format_name?: string;
+  training_request_id?: string;
+  experts?: { name?: string }[];
+} | null;
 
 type ResultRow = {
   id: string;
@@ -81,6 +93,7 @@ type ResultRow = {
   context_function: string | null;
   situation_type: string | null;
   framework: FrameworkArtifact | null;
+  codified_from: CodifiedFrom;
 };
 
 type MatchRow = { id?: unknown; similarity?: unknown };
@@ -261,26 +274,82 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── 7. P-8 PHASE 2 — the effectiveness reader (the first reader).
+    //    Computes a per-record signal from what the org actually experienced
+    //    (watch-verified resolutions + explicit "this helped" judgments) and
+    //    re-ranks WITHIN the matches that already cleared the 0.75 gate. The
+    //    thin-data guardrail lives in the reader: below the confidence bar the
+    //    signal is 'early', never 'proven'. A reader failure degrades to
+    //    similarity-only ranking — it can never take retrieval down.
+    let effectiveness: Record<string, RecordEffectiveness> = {};
+    try {
+      const orgId = rows.find((r) => r.org_id)?.org_id ?? null;
+      const orgRecordIds = rows.filter((r) => r.org_id).map((r) => r.id);
+      if (orgId && orgRecordIds.length > 0) {
+        const service = createServiceClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+        effectiveness = await computeRetrievalEffectiveness(service, orgId, orgRecordIds);
+      }
+    } catch (err) {
+      log("effectiveness reader failed (degrading to similarity-only)", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      effectiveness = {};
+    }
+
     const results = rows
-      .map((r) => ({
-        id: r.id,
-        similarity: Math.round((simById.get(r.id) ?? 0) * 1000) / 1000,
-        trigger_type: r.trigger_type,
-        method: r.method,
-        context_function: r.context_function,
-        situation_type: r.situation_type,
-        framework: r.framework,
-        is_mine: r.user_id === user.id,
-        author: authors[r.user_id] ?? null,
-        contested: contestedBy[r.id] ?? [],
-      }))
-      .sort((a, b) => b.similarity - a.similarity);
+      .map((r) => {
+        const eff = effectiveness[r.id] ?? null;
+        // Training-derived provenance, shipped only in the safe display shape.
+        const provenance =
+          r.codified_from && r.codified_from.kind === "training_studio"
+            ? {
+                format_name: r.codified_from.format_name ?? "training",
+                expert_names: [
+                  ...new Set(
+                    (r.codified_from.experts ?? [])
+                      .map((e) => e?.name)
+                      .filter((n): n is string => typeof n === "string" && n.trim().length > 0)
+                  ),
+                ],
+                training_request_id: r.codified_from.training_request_id ?? null,
+              }
+            : null;
+        return {
+          id: r.id,
+          similarity: Math.round((simById.get(r.id) ?? 0) * 1000) / 1000,
+          trigger_type: r.trigger_type,
+          method: r.method,
+          context_function: r.context_function,
+          situation_type: r.situation_type,
+          framework: r.framework,
+          is_mine: r.user_id === user.id,
+          author: authors[r.user_id] ?? null,
+          contested: contestedBy[r.id] ?? [],
+          effectiveness: eff,
+          codified_from: provenance,
+        };
+      })
+      // Re-rank WITHIN matches: similarity + the (small, explained) boost.
+      // The displayed similarity never changes; only the order can.
+      .sort(
+        (a, b) =>
+          b.similarity + (b.effectiveness?.boost ?? 0) - (a.similarity + (a.effectiveness?.boost ?? 0))
+      );
 
     // THE INVARIANT: noMatch is derived from the array being returned — the one
     // and only source of truth. { noMatch: false, results: [] } cannot be
     // constructed from here, and neither can { noMatch: true, results: [...] }.
     const noMatch = results.length === 0;
-    log("done", { results: results.length, noMatch, contested: Object.keys(contestedBy).length });
+    log("done", {
+      results: results.length,
+      noMatch,
+      contested: Object.keys(contestedBy).length,
+      withEffectiveness: Object.keys(effectiveness).length,
+      proven: Object.values(effectiveness).filter((e) => e.level === "proven").length,
+    });
 
     return NextResponse.json({ noMatch, query, results });
   } catch (err) {
