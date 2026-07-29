@@ -12,7 +12,15 @@
 // ⚠️ COPY ON THESE PAGES IS CUSTOMER-FACING AND LEAVES THE BUILDING. It is
 // DRAFT pending Brian, and it is the highest-stakes copy in the product: it is
 // read by the budget holder, not the user.
-import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, View, Text, StyleSheet, Font } from "@react-pdf/renderer";
+
+// react-pdf hyphenates by default, which broke "redesigned" into "re-designed"
+// and "specific" into "spe-cific" in the stat captions. On a two-page document
+// that a champion forwards to a VP, a word split across lines by an algorithm
+// reads as a typo — it makes the whole artifact look auto-generated, which is
+// the one impression this document cannot afford. Returning the word whole
+// disables hyphenation globally for this renderer.
+Font.registerHyphenationCallback((word) => [word]);
 import type { Readout } from "@/lib/value-readout";
 
 // Viridescent palette. @react-pdf/renderer runs its own layout engine and never
@@ -109,10 +117,10 @@ const COPY = {
   s1: "What is now written down",
   s1lead:
     "Judgment that existed only in someone's head at the start of this period, and now exists in your team's library — attributed, searchable, and yours.",
-  anchor: (years: number, partial: boolean, people: number) =>
-    `${partial ? "At least " : ""}${years} years of experience are now represented in writing, across ${people} ${
-      people === 1 ? "person" : "people"
-    }.`,
+  anchor: (partial: boolean, people: number) =>
+    `${
+      partial ? "At least this much experience" : "Experience"
+    } now on the record — across ${people} ${people === 1 ? "person" : "people"}.`,
   anchorTail:
     "That is the replacement cost you were carrying without a copy. What it is worth to you is your number to run — we do not estimate it.",
 
@@ -170,7 +178,7 @@ export function ReadoutDocument({ readout }: { readout: Readout }) {
                 {c.years_of_judgment} years
               </Text>
               <Text style={styles.anchorText}>
-                {COPY.anchor(c.years_of_judgment, c.years_is_partial, c.contributors.length)}
+                {COPY.anchor(c.years_is_partial, c.contributors.length)}
               </Text>
               <Text style={styles.anchorText}>{COPY.anchorTail}</Text>
             </View>
