@@ -4,6 +4,52 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-07-28 -- Demo reseed STAGED: Meridian → AWIP/IMP (authentic panel-line content, real names)
+
+**What was built (staged, not yet run -- Brian executes from his machine):**
+the full demo-org replacement. Wipe SQL (`claude/AWIP-RESEED-WIPE.sql`, one
+transaction, org-scoped) + three scripts: `seed-awip-demo.mjs` (15 experts,
+10 frameworks VERBATIM from `IMP-DEMO-FRAMEWORK-CONTENT.md`, win column,
+knowledge gap, coaching records), `seed-awip-conflicts.mjs` (real P-2/P-6
+detectors + prescriptions), `verify-awip-demo.mjs` (the DONE test, read-only).
+
+**Non-obvious decisions:**
+
+- **The spine conflict is now IMP-authentic:** Dana Whitfield "The No-Release
+  Gate" ⚔ Brian Ng "The Controlled Restart Release" -- same trigger (first
+  run after a changeover), hold vs. release. Secondary: Kim Harrell "Custom
+  Profile: Promise It or Walk" ⚔ Brian Montes "Capacity Reality First".
+  Both must be OPEN; both pairs share an identical `entity_map` process
+  entity so the deterministic candidate filter fires by construction, not
+  hope.
+- **Real-name mapping per Brian's approved design.** 13 real AWIP people;
+  the two made-up names are **Dana Whitfield** (Quality Manager -- the spine
+  needed a quality voice) and **Tyler Brooks** (operator, the coaching-watch
+  subject -- deliberately not a real person). Marcus Webb carries over as the
+  Win Column subject, now a PM.
+- **VERBATIM doctrine: no `framePattern()` model call in the seed.** Every
+  other seed renders artifacts through the model; this one composes the
+  framework JSON mechanically from the doc's own sections, because the
+  handoff requires the approved judgment text unaltered. A model render
+  paraphrases -- that's the one thing this reseed must never do.
+- **The wipe never touches auth/profiles/org rows.** The 5 Meridian accounts
+  survive (auth intact) and are un-hooked from the org; the 15 AWIP experts
+  are fresh accounts (`@awip-demo.example`, `Demo-AWIP-2026!`). Cascade
+  protection is enforced IN the SQL: a DO-block gate aborts the whole
+  transaction unless +test1 still shows exactly 29 sources / 1,248 dependent
+  insights / Meridian org name. Verified live pre-build: demo users own ZERO
+  legacy insights/sources, so the wipe cannot reach the insight web
+  (1,272 global insights spot-checked intact).
+- **Manager chain built for the gates:** Tyler → Chuck Milner (plant
+  manager) is what routes the coaching watch to Chuck and nobody else;
+  Joe Paparella tops the chain; Montes/Kim/Hicks/Chuck/Carlos are
+  `role='manager'` so every manager-gated feature has a real approver.
+- **New 📌 shoot query** (replaces the die-changeover one): *"We had a
+  delamination escape right after a profile changeover on the Little Rock
+  line -- should we release the next run before the bond-strength inspection
+  clears?"* → must return "The Controlled Restart Release" (Brian Ng) top,
+  CONTESTED. `verify-awip-demo.mjs` asserts exactly this.
+
 ## 2026-07-21 -- P0 build: Elicitation Engine (`/codify` → Pattern Record → branded framework)
 
 **What shipped (local code only -- migration + deploy pending):** the full P0

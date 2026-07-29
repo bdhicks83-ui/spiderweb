@@ -91,7 +91,7 @@ else { console.log("❌ some complete records are missing an embedding"); failur
 // ── 2. Positive retrieval ──
 console.log("\n=== 2. POSITIVE RETRIEVAL (changeover / QC) ===");
 const posQ =
-  "We had a quality escape right after a die changeover on the press line — should we release the next production run before first-piece inspection clears?";
+  "We had a delamination escape right after a profile changeover on the Little Rock line — should we release the next run before the bond-strength inspection clears?";
 const posEmb = await embedQuery(posQ);
 const { data: posMatches, error: posErr } = await supabase.rpc("search_pattern_records_by_query", {
   query_embedding: posEmb,
