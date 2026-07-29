@@ -423,9 +423,22 @@ export async function buildReadout(
       } no captured answer.`
     );
   }
-  if (withYears.length < contributors.length) {
+  // ⭐ The years caveat may only fire when there IS a total to caveat.
+  // When nobody has a figure on file, `yearsOfJudgment` is null and the anchor
+  // block renders nothing — so "the total below is a minimum" would point the
+  // reader at a number that is not on the page. A caveat referencing a missing
+  // number is exactly the credibility failure this section exists to prevent,
+  // and it is worse than no caveat at all.
+  if (yearsOfJudgment === null) {
     notes.push(
-      "Years of experience is self-reported and not everyone has filled it in, so the total below is a minimum."
+      "Nobody on the account has recorded years of experience yet, so this readout cannot show what the captured judgment would cost to replace."
+    );
+  } else if (withYears.length < contributors.length) {
+    const missing = contributors.length - withYears.length;
+    notes.push(
+      `Years of experience is self-reported and ${missing} of the ${contributors.length} contributors ${
+        missing === 1 ? "has" : "have"
+      } not filled it in, so the years total is a minimum.`
     );
   }
 

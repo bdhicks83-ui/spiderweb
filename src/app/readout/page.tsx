@@ -260,7 +260,8 @@ export default function ReadoutPage() {
               <h2 style={styles.h2}>{COPY.s1}</h2>
               <p style={styles.lead}>{COPY.s1lead}</p>
 
-              {data.captured.years_of_judgment !== null && (
+              {data.captured.years_of_judgment !== null &&
+                data.captured.contributors.length > 0 && (
                 <div style={styles.anchor}>
                   <div style={styles.anchorNum}>
                     {data.captured.years_is_partial ? "≥" : ""}
