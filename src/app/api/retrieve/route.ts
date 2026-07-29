@@ -93,6 +93,8 @@ import {
   type RecordEffectiveness,
 } from "@/lib/retrieval-effectiveness";
 import { beginnerFrame, resolveFloorGuideMode, type BeginnerFrame } from "@/lib/floor-guide";
+// Server-only (pulls fs via @/lib/claude). Safe here — this is an API route.
+import { translateSymptom, lastSymptomTranslateDiagnostic } from "@/lib/claude";
 
 // Below this cosine similarity a "match" is noise. A wrong framework is worse
 // than an empty result (a confident wrong answer erodes trust in the brain).
@@ -178,67 +180,172 @@ export async function POST(req: NextRequest) {
     const userId = viewer.userId;
     log("start", { user: userId, chars: query.length, floorGuide });
 
-    // ── 1. Embed the situation as a query. A failure is surfaced, never
-    //    swallowed. (pattern_records embed as `document`, queries as `query` —
-    //    do not mix; mixing quietly degrades every similarity score.)
-    const embed = await embedText(query, { inputType: "query" });
-    if (!embed.ok) {
-      log("embed FAILED", { status: embed.status, rateLimited: embed.rateLimited, error: embed.error });
-      return NextResponse.json(
-        {
-          error: embed.rateLimited
-            ? "The search service is busy right now — try again in a moment."
-            : "Could not run the search. Please try again.",
-          code: embed.rateLimited ? "EMBED_RATE_LIMITED" : "EMBED_FAILED",
-          details: embed.error,
-        },
-        { status: 502 }
+    // ── 1 + 2. EMBED AND SEARCH, as one reusable step.
+    //
+    // Extracted into a local helper because Floor Guide may run it TWICE: once on
+    // the translated reading, and once on the person's raw words as a fallback.
+    // Every guard from the P-7 hardening lives inside it, so both calls get the
+    // same protection rather than the second one getting a hand-rolled copy.
+    //
+    // (pattern_records embed as `document`, queries as `query` — do not mix;
+    // mixing quietly degrades every similarity score.)
+    type SearchOutcome =
+      | { ok: true; scored: { id: string; similarity: number }[] }
+      | { ok: false; response: NextResponse };
+
+    const runSearch = async (text: string): Promise<SearchOutcome> => {
+      const embed = await embedText(text, { inputType: "query" });
+      if (!embed.ok) {
+        log("embed FAILED", {
+          status: embed.status,
+          rateLimited: embed.rateLimited,
+          error: embed.error,
+        });
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: embed.rateLimited
+                ? "The search service is busy right now — try again in a moment."
+                : "Could not run the search. Please try again.",
+              code: embed.rateLimited ? "EMBED_RATE_LIMITED" : "EMBED_FAILED",
+              details: embed.error,
+            },
+            { status: 502 }
+          ),
+        };
+      }
+
+      // SECURITY INVOKER by design, so the caller's "org library read" RLS scopes
+      // this — see p3-pattern-record-embeddings.sql.
+      const { data: matches, error: matchError } = await supabase.rpc(
+        "search_pattern_records_by_query",
+        { query_embedding: embed.vector, match_count: MATCH_COUNT }
       );
-    }
-    log("embed ok");
+      if (matchError) {
+        log("rpc FAILED", { error: matchError.message });
+        return {
+          ok: false,
+          response: NextResponse.json(
+            { error: "Search failed", code: "SEARCH_RPC_FAILED", details: matchError.message },
+            { status: 500 }
+          ),
+        };
+      }
 
-    // ── 2. Nearest frameworks. SECURITY INVOKER by design, so the caller's
-    //    "org library read" RLS scopes this — see p3-pattern-record-embeddings.sql.
-    const { data: matches, error: matchError } = await supabase.rpc(
-      "search_pattern_records_by_query",
-      { query_embedding: embed.vector, match_count: MATCH_COUNT }
-    );
-    if (matchError) {
-      log("rpc FAILED", { error: matchError.message });
-      return NextResponse.json(
-        { error: "Search failed", code: "SEARCH_RPC_FAILED", details: matchError.message },
-        { status: 500 }
+      const rawMatches = (matches ?? []) as MatchRow[];
+
+      // A malformed match row is a schema/contract break (e.g. the live function
+      // no longer returns an `id` column, or returns it under another name). That
+      // must NOT be silently filtered into an empty result — it is the exact
+      // failure mode that produced the blank-page bug.
+      const malformed = rawMatches.filter(
+        (m) =>
+          typeof m.similarity !== "number" ||
+          typeof m.id !== "string" ||
+          !UUID_RE.test(m.id as string)
       );
+      if (malformed.length > 0) {
+        log("rpc returned malformed rows", { count: malformed.length, sample: malformed[0] });
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: "Search returned an unexpected result shape.",
+              code: "RETRIEVAL_BAD_MATCH_SHAPE",
+              details:
+                "search_pattern_records_by_query must return (id uuid, similarity float). " +
+                `Got ${malformed.length} row(s) that do not match — sample keys: ` +
+                Object.keys(malformed[0] ?? {}).join(", "),
+            },
+            { status: 500 }
+          ),
+        };
+      }
+
+      return { ok: true, scored: rawMatches as { id: string; similarity: number }[] };
+    };
+
+    const aboveBar = (rows: { similarity: number }[]) =>
+      rows.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
+
+    // ── 1b. ⭐ FLOOR GUIDE — CLOSE THE VOCABULARY GAP ON THE QUERY, NOT THE BAR.
+    //
+    // Measured on this library (MASTER-STATE note 2026-07-29): expert phrasing of
+    // the delamination question scores 0.823; the beginner phrasing of the SAME
+    // problem scores 0.665–0.691, against an org holding two frameworks on
+    // exactly it. Unrelated cross-domain queries also land at 0.62–0.69 on this
+    // model, so a bar low enough to catch the beginner is a bar low enough to
+    // serve confident nonsense to the person least able to spot it.
+    //
+    // So the threshold does NOT move — 0.75 still governs both surfaces, and
+    // /retrieve is untouched. What changes is the QUERY: the observation is
+    // restated in the org's own captured vocabulary and that is what gets
+    // embedded. Fails open in every direction (see translateSymptom).
+    let reading: string | null = null;
+    let readingTerms: string[] = [];
+    let readingConfident = false;
+    let readingDiagnostic: string | null = null;
+
+    if (floorGuide) {
+      // The vocabulary the translation is allowed to use: this org's OWN framework
+      // names and taglines, read through the session client so RLS is the gate.
+      // Deliberately not the model's own industry knowledge — see the prompt.
+      const { data: vocabRows } = await supabase
+        .from("pattern_records")
+        .select("framework")
+        .eq("status", "complete")
+        .order("created_at", { ascending: false })
+        .limit(24);
+      const vocabulary = ((vocabRows ?? []) as { framework: { name?: string; tagline?: string } | null }[])
+        .map((r) => {
+          const n = typeof r.framework?.name === "string" ? r.framework.name : "";
+          const t = typeof r.framework?.tagline === "string" ? r.framework.tagline : "";
+          return n ? (t ? `${n} — ${t}` : n) : "";
+        })
+        .filter(Boolean);
+
+      const translated = await translateSymptom(query, vocabulary, viewer.claimedTitle);
+      if (translated?.reading) {
+        reading = translated.reading;
+        readingTerms = translated.terms;
+        readingConfident = translated.confident;
+        log("symptom translated", { confident: readingConfident, terms: readingTerms.length });
+      } else {
+        // A null reading is a legitimate outcome, not only an error — the prompt
+        // is explicitly told to return one when the words map onto nothing.
+        readingDiagnostic = lastSymptomTranslateDiagnostic;
+        log("no translation — searching the raw words", { diagnostic: readingDiagnostic });
+      }
     }
 
-    const rawMatches = (matches ?? []) as MatchRow[];
+    // ── 2. The search itself. Translated reading first when we have one.
+    const primary = await runSearch(reading ?? query);
+    if (!primary.ok) return primary.response;
+    let scored = primary.scored;
+    let searchedRaw = reading === null;
 
-    // A malformed match row is a schema/contract break (e.g. the live function
-    // no longer returns an `id` column, or returns it under another name). That
-    // must NOT be silently filtered into an empty result — it is the exact
-    // failure mode that produced the blank-page bug.
-    const malformed = rawMatches.filter(
-      (m) =>
-        typeof m.similarity !== "number" ||
-        typeof m.id !== "string" ||
-        !UUID_RE.test(m.id as string)
-    );
-    if (malformed.length > 0) {
-      log("rpc returned malformed rows", { count: malformed.length, sample: malformed[0] });
-      return NextResponse.json(
-        {
-          error: "Search returned an unexpected result shape.",
-          code: "RETRIEVAL_BAD_MATCH_SHAPE",
-          details:
-            "search_pattern_records_by_query must return (id uuid, similarity float). " +
-            `Got ${malformed.length} row(s) that do not match — sample keys: ` +
-            Object.keys(malformed[0] ?? {}).join(", "),
-        },
-        { status: 500 }
-      );
+    // The reading found nothing above the bar → try the person's own words before
+    // declaring a gap. This can only ADD recall: the raw search is exactly what
+    // would have run without any of this, so Floor Guide can never end up worse
+    // off than /retrieve on the same question.
+    if (floorGuide && reading !== null && aboveBar(scored).length === 0) {
+      const rawAttempt = await runSearch(query);
+      if (!rawAttempt.ok) return rawAttempt.response;
+      searchedRaw = true;
+      if (aboveBar(rawAttempt.scored).length > 0) {
+        log("reading missed, raw words hit — using the raw search");
+        scored = rawAttempt.scored;
+        reading = null; // don't show a reading that didn't produce the answer
+      } else {
+        // Keep whichever near-miss was closer, purely so the honest empty state
+        // reports the better number.
+        const bestRaw = rawAttempt.scored[0]?.similarity ?? 0;
+        const bestReading = scored[0]?.similarity ?? 0;
+        if (bestRaw > bestReading) scored = rawAttempt.scored;
+      }
     }
 
-    const scored = rawMatches as { id: string; similarity: number }[];
     const strong = scored.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
     log("search", {
       returned: scored.length,
@@ -252,6 +359,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         noMatch: true,
         floor_guide: floorGuide,
+        reading,
+        reading_terms: readingTerms,
+        reading_confident: readingConfident,
+        reading_diagnostic: readingDiagnostic,
+        searched_raw: searchedRaw,
         message:
           "Nothing codified on this yet. No one on your team has captured a framework that matches this situation — this is a gap worth codifying.",
         topSimilarity: scored.length ? Math.round(scored[0].similarity * 1000) / 1000 : null,
@@ -428,7 +540,21 @@ export async function POST(req: NextRequest) {
     // `floor_guide` is echoed so the surface can pass the SAME resolved value
     // back on its follow-up calls (the "this helped" control, the gap flag)
     // instead of each of them re-deriving what mode this search was in.
-    return NextResponse.json({ noMatch, query, results, floor_guide: floorGuide });
+    return NextResponse.json({
+      noMatch,
+      query,
+      results,
+      floor_guide: floorGuide,
+      // ⭐ Shown to the new hire as "here's how I read that" — the translation is
+      // deliberately visible, because handing somebody the words their colleagues
+      // use is half the value of onboarding. A silent rewrite would search just as
+      // well and teach them nothing. Null on /retrieve and whenever the raw words
+      // were what actually found the answer.
+      reading,
+      reading_terms: readingTerms,
+      reading_confident: readingConfident,
+      searched_raw: searchedRaw,
+    });
   } catch (err) {
     console.error("[retrieve] Unexpected error in retrieve route:", err);
     return NextResponse.json(

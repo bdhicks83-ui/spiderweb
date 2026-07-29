@@ -93,6 +93,14 @@ const COPY = {
   askWorking: "Looking…",
 
   answersLead: "Here's what your team says about that.",
+  // ⭐ The vocabulary bridge, shown on purpose. A new hire's biggest handicap is
+  // not knowing what things are called here, so the restatement is handed to them
+  // rather than applied silently behind the search. Two versions: one for a solid
+  // mapping, one for a shaky one, because presenting a guess as a certainty to
+  // somebody who can't yet tell the difference is the thing to avoid.
+  readingLabel: "Here's how I read that, in your team's words:",
+  readingTentative: "I think you might mean this — worth checking if it looks off:",
+  readingTermsLabel: "Words your team uses for this:",
   theCall: "What to do",
   whoOwns: "Who to grab",
   watchFor: "What to look for",
@@ -171,11 +179,13 @@ type Answer = {
   contested: boolean;
 };
 
+type Reading = { text: string; terms: string[]; confident: boolean } | null;
+
 type Ask =
   | { kind: "idle" }
   | { kind: "working" }
-  | { kind: "answers"; askedFor: string; answers: Answer[] }
-  | { kind: "gap"; askedFor: string }
+  | { kind: "answers"; askedFor: string; answers: Answer[]; reading: Reading }
+  | { kind: "gap"; askedFor: string; reading: Reading }
   | { kind: "failed"; message: string };
 
 type GapState =
@@ -417,13 +427,24 @@ export default function FloorGuidePage() {
         return;
       }
       const results = Array.isArray(data?.results) ? (data.results as Record<string, unknown>[]) : [];
+      // Null whenever the raw words were what found the answer — showing a
+      // restatement that didn't produce the result would be theatre.
+      const reading: Reading =
+        typeof data?.reading === "string" && data.reading.trim()
+          ? {
+              text: data.reading.trim(),
+              terms: asArray(data?.reading_terms),
+              confident: data?.reading_confident === true,
+            }
+          : null;
       if (data?.noMatch === true || results.length === 0) {
-        setAsk({ kind: "gap", askedFor });
+        setAsk({ kind: "gap", askedFor, reading });
         return;
       }
       setAsk({
         kind: "answers",
         askedFor,
+        reading,
         answers: results.map((r) => ({
           id: asText(r.id),
           name: asText((r.framework as Record<string, unknown>)?.name) || "A framework",
@@ -559,6 +580,25 @@ export default function FloorGuidePage() {
         {ask.kind === "failed" && (
           <div style={styles.calmPanel}>
             <p style={styles.panelBody}>{ask.message}</p>
+          </div>
+        )}
+
+        {(ask.kind === "answers" || ask.kind === "gap") && ask.reading && (
+          <div style={styles.readingPanel}>
+            <div style={styles.readingLabel}>
+              {ask.reading.confident ? COPY.readingLabel : COPY.readingTentative}
+            </div>
+            <p style={styles.readingText}>{ask.reading.text}</p>
+            {ask.reading.terms.length > 0 && (
+              <div style={styles.termsRow}>
+                <span style={styles.blockLabel}>{COPY.readingTermsLabel}</span>
+                {ask.reading.terms.map((t, i) => (
+                  <span key={i} style={styles.termChip}>
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -855,6 +895,38 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     borderTop: "1px solid var(--line)",
     paddingTop: 12,
+  },
+
+  // Paper-toned, not accented: the reading is context for what follows, not a
+  // result in its own right. It must not compete with the WHAT TO DO box.
+  readingPanel: {
+    background: "var(--paper-2)",
+    border: "1px solid var(--line)",
+    borderRadius: 14,
+    padding: "14px 18px",
+    marginBottom: 18,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  readingLabel: { fontSize: 13, fontWeight: 600, color: "var(--muted)" },
+  readingText: {
+    fontSize: 15.5,
+    lineHeight: 1.6,
+    color: "var(--pine)",
+    margin: 0,
+    fontFamily: "var(--font-serif)",
+    maxWidth: "62ch",
+  },
+  termsRow: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  termChip: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--growth-deep)",
+    background: "var(--growth-soft)",
+    border: "1px solid var(--ok-border)",
+    borderRadius: 999,
+    padding: "2px 9px",
   },
 
   gapPanel: {

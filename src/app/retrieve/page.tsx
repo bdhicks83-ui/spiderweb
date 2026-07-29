@@ -343,6 +343,19 @@ export default function RetrievePage() {
   // every new search alongside `view`, so a flag never carries over onto a
   // different question.
   const [gapState, setGapState] = useState<GapState>({ kind: "idle" });
+  // ─── FLOOR GUIDE PHASE A ───
+  // Contributors reach this page fully — retrieval is theirs, and flagging a gap
+  // is the single most useful thing they do here. What they cannot do is CODIFY,
+  // so the two codify doorways on this page are hidden for them.
+  //
+  // ⚠️ This deviates from the app-wide "show the link, let the gate decide"
+  // default, and the deviation is deliberate. That default is right when the gate
+  // is about DATA — /coaching renders empty for someone with no reports, which is
+  // informative. It is wrong when the gate is about the PERSON: offering "Answer
+  // it now," walking them into a multi-turn interview, and refusing at the end is
+  // a bait-and-switch, and the refusal would land at the worst possible moment.
+  // Own-row read; the real gate is the pattern_records trigger.
+  const [isContributor, setIsContributor] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -356,6 +369,12 @@ export default function RetrievePage() {
         router.replace("/login");
         return;
       }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      setIsContributor((profile as { role: string | null } | null)?.role === "contributor");
       setChecking(false);
     })();
   }, [router]);
@@ -580,9 +599,11 @@ export default function RetrievePage() {
             <a href="/library" style={styles.headerLink}>
               📚 Library
             </a>
-            <a href="/codify" style={styles.newLink}>
-              + Codify a pattern
-            </a>
+            {!isContributor && (
+              <a href="/codify" style={styles.newLink}>
+                + Codify a pattern
+              </a>
+            )}
           </div>
         </div>
         <p style={styles.subtitle}>
@@ -684,14 +705,16 @@ export default function RetrievePage() {
                   >
                     {gapState.kind === "flagging" ? GAP_COPY.flagging : GAP_COPY.flag}
                   </button>
-                  <button
-                    type="button"
-                    style={styles.gapSecondary}
-                    disabled={gapState.kind === "flagging"}
-                    onClick={() => flagGap(view.askedFor, view.topSimilarity, true)}
-                  >
-                    {GAP_COPY.answer}
-                  </button>
+                  {!isContributor && (
+                    <button
+                      type="button"
+                      style={styles.gapSecondary}
+                      disabled={gapState.kind === "flagging"}
+                      onClick={() => flagGap(view.askedFor, view.topSimilarity, true)}
+                    >
+                      {GAP_COPY.answer}
+                    </button>
+                  )}
                 </div>
                 {gapState.kind === "error" && (
                   <p style={styles.gapError}>{gapState.message}</p>

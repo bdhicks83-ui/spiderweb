@@ -387,6 +387,117 @@ export async function checkConsistency(
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FLOOR GUIDE PHASE A — SYMPTOM → THE ORG'S OWN LANGUAGE.
+//
+// THE PROBLEM THIS SOLVES, MEASURED (see MASTER-STATE note 2026-07-29):
+// the 0.75 retrieval threshold was tuned against EXPERT-phrased situations and
+// holds up well there (on-target ~0.85). Beginner symptom phrasing scores far
+// lower against the same library — "the panel looks bubbled along one edge"
+// scored 0.665 against an org holding TWO frameworks about exactly that.
+//
+// ⚠️ AND LOWERING THE THRESHOLD CANNOT FIX IT. Unrelated cross-domain queries
+// also land at ~0.62–0.69 on this embedding model. So 0.665 for an on-topic
+// beginner question is statistically INDISTINGUISHABLE from a completely
+// unrelated one. Any threshold low enough to catch the beginner is low enough to
+// serve confident nonsense — to the person least equipped to notice. The
+// vocabulary gap has to be closed on the QUERY side, not the bar side.
+//
+// So: translate the observation into the situation language the org itself uses,
+// then run the SAME search at the SAME 0.75. The bar never moves.
+//
+// ⭐ AND THE TRANSLATION IS SHOWN TO THE NEW HIRE. "Here's how I read that"
+// hands them the words their colleagues use, which is a real onboarding win in
+// its own right — the fastest way to stop feeling lost is to learn what things
+// are called. A silent rewrite would work just as well for the search and teach
+// them nothing.
+//
+// GROUNDED IN THE ORG'S REAL VOCABULARY, NOT THE MODEL'S. The prompt is given
+// this org's actual framework names and taglines and is forbidden from importing
+// outside jargon. A model translating "bubbled panel" into textbook terms this
+// team does not use would produce a confident search for something nobody wrote
+// down — worse than no translation.
+//
+// FAILS OPEN, ALWAYS. Returns null on any failure and the caller searches the
+// raw words instead. Single attempt, no internal retry (P-7: under a hard 60s
+// ceiling a second attempt cannot return). max_tokens sized for the THINKING
+// block plus the output, not the output alone — the P-7 trap where 2500 tokens
+// for a 300-word artifact was entirely consumed by thinking and returned zero
+// text blocks.
+// ─────────────────────────────────────────────────────────────────────────────
+export type SymptomReading = {
+  /** The observation restated in the org's language, or null if it doesn't map. */
+  reading: string | null;
+  /** The org terms the beginner's words were mapped onto. */
+  terms: string[];
+  /** False when the model itself flagged the mapping as shaky. */
+  confident: boolean;
+};
+
+/** Set on failure so a fail-open is diagnosable from the response body (P-7). */
+export let lastSymptomTranslateDiagnostic: string | null = null;
+
+export async function translateSymptom(
+  observation: string,
+  vocabulary: string[],
+  title: string | null
+): Promise<SymptomReading | null> {
+  lastSymptomTranslateDiagnostic = null;
+  // Nothing captured yet ⇒ nothing to translate INTO. Skipping is correct: with
+  // no vocabulary the model could only invent one.
+  if (vocabulary.length === 0) {
+    lastSymptomTranslateDiagnostic = "skipped: org has no codified vocabulary yet";
+    return null;
+  }
+  try {
+    const prompt = await loadPrompt("floor-guide-translate", {
+      vocabulary: vocabulary.map((v, i) => `${i + 1}. ${v}`).join("\n"),
+      title: title && title.trim() ? title.trim() : "not recorded",
+      observation,
+    });
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const blocks = msg.content as { type: string; text?: string }[];
+    const text = firstText(blocks);
+    if (!text) {
+      lastSymptomTranslateDiagnostic =
+        `no text block (stop_reason=${msg.stop_reason}, blocks=[${blocks
+          .map((b) => b.type)
+          .join(",")}])`;
+      return null;
+    }
+    const parsed = parseJson(text) as {
+      reading?: unknown;
+      terms?: unknown;
+      confident?: unknown;
+    } | null;
+    if (!parsed) {
+      lastSymptomTranslateDiagnostic = `unparseable JSON (len=${text.length}): ${text.slice(0, 160)}`;
+      return null;
+    }
+    // A null reading is a VALID, deliberate outcome per rule 4 of the prompt —
+    // not a failure. The caller searches the raw words and, if that finds
+    // nothing, the org has learned something true about its coverage.
+    const reading =
+      typeof parsed.reading === "string" && parsed.reading.trim()
+        ? parsed.reading.trim().slice(0, 500)
+        : null;
+    const terms = Array.isArray(parsed.terms)
+      ? parsed.terms
+          .filter((t): t is string => typeof t === "string" && !!t.trim())
+          .map((t) => t.trim().slice(0, 80))
+          .slice(0, 6)
+      : [];
+    return { reading, terms, confident: parsed.confident === true };
+  } catch (err) {
+    lastSymptomTranslateDiagnostic = `threw: ${err instanceof Error ? err.message : String(err)}`;
+    return null;
+  }
+}
+
 // Phase 5 (Step 4): identity/credential plausibility check. Compares the
 // expert's claimed identity against their LinkedIn profile content and returns
 // a plausibility flag + short notes + extracted structured attributes. Returns
