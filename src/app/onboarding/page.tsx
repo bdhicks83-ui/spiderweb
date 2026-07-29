@@ -34,7 +34,7 @@ const PERSONAS: { id: Persona; emoji: string; label: string; help: string }[] = 
   {
     id: "technical_director",
     emoji: "\u{1F527}",
-    label: "Technical Director",
+    label: "Technical Expert",
     help: "Equipment / error-class / 5-Whys-heavy — the concrete detail.",
   },
   {

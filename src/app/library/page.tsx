@@ -29,7 +29,11 @@ type LibraryRecord = {
     tagline: string;
   } | null;
   is_mine: boolean;
-  author: { display_name: string | null; persona: string | null } | null;
+  author: {
+    display_name: string | null;
+    persona: string | null;
+    claimed_title: string | null;
+  } | null;
   // P-2: open conflicts annotating this record (surface-with-warning — the
   // record renders normally either way, it just wears the badge).
   contested: { conflict_id: string; other_record_id: string }[];
@@ -53,9 +57,12 @@ const METHOD_LABEL: Record<string, string> = {
   training_derived: "Codified from training",
 };
 
+// FALLBACK ONLY — the card shows the author's real profiles.claimed_title
+// (e.g. "Quality Manager, Little Rock"); this generic role label paints only
+// when a profile has no claimed_title set.
 const PERSONA_LABEL: Record<string, string> = {
   exec: "Executive",
-  technical_director: "Technical Director",
+  technical_director: "Technical Expert",
   sr_manager: "Sr. Manager",
 };
 
@@ -169,9 +176,12 @@ export default function LibraryPage() {
                 <span style={styles.authorName}>
                   {r.author?.display_name || "Org member"}
                 </span>
-                {r.author?.persona && (
+                {(r.author?.claimed_title || r.author?.persona) && (
                   <span style={styles.personaTag}>
-                    {PERSONA_LABEL[r.author.persona] ?? r.author.persona}
+                    {r.author?.claimed_title ||
+                      (r.author?.persona
+                        ? PERSONA_LABEL[r.author.persona] ?? r.author.persona
+                        : "")}
                   </span>
                 )}
                 <span style={styles.date}>

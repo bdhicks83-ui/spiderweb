@@ -187,7 +187,11 @@ type Result = {
   situation_type: string | null;
   framework: Framework | null;
   is_mine: boolean;
-  author: { display_name: string | null; persona: string | null } | null;
+  author: {
+    display_name: string | null;
+    persona: string | null;
+    claimed_title: string | null;
+  } | null;
   contested: Contested[];
   effectiveness?: Effectiveness | null;
   codified_from?: Provenance | null;
@@ -234,9 +238,12 @@ const METHOD_LABEL: Record<string, string> = {
   training_derived: "Codified from training",
 };
 
+// FALLBACK ONLY — the card shows the author's real profiles.claimed_title
+// (e.g. "Panel Technical Expert, R&D"); this generic role label paints only
+// when a profile has no claimed_title set.
 const PERSONA_LABEL: Record<string, string> = {
   exec: "Executive",
-  technical_director: "Technical Director",
+  technical_director: "Technical Expert",
   sr_manager: "Sr. Manager",
 };
 
@@ -245,7 +252,7 @@ const PERSONA_LABEL: Record<string, string> = {
 // textarea reads differently each time the page loads.
 const SITUATION_PLACEHOLDERS = [
   "e.g. We had a quality escape right after a die changeover on the press line — should we release the next run before first-piece inspection clears?",
-  "e.g. The second-shift crew keeps missing the same setup step on CNC Line 2 — is this a training gap or an equipment issue?",
+  "e.g. We had a delamination escape after a profile changeover on the Little Rock line — release the next run before bond-strength clears?",
   "e.g. Maintenance and Quality disagree on when a fixture needs recalibration — who's right, and what's the actual trigger?",
   "e.g. A new hire on the receiving dock flagged a part as out-of-spec that later shipped fine — was that the right call?",
   "e.g. Scrap is climbing on the same line where we had a thermal drift issue months ago — is this the same root cause coming back?",
@@ -725,6 +732,11 @@ export default function RetrievePage() {
                 const prov =
                   r.codified_from && typeof r.codified_from === "object" ? r.codified_from : null;
                 const provNames = prov ? asArray(prov.expert_names) : [];
+                // The expert's real title from their profile; generic persona
+                // role only when no claimed_title is set.
+                const authorTitle =
+                  asText(r.author?.claimed_title) ||
+                  (r.author?.persona ? PERSONA_LABEL[r.author.persona] ?? r.author.persona : "");
 
                 return (
                   <ResultBoundary key={key} recordId={typeof r.id === "string" ? r.id : ""}>
@@ -844,10 +856,8 @@ export default function RetrievePage() {
                           <span style={styles.authorName}>
                             {r.author?.display_name || "Org member"}
                           </span>
-                          {r.author?.persona && (
-                            <span style={styles.personaTag}>
-                              {PERSONA_LABEL[r.author.persona] ?? r.author.persona}
-                            </span>
+                          {authorTitle && (
+                            <span style={styles.personaTag}>{authorTitle}</span>
                           )}
                           <span style={styles.openLink}>Open framework →</span>
                         </div>

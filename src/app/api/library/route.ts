@@ -78,14 +78,20 @@ export async function GET() {
     const rows = (records || []) as unknown as ListRow[];
     const authorIds = Array.from(new Set(rows.map((r) => r.user_id)));
 
-    let authors: Record<string, { display_name: string | null; persona: string | null }> = {};
+    let authors: Record<
+      string,
+      { display_name: string | null; persona: string | null; claimed_title: string | null }
+    > = {};
     if (authorIds.length > 0) {
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, display_name, persona")
+        .select("id, display_name, persona, claimed_title")
         .in("id", authorIds);
       authors = Object.fromEntries(
-        (profiles || []).map((p) => [p.id, { display_name: p.display_name, persona: p.persona }])
+        (profiles || []).map((p) => [
+          p.id,
+          { display_name: p.display_name, persona: p.persona, claimed_title: p.claimed_title },
+        ])
       );
     }
 

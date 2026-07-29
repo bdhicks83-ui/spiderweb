@@ -41,7 +41,11 @@ type DetailRecord = {
     boundaries: string[];
   } | null;
   is_mine: boolean;
-  author: { display_name: string | null; persona: string | null } | null;
+  author: {
+    display_name: string | null;
+    persona: string | null;
+    claimed_title: string | null;
+  } | null;
   // P-2: open conflicts on this record. Surface-with-warning: the framework
   // below renders fully and stays usable — the banner only adds the warning
   // and the two links (other side + resolution thread).
@@ -133,9 +137,11 @@ export default function LibraryDetailPage() {
           <span style={styles.authorName}>
             {record.author?.display_name || "Org member"}
           </span>
-          {record.author?.persona && (
+          {record.author?.claimed_title ? (
+            <span style={styles.personaTag}>{record.author.claimed_title}</span>
+          ) : record.author?.persona ? (
             <span style={styles.personaTag}>{record.author.persona.replace("_", " ")}</span>
-          )}
+          ) : null}
           {record.is_mine && <span style={styles.mineBadge}>Yours</span>}
           <span style={styles.date}>{new Date(record.created_at).toLocaleDateString()}</span>
         </div>

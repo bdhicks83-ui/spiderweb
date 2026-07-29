@@ -76,7 +76,7 @@ export async function GET(
 
     const { data: author } = await supabase
       .from("profiles")
-      .select("display_name, persona")
+      .select("display_name, persona, claimed_title")
       .eq("id", record.user_id)
       .maybeSingle();
 
