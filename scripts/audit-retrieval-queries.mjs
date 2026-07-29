@@ -4,7 +4,7 @@
 // which framework comes back #1 and who authored it.
 //
 // Usage: node scripts/audit-retrieval-queries.mjs
-//        node scripts/audit-retrieval-queries.mjs --as=tom.whitfield@meridian-demo.example
+//        node scripts/audit-retrieval-queries.mjs --as=chuck.milner@awip-demo.example
 import { createClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -18,17 +18,17 @@ const { NEXT_PUBLIC_SUPABASE_URL: URL, NEXT_PUBLIC_SUPABASE_ANON_KEY: ANON, SUPA
 
 const THRESHOLD = 0.75;
 const MATCH_COUNT = 5;
-const DEMO_PASSWORD = "Demo-Meridian-2026!";
+const DEMO_PASSWORD = "Demo-AWIP-2026!";
 const argOf = (f, d) => (process.argv.find((a) => a.startsWith(`--${f}=`)) || `--${f}=${d}`).slice(f.length + 3);
-const AS_EMAIL = argOf("as", "tom.whitfield@meridian-demo.example");
+const AS_EMAIL = argOf("as", "chuck.milner@awip-demo.example");
 
 const CANDIDATES = [
-  "We just ran a die changeover on the press line. Can we start the production run before the first-piece inspection comes back?",
-  "Die changeover finished on second shift and the press crew is idle waiting on first-piece inspection. Do we release the run?",
-  "Same-family die swap on Press #3 — do we have to hold the line until first-piece clears, or can we run parallel?",
-  "The presses are sitting idle after a changeover waiting for quality to sign off on the first piece. What do we do?",
-  "Should we release production after a die changeover before first-piece inspection is complete?",
-  "We had a quality escape right after a die changeover on the press line — should we release the next production run before first-piece inspection clears?",
+  "We had a delamination escape right after a profile changeover on the Little Rock line — should we release the next run before the bond-strength inspection clears?",
+  "Profile changeover just finished on the line. Can we release the first run of panels before the bond-strength and cut-section inspection comes back?",
+  "The line is sitting idle after a changeover waiting on first-article bond-strength results. Do we release the run or hold?",
+  "Same-chemistry profile swap on the Little Rock line — do we hold everything for the full cut-section, or release on a peel check?",
+  "Should we release a post-changeover panel run before the delamination inspection is complete?",
+  "First panels after a foam-chemical lot change — release to shipping or hold for quality?",
 ];
 
 const service = createClient(URL, SVC, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -90,9 +90,9 @@ for (const q of CANDIDATES) {
 console.log("\n" + "=".repeat(74));
 console.log("SUMMARY — best query for the shoot");
 console.log("=".repeat(74));
-const DIE = ["The No-Exceptions Gate", "The Quarantined Restart Play"];
+const TARGETS = ["The Controlled Restart Release", "The No-Release Gate"];
 for (const r of results.sort((a, b) => b.topSim - a.topSim)) {
-  const hit = DIE.includes(r.topName) ? "  <== die-changeover framework is #1" : "";
+  const hit = TARGETS.includes(r.topName) ? "  <== changeover-release framework is #1" : "";
   console.log(`  ${r.topSim.toFixed(3)} · ${r.n} results · top="${r.topName}" (${r.topAuthor})${hit}`);
   console.log(`      "${r.q}"`);
   if (r.unresolved) console.log(`      !! ${r.unresolved} matched id(s) did not load under RLS`);

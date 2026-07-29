@@ -133,8 +133,8 @@ const openCount = (openConflicts || []).length;
 if (openCount > 0) {
   console.log(`✅ ${openCount} OPEN conflict(s) — a contested badge WILL render in results`);
 } else {
-  console.log("⚠️  0 open conflicts — the planted one is still RESOLVED from the P-2 live test.");
-  console.log("    Contested badge won't show until you replant: node scripts/seed-p2-conflict.mjs --force");
+  console.log("⚠️  0 open conflicts — none seeded, or all were resolved in a live test.");
+  console.log("    Contested badge won't show until you replant: node scripts/seed-awip-conflicts.mjs");
 }
 
 console.log(`\n=== SUMMARY: ${failures === 0 ? "ALL CHECKS PASSED ✅" : failures + " CHECK(S) FAILED ❌"} ===\n`);

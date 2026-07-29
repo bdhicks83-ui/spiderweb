@@ -1,13 +1,13 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   THE 90-SECOND AD — all content and timing in ONE file.
+   THE BRAND AD (~100s) — all content and timing in ONE file.
 
    This is the only file Brian edits. Components never hardcode copy.
 
    ⚠ PLACEHOLDER COPY: AD-SCRIPT-90sec-2026-07-26.md is not in the repo (it
    lives in the Claude project). Every line and caption below is a placeholder
    written to the same storyline (the die-changeover conflict) and the same
-   four-beat structure. Paste the real script lines over these — timings are
-   already laid out at the right cadence for a 90-second read.
+   beat structure. Paste the real script lines over these — timings are
+   already laid out at the right cadence for a calm ~100-second read.
 
    Timing model: all times are ABSOLUTE seconds from frame 0 of the Ad90
    composition. Beats are back-to-back; captions are one flat list.
@@ -16,7 +16,7 @@
 import type { TitleLine } from "../brand/OpeningTitle";
 import type { Cue } from "../brand/CaptionTrack";
 
-export const TOTAL_SEC = 90;
+export const TOTAL_SEC = 103;
 
 /* ── Opening title (0 → OPENING_SEC) ────────────────────────────────────── */
 export const OPENING_SEC = 7;
@@ -26,7 +26,7 @@ export const OPENING_LINES: TitleLine[] = [
   { text: "When they leave, it walks out with them.", atSec: 3.6, soft: true },
 ];
 
-/* ── The four beats ─────────────────────────────────────────────────────── */
+/* ── The five beats ─────────────────────────────────────────────────────── */
 export type Beat = {
   number: string;
   title: string;
@@ -77,11 +77,27 @@ export const BEATS: Beat[] = [
     slateLabel: "Training module + Win Column",
     slateHint: "/prescriptions detail → training altitudes, then the Win Column",
   },
+  {
+    number: "05",
+    title: "Everything feeds the web.",
+    fromSec: 79,
+    toSec: 92,
+    footageSrc: null,
+    slateLabel: "The compounding loop",
+    slateHint:
+      "Outcome → graph → retrieval — the Format Agent reading the org's own track record",
+  },
 ];
 
-/* ── End card (last beat → TOTAL_SEC) ───────────────────────────────────── */
-export const ENDCARD_FROM_SEC = 79;
-export const ENDCARD_KICKER = "Your company's judgment, kept.";
+/* ── End card (last beat → TOTAL_SEC) ─────────────────────────────────────
+   The card itself is the tagline: the mark reads "Viridescent", the line
+   under it reads KNOWLEDGE THAT APPRECIATES (URL_TEXT in brand/tokens.ts).
+   Kicker is null on purpose — a serif "Knowledge that appreciates." above
+   that line would print the same sentence twice. The closing caption speaks
+   the full button.
+   ───────────────────────────────────────────────────────────────────────── */
+export const ENDCARD_FROM_SEC = 92;
+export const ENDCARD_KICKER: string | null = null;
 
 /* ── Burned-in captions — the whole voiceover, timed ────────────────────── */
 export const CUES: Cue[] = [
@@ -113,6 +129,11 @@ export const CUES: Cue[] = [
   { fromSec: 70.0, toSec: 74.2, text: "Then it measures whether the fix actually held." },
   { fromSec: 74.4, toSec: 78.4, text: "Knowledge in. Judgment out. Nothing lost in between." },
 
+  // Beat 05 — the flywheel
+  { fromSec: 79.5, toSec: 83.4, text: "And every fix that works feeds back in —" },
+  { fromSec: 83.6, toSec: 87.6, text: "so the answer's already there next time." },
+  { fromSec: 87.8, toSec: 91.8, text: "Knowledge that compounds instead of walking out the door." },
+
   // End card
-  { fromSec: 80.0, toSec: 84.5, text: "Viridescent. Your company's judgment, kept." },
+  { fromSec: 93.0, toSec: 97.5, text: "Viridescent. Knowledge that appreciates." },
 ];

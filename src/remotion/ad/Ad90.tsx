@@ -1,8 +1,9 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Ad90 — the 90-second advertisement, assembled.
+   Ad90 — the brand advertisement, assembled. (~103s; the id stays "Ad90"
+   so existing render scripts and output filenames keep working.)
 
    Structure (all timing lives in ad-script.ts, none here):
-     OpeningTitle → four beats (ScreenFrame footage/slate + LowerThird)
+     OpeningTitle → five beats (ScreenFrame footage/slate + LowerThird)
      → EndCard, with ONE CaptionTrack over everything.
 
    CaptionTrack mounts at the top level, outside every <Sequence> — its cue
@@ -45,7 +46,7 @@ export const Ad90: React.FC = () => {
         <OpeningTitle lines={OPENING_LINES} />
       </Sequence>
 
-      {/* The four beats */}
+      {/* The five beats */}
       {BEATS.map((beat) => (
         <Sequence
           key={beat.number}
@@ -68,7 +69,7 @@ export const Ad90: React.FC = () => {
         durationInFrames={f(TOTAL_SEC) - f(ENDCARD_FROM_SEC)}
         name="End card"
       >
-        <EndCard kicker={ENDCARD_KICKER} />
+        <EndCard kicker={ENDCARD_KICKER ?? undefined} />
       </Sequence>
 
       {/* Captions — absolute cues, so OUTSIDE every Sequence. Mandatory:
