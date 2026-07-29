@@ -18,7 +18,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const DEMO_ORG_NAME = "Meridian Precision Manufacturing (DEMO)";
+const DEMO_ORG_NAME = "All Weather Insulated Panels (AWIP) — DEMO";
 const normalizeEntityName = (name) =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 

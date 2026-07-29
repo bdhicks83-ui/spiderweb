@@ -1,6 +1,6 @@
-// READ-ONLY audit for the 90-sec ad shoot (Job 1, steps 1-2).
+// READ-ONLY audit for the ad shoot (Job 1, steps 1-2).
 // No writes, no model calls. Dumps everything that could read as "test data"
-// on camera, then verifies the die-changeover conflict storyline end to end.
+// on camera, then verifies the changeover-release conflict storyline end to end.
 //
 // Usage: node scripts/audit-ad-demo.mjs
 import { createClient } from "@supabase/supabase-js";
@@ -18,7 +18,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const DEMO_ORG_NAME = "Meridian Precision Manufacturing (DEMO)";
+const DEMO_ORG_NAME = "All Weather Insulated Panels (AWIP) — DEMO";
 const hr = (t) => console.log(`\n${"═".repeat(70)}\n${t}\n${"═".repeat(70)}`);
 
 // ── 1. AUTH USERS — anything that reads as a test account ────────────────────
@@ -79,7 +79,7 @@ const { data: recs } = await supabase
   .select(
     "id, org_id, user_id, status, trigger_type, context_summary, trigger_signal, judgment, rationale, boundaries, framework, entity_map, created_at, updated_at"
   );
-const DUMMY = /lorem|ipsum|asdf|qwerty|placeholder|dummy|\btest\b|xxx|foo bar|TODO|FIXME|sample text/i;
+const DUMMY = /lorem|ipsum|asdf|qwerty|placeholder|dummy|\btest (?:data|record|user|entry)\b|\btesting 123\b|xxx|foo bar|TODO|FIXME|sample text/i;
 let contentIssues = 0;
 for (const r of recs || []) {
   const author = profById.get(r.user_id)?.display_name ?? r.user_id;
@@ -133,18 +133,17 @@ const people = new Map();
 for (const r of demoRecs)
   for (const e of r.entity_map || [])
     if (e.type === "person") people.set(e.name, (people.get(e.name) ?? 0) + 1);
+if (people.size === 0) console.log("  ✓ no person-type entities in demo org — nothing to leak on camera");
 for (const [name, count] of [...people.entries()].sort((a, b) => b[1] - a[1]))
   console.log(`  ${name} × ${count}${/test|demo|placeholder|lorem/i.test(name) ? "  ⚠️ suspicious" : ""}`);
 
-// ── 5. THE DIE-CHANGEOVER CONFLICT STORYLINE ─────────────────────────────────
-hr("5. DIE-CHANGEOVER CONFLICT — end-to-end check");
-const ANGELA_START = "Sr. Manager of 2nd Shift Production pushed to stop idling press crews";
-const PRIYA_START = "Technical Director of Quality Systems locked down first-piece release";
-const angela = demoRecs.find((r) => r.context_summary?.startsWith(ANGELA_START));
-const priya = demoRecs.find((r) => r.context_summary?.startsWith(PRIYA_START));
+// ── 5. THE CHANGEOVER-RELEASE CONFLICT STORYLINE ─────────────────────────────
+hr("5. CHANGEOVER-RELEASE CONFLICT — end-to-end check");
+const ng = demoRecs.find((r) => r.framework?.name === "The Controlled Restart Release");
+const dana = demoRecs.find((r) => r.framework?.name === "The No-Release Gate");
 for (const [label, rec, wantAuthor] of [
-  ["Angela side (parallel release)", angela, "Angela Brooks"],
-  ["Priya side (hard hold)", priya, "Priya Nair"],
+  ["Ng side (conditional release)", ng, "Brian Ng"],
+  ["Whitfield side (hard hold)", dana, "Dana Whitfield"],
 ]) {
   if (!rec) {
     console.log(`  ✗ ${label}: RECORD MISSING`);
@@ -155,13 +154,12 @@ for (const [label, rec, wantAuthor] of [
     `  ${author === wantAuthor ? "✓" : "✗"} ${label}\n     "${rec.framework?.name ?? "(NO FRAMEWORK)"}" · author=${author} · status=${rec.status} · created=${rec.created_at?.slice(0, 10)}`
   );
 }
-if (angela && priya) {
-  const [a, b] = [angela.id, priya.id].sort();
+if (ng && dana) {
+  const [a, b] = [ng.id, dana.id].sort();
   const { data: conflict } = await supabase
     .from("framework_conflicts")
-    .select("id, status, territory, rationale, detected_by, created_at")
-    .eq("record_a_id", a)
-    .eq("record_b_id", b)
+    .select("id, status, territory, rationale, detected_by, detected_at")
+    .or(`and(record_a_id.eq.${a},record_b_id.eq.${b}),and(record_a_id.eq.${b},record_b_id.eq.${a})`)
     .maybeSingle();
   if (!conflict) console.log("  ✗ NO conflict row for the pair");
   else {
@@ -185,7 +183,7 @@ if (angela && priya) {
 
 // ── 6. OTHER ON-CAMERA TABLES — quick dummy-string scan ──────────────────────
 hr("6. PRESCRIPTIONS / SIGNALS / TRAINING quick scan");
-for (const table of ["prescriptions", "detections", "retraining_signals"]) {
+for (const table of ["prescriptions", "prescription_detections", "retraining_signals"]) {
   const { data: rows, error } = await supabase.from(table).select("*").limit(50);
   if (error) {
     console.log(`  ${table}: (${error.message})`);

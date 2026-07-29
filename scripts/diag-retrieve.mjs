@@ -24,7 +24,7 @@
 //
 // USAGE (from PowerShell, in the repo root — needs internet + .env.local):
 //   node scripts/diag-retrieve.mjs
-//   node scripts/diag-retrieve.mjs --as=tom.whitfield@meridian-demo.example
+//   node scripts/diag-retrieve.mjs --as=dana.whitfield@awip-demo.example
 //   node scripts/diag-retrieve.mjs --query="your situation text here"
 import { createClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
@@ -60,8 +60,8 @@ const argOf = (flag, fallback) => {
   return hit ? hit.slice(flag.length + 3) : fallback;
 };
 
-const DEMO_PASSWORD = "Demo-Meridian-2026!";
-const AS_EMAIL = argOf("as", "david.chen@meridian-demo.example");
+const DEMO_PASSWORD = "Demo-AWIP-2026!";
+const AS_EMAIL = argOf("as", "chuck.milner@awip-demo.example");
 const QUERY = argOf(
   "query",
   "We had a quality escape right after a die changeover on the press line — should we release the next production run before first-piece inspection clears?"

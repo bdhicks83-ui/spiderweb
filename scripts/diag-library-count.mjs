@@ -24,7 +24,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const DEMO_ORG_NAME = "Meridian Precision Manufacturing (DEMO)";
+const DEMO_ORG_NAME = "All Weather Insulated Panels (AWIP) — DEMO";
 
 const { data: org } = await supabase
   .from("orgs").select("id").eq("name", DEMO_ORG_NAME).single();
