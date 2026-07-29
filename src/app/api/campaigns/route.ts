@@ -67,11 +67,22 @@ export async function GET(_req: NextRequest) {
     }
     const campaigns = (rawCampaigns ?? []) as unknown as CampaignRow[];
 
-    // Requests read through the SESSION client on purpose: RLS decides which
-    // rows this caller may see, so a peer's progress numbers are computed from
-    // their OWN visible rows rather than from the whole roster. A manager sees
-    // their reports' asks; an admin sees all; everyone else sees their own.
-    const { data: rawRequests } = await supabase
+    // ⭐ PROGRESS IS COMPUTED FROM THE **TRUE** ROW SET, NOT FROM WHAT THE
+    // CALLER CAN SEE — and that is a correction, not a widening.
+    //
+    // The first cut read these through the SESSION client so RLS scoped them.
+    // That produced an honest-looking lie: a manager who could see one of a
+    // campaign's two asks was shown "0 of 1", with nothing saying it was a
+    // partial view. A count that silently drops rows reads as "this is the
+    // whole campaign" when it isn't — the same class of failure as a silent
+    // truncation, and it would have had managers reporting wrong numbers
+    // upward with total confidence.
+    //
+    // The fix is the P-9 shape: an AGGREGATE CARRIES NO NAME. "6 of 15
+    // captured" says nothing about who, so it is safe for everyone in the org;
+    // the per-person ROSTER stays RLS-scoped on the detail route, which is
+    // where the person-level information actually lives.
+    const { data: rawRequests } = await service()
       .from("capture_requests")
       .select(REQUEST_COLUMNS)
       .eq("org_id", orgId);
@@ -110,11 +121,8 @@ export async function GET(_req: NextRequest) {
         created_at: c.created_at,
         owner_name: names[c.created_by] ?? "A teammate",
         owned_by_me: c.created_by === user.id,
+        // True campaign-wide totals. Names never leave the server.
         progress: computeProgress(byCampaign.get(c.id) ?? []),
-        // Honest about what the numbers mean for a non-manager: they are
-        // computed from the rows this caller can see, which for a peer is
-        // only their own. Never present a partial count as the whole.
-        progress_is_partial: false,
       })),
     });
   } catch (err) {

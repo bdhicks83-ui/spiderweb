@@ -49,6 +49,11 @@ const COPY = {
   emptyRoster:
     "You can see your own ask on this campaign. The full list is visible to the person's manager and to account admins.",
   declineLead: "Passed on:",
+  // ⚠️ Shown whenever the list below is shorter than the campaign. The totals
+  // above are always the real ones — this line stops somebody reading a
+  // partial roster as the whole campaign.
+  partialRoster: (shown: number, total: number) =>
+    `The totals above cover all ${total} asks. You're seeing the ${shown} you can — your own, and your direct reports'.`,
 };
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -78,6 +83,9 @@ type Detail = {
     owned_by_me: boolean;
   };
   can_manage: boolean;
+  roster_is_partial: boolean;
+  roster_shown: number;
+  roster_total: number;
   progress: {
     asks: number;
     captured: number;
@@ -222,6 +230,10 @@ export default function CampaignDetailPage() {
           )}
         </div>
 
+        {data.roster_is_partial && (
+          <p style={styles.partialNote}>{COPY.partialRoster(data.roster_shown, data.roster_total)}</p>
+        )}
+
         {requests.length <= 1 && !can_manage && <div style={styles.emptyCard}>{COPY.emptyRoster}</div>}
 
         {requests.map((r) => {
@@ -320,6 +332,13 @@ const styles: Record<string, React.CSSProperties> = {
   barFill: { height: "100%", background: "var(--growth)", borderRadius: 999 },
   progressLine: { fontSize: "14px", color: "var(--pine)", margin: "0 0 4px" },
   progressSub: { fontSize: "12px", color: "var(--muted)", margin: "0 0 12px" },
+  partialNote: {
+    fontSize: "12px",
+    color: "var(--muted)",
+    lineHeight: 1.55,
+    margin: "0 0 12px",
+    fontStyle: "italic",
+  },
   actionRow: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
   ask: {
     background: "var(--white)",

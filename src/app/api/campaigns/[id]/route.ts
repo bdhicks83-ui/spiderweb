@@ -61,12 +61,31 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "That campaign isn't on this account." }, { status: 404 });
     }
 
+    // ─── TWO READS, TWO DIFFERENT BOUNDARIES, ON PURPOSE ───
+    //
+    // (1) The ROSTER — who was asked what, and how they answered — through the
+    //     SESSION client, so the capture_requests policy is the real gate. A
+    //     peer sees their own ask; a manager sees their direct reports'; an
+    //     admin and the person who sent the asks see all of them.
     const { data: rawRequests } = await supabase
       .from("capture_requests")
       .select(REQUEST_COLUMNS)
       .eq("campaign_id", id)
       .order("created_at", { ascending: true });
     const requests = (rawRequests ?? []) as unknown as RequestRow[];
+
+    // (2) The TOTALS — service role, campaign-wide. An aggregate carries no
+    //     name (the P-9 rule: the org-wide row has a COUNT, never a NAME), so
+    //     everyone gets the true number even when they can only see part of
+    //     the roster. Showing a caller "0 of 1" for a two-ask campaign was the
+    //     first cut's real bug: not a leak, but a partial view presented as
+    //     the whole, which is how somebody reports a wrong number upward with
+    //     complete confidence.
+    const { data: rawAll } = await service()
+      .from("capture_requests")
+      .select(REQUEST_COLUMNS)
+      .eq("campaign_id", id);
+    const allRequests = (rawAll ?? []) as unknown as RequestRow[];
 
     const personIds = Array.from(
       new Set([...requests.map((r) => r.person_id), campaign.created_by])
@@ -119,7 +138,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         owned_by_me: campaign.created_by === user.id,
       },
       can_manage: canManage,
-      progress: computeProgress(requests),
+      progress: computeProgress(allRequests),
+      // ⚠️ SAY SO WHEN THE LIST BELOW ISN'T THE WHOLE LIST. "No silent caps":
+      // if a surface bounds what it shows, it has to admit it, or the reader
+      // fills the gap with an assumption that it didn't.
+      roster_is_partial: requests.length < allRequests.length,
+      roster_shown: requests.length,
+      roster_total: allRequests.length,
       requests: requests.map((r) => ({
         id: r.id,
         person_id: r.person_id,

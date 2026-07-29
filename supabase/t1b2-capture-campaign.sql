@@ -191,17 +191,27 @@ alter table capture_requests enable row level security;
 
 -- ⭐ NARROWER THAN THE ORG, ON PURPOSE. See the read-boundary note at the top:
 -- org-wide, these rows are a leaderboard of who is behind, which is a
--- person-level negative signal on a peer-visible surface. Three readers only:
+-- person-level negative signal on a peer-visible surface. FOUR readers only:
 --   • the person who was asked            (it is their work)
 --   • their DIRECT manager                (P-6's boundary, reused verbatim)
 --   • an org admin                        (T1B1's capability)
+--   • WHOEVER SENT THE ASK                (see below)
 -- A peer sees the campaign and their own request. Never the roster.
+--
+-- ⚠️ `created_by = auth.uid()` was ADDED after the first live boundary walk.
+-- Without it, a manager who is not an org admin could send ten asks and see
+-- only the ones that happened to go to their own direct reports — the feature
+-- silently half-worked for exactly the person it was built for. Seeing the
+-- answer to a question you personally asked is not surveillance; it is the
+-- premise. It is also still not org-wide: you see the asks YOU sent, not the
+-- asks anyone else sent.
 drop policy if exists "capture requests read" on capture_requests;
 create policy "capture requests read" on capture_requests
   for select using (
     org_id = public.current_org_id()
     and (
       person_id = auth.uid()
+      or created_by = auth.uid()
       or public.is_manager_of(person_id)
       or public.is_org_admin()
     )
