@@ -638,3 +638,16 @@ The original P0 ladder was 1 Situate · 2 Classify · 3 Call · 4 Signal · 5 Re
 **Result:** Cross-functional conflict flagged OPEN on the first re-judge (territory: "Quote-time decision on custom/tight-date orders whose capacity impact isn't yet confirmed"). `verify-awip-demo.mjs` — ALL CHECKS PASSED, shoot-ready: 3 open conflicts, retrieval top match 0.823 with CONTESTED badge, prescriptions/win-column/gap/coaching all green.
 
 **Lesson:** when an LLM judge rejects the same pair twice, stop re-rolling and read the content — the judge being *right* is a failure mode the seed's own design docs can catch. Also: legacy Meridian-era scripts (`seed-p2-conflict.mjs`, `verify-p3.mjs`'s replant hint) still point at the renamed org and shouldn't be used post-AWIP-reseed.
+
+
+### July 29, 2026 — Expert titles: cards now show the author's real claimed_title, not a hardcoded persona role
+
+**Context:** Retrieve/library cards labeled every expert with the generic persona role — worst case the hardcoded "Technical Director" — while `profiles.claimed_title` already held each demo expert's real title (Brian Ng "Panel Technical Expert, R&D", Dana Whitfield "Quality Manager, Little Rock"). For the AWIP demo the wrong title on camera reads as fake data. The DB was right; the UI never read the column.
+
+**Decision:** Read `profiles.claimed_title` everywhere an author is attributed; keep the persona role label strictly as a fallback when a profile has no claimed_title. Retire the "Technical Director" persona label (now "Technical Expert") in onboarding/settings persona pickers. Also swapped the one stale retrieve placeholder for the AWIP delamination/changeover phrasing.
+
+**Execution:** 8 files — the three author-attributing APIs (`/api/retrieve`, `/api/library`, `/api/library/[id]`) now select `claimed_title` from profiles; the three card surfaces (retrieve, library list, library detail) render it with persona-label fallback; onboarding + settings persona pickers relabeled. `elicitation.ts` confirmed untouched on purpose — its PERSONAS labels feed prompt selection only, never the UI. Gate: `tsc --noEmit` clean.
+
+**Verified:** End-to-end at both privilege paths on LOCAL and PRODUCTION (script-authed as chuck.milner, real RLS): `/api/retrieve` top results return "The Controlled Restart Release" — Brian Ng · "Panel Technical Expert, R&D" and "The No-Release Gate" — Dana Whitfield · "Quality Manager, Little Rock"; `/api/library` shows all 9 AWIP experts with real titles. Shipped as `5fe2548`, live on spiderweb-nine.vercel.app. Pixel-level authenticated browser walk still follows the standing rule (Claude never types passwords — Brian logs in once and Claude drives); the rendering path is the reviewed one-liner `claimed_title || persona label`.
+
+**Lesson:** when seed data carries real-world texture (titles, plants, territories), any UI string that hardcodes a role class will eventually contradict it on camera — attribute from the profile row, keep enums for logic only.

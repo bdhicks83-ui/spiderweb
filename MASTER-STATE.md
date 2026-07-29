@@ -1,6 +1,6 @@
 # 🕷️ MASTER STATE — Execution Only
 
-**v2.29 · Updated July 28, 2026 (AWIP/IMP demo reseed STAGED — wipe SQL + 3 scripts built and handed off; Meridian content replaced the moment Brian runs the sequence) · REPLACES all prior versions in full**
+**v2.30 · Updated July 29, 2026 (Expert titles SHIPPED `5fe2548` — cards read profiles.claimed_title with persona-label fallback, "Technical Director" label retired, AWIP retrieve placeholder; verified live on prod API) · REPLACES all prior versions in full**
 Strategy/positioning: STRATEGY.md (v3) · Core IP: ELICITATION-ENGINE-SPEC.md + ADDENDUM-2026-07-22 (v2) · Doc map: DOC-INDEX.md · North star: ENTERPRISE-OPERATING-BRAIN-CONCEPT-2026-07-21.md · Plan of record: ROADMAP-operating-brain-2026-07-22.md (v4)
 
 ⚠️ **System clarification (unchanged, still true):** This app (Supabase/Next.js) and the Airtable base `appV7vsagYFlfxLsG` ("LIT Spiderweb") are two SEPARATE systems. Airtable is a manually-curated LIT content + sales-demo tool — NOT this app's database.
