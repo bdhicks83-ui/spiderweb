@@ -20,9 +20,38 @@ import type { User } from "@supabase/supabase-js";
 export const PERSONAS = ["exec", "technical_director", "sr_manager"] as const;
 export type Persona = (typeof PERSONAS)[number];
 
-/** profiles.role — unchanged by this build. 'admin' is deliberately NOT here. */
-export const ROLES = ["member", "manager"] as const;
+/**
+ * profiles.role — the ladder. 'admin' is deliberately NOT here (T1B1: admin is
+ * an orthogonal boolean, not a rung — see supabase/t1b1-admin-console.sql).
+ *
+ * ⭐ FLOOR GUIDE PHASE A added 'contributor', BELOW member. It IS a rung, and
+ * the opposite call from 'admin' for a concrete reason: contributor is strictly
+ * less than member on the one axis role has ever meant — whose input becomes the
+ * team's canonical judgment. Two sources of truth for that one question is how a
+ * contributor's capture eventually becomes a framework by accident. See the
+ * decision note in supabase/floorguide-a-contributor-tier.sql §1.
+ *
+ * Order is the ladder, low to high. Mirrored by profiles_role_check in SQL and
+ * by ROLE_LADDER in src/lib/floor-guide.ts — change one, change all three.
+ */
+export const ROLES = ["contributor", "member", "manager"] as const;
 export type MemberRole = (typeof ROLES)[number];
+
+/** ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (Floor Guide A). */
+export const ROLE_LABELS: Record<MemberRole, string> = {
+  contributor: "Contributor",
+  member: "Member",
+  manager: "Manager",
+};
+
+/**
+ * The one question worth asking about a role: may this person's input become the
+ * org's canonical judgment? DEFAULT-DENY — a future fourth value has to opt in
+ * deliberately rather than inherit judgment rights by not being a contributor.
+ */
+export function roleCanCodify(role: unknown): boolean {
+  return role === "member" || role === "manager";
+}
 
 /**
  * Platform owner(s) — the only accounts that may create an org for SOMEBODY
@@ -80,10 +109,19 @@ export type ProfileRow = {
   deactivated_at: string | null;
   invited_at: string | null;
   created_at: string | null;
+  // ─── Floor Guide Phase A ───
+  // WHETHER somebody is onboarding is org-readable, and that is correct: an
+  // admin turned it on and the console shows who is currently in it. What is
+  // private is the QUESTIONS they ask inside it, and that privacy is enforced at
+  // the point of write (src/lib/floor-guide.ts), not by hiding this column.
+  floor_guide_active: boolean | null;
+  floor_guide_started_at: string | null;
+  floor_guide_activated_by: string | null;
 };
 
 export const PROFILE_COLUMNS =
-  "id, org_id, display_name, claimed_title, role, persona, manager_id, is_org_admin, deactivated_at, invited_at, created_at";
+  "id, org_id, display_name, claimed_title, role, persona, manager_id, is_org_admin, deactivated_at, invited_at, created_at, " +
+  "floor_guide_active, floor_guide_started_at, floor_guide_activated_by";
 
 export type OrgRow = {
   id: string;

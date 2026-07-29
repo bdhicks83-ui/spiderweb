@@ -1,6 +1,12 @@
 // TIER 1 / BUILD 1 — INVITE A PERSON.
 //
-// POST { email, display_name, role, claimed_title?, manager_id?, persona? }
+// POST { email, display_name, role, claimed_title?, manager_id?, persona?,
+//        floor_guide_active? }
+//
+// FLOOR GUIDE PHASE A: `role` now accepts 'contributor', and a seat can be
+// created with Floor Guide already switched on — which is the actual onboarding
+// moment. Turning it on the day after somebody's first shift is a worse product
+// than having it on when they first sign in.
 //   → creates the seat in the caller's org and returns a sign-in link the
 //     admin copies and sends. NO SQL, no seed script, no Brian.
 //
@@ -57,8 +63,16 @@ export async function POST(req: NextRequest) {
 
     const role = body?.role ?? "member";
     if (!isRole(role)) {
-      return NextResponse.json({ error: "Role must be member or manager." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Role must be contributor, member or manager." },
+        { status: 400 }
+      );
     }
+
+    // A brand-new seat has no reports and no admin flag, so guards 5 and 6 from
+    // the PATCH route cannot be violated here — a contributor invite is always a
+    // consistent end state. Nothing to check.
+    const floorGuideActive = body?.floor_guide_active === true;
 
     const claimedTitle = cleanText(body?.claimed_title, 120) ?? null;
 
@@ -183,6 +197,12 @@ export async function POST(req: NextRequest) {
         manager_id: managerId,
         invited_at: new Date().toISOString(),
         invited_by: ctx.user.id,
+        // Floor Guide Phase A — on from the first sign-in when the admin asked
+        // for it. started_at/activated_by are stamped together with the flag so
+        // the console can always say how long this stint has run and who set it.
+        floor_guide_active: floorGuideActive,
+        floor_guide_started_at: floorGuideActive ? new Date().toISOString() : null,
+        floor_guide_activated_by: floorGuideActive ? ctx.user.id : null,
         // Re-inviting a deactivated seat reopens it. Explicit, not implied.
         deactivated_at: null,
         deactivated_by: null,

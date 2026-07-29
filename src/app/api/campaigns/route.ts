@@ -168,10 +168,24 @@ export async function POST(req: NextRequest) {
     // body is otherwise a way to write a row into somebody else's world.
     const { data: rawPeople } = await svc
       .from("profiles")
-      .select("id, deactivated_at")
+      .select("id, deactivated_at, role")
       .eq("org_id", gate.orgId);
-    const people = (rawPeople ?? []) as { id: string; deactivated_at: string | null }[];
+    const people = (rawPeople ?? []) as {
+      id: string;
+      deactivated_at: string | null;
+      role: string | null;
+    }[];
     const activeIds = new Set(people.filter((p) => !p.deactivated_at).map((p) => p.id));
+    // ─── FLOOR GUIDE PHASE A ───
+    // A capture ask says "write down how you decide this, and it becomes the
+    // team's framework." Sending one to a contributor would set them up to hit
+    // the integrity guard at the end of an interview they were invited into —
+    // the cruellest possible place to enforce a rule. Refuse at assignment.
+    // (Phase C is what gives an admin a legitimate way to ask a contributor for
+    // input: a deep-dive request, captured as input rather than as judgment.)
+    const contributorIds = new Set(
+      people.filter((p) => p.role === "contributor").map((p) => p.id)
+    );
 
     type Ask = { person_id: string; prompt: string; gap_id: string | null };
     const asks: Ask[] = [];
@@ -182,6 +196,17 @@ export async function POST(req: NextRequest) {
       if (!activeIds.has(personId)) {
         return NextResponse.json(
           { error: "One of those people isn't an active member of this account." },
+          { status: 400 }
+        );
+      }
+      if (contributorIds.has(personId)) {
+        // ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (Floor Guide A).
+        return NextResponse.json(
+          {
+            error:
+              "One of those people is set up as a contributor, so they can't codify a framework. Move them to member first if capturing their judgment is the goal.",
+            code: "CONTRIBUTOR_ASSIGNEE",
+          },
           { status: 400 }
         );
       }

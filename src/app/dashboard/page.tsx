@@ -88,6 +88,9 @@ export default function DashboardPage() {
   const [hasOrg, setHasOrg] = useState(true);
   // T1B2 — capture campaigns.
   const [canRunCampaigns, setCanRunCampaigns] = useState(false);
+  // Floor Guide Phase A — the role ladder + the onboarding state.
+  const [isContributor, setIsContributor] = useState(false);
+  const [floorGuideActive, setFloorGuideActive] = useState(false);
   const [openAsks, setOpenAsks] = useState(0);
   const router = useRouter();
 
@@ -105,12 +108,24 @@ export default function DashboardPage() {
     if (!user) return;
     const { data } = await supabase
       .from('profiles')
-      .select('is_org_admin, org_id')
+      .select('is_org_admin, org_id, role, floor_guide_active, deactivated_at')
       .eq('id', user.id)
       .maybeSingle();
-    const row = data as { is_org_admin: boolean | null; org_id: string | null } | null;
+    const row = data as {
+      is_org_admin: boolean | null;
+      org_id: string | null;
+      role: string | null;
+      floor_guide_active: boolean | null;
+      deactivated_at: string | null;
+    } | null;
     setIsOrgAdmin(!!row?.is_org_admin);
     setHasOrg(!!row?.org_id);
+    // Own-row read, so this is the same answer the SECURITY DEFINER functions
+    // give — it decides what to OFFER, never what is permitted. The real gates
+    // are is_contributor() / is_floor_guide_active() in Postgres and the
+    // pattern_records trigger behind them.
+    setIsContributor(row?.role === 'contributor');
+    setFloorGuideActive(!!row?.floor_guide_active && !row?.deactivated_at);
 
     // T1B2 — can this person run a capture campaign? Manager OR admin, both
     // evaluated by Postgres as the caller (SECURITY DEFINER), so the tile is
@@ -284,6 +299,34 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ⭐ FLOOR GUIDE PHASE A — FIRST TILE ON THE PAGE WHEN IT'S ON.
+            Position is the point: somebody in their second week should not have
+            to scan nine tiles to find the one built for them. Admin-assigned per
+            person, so it is hidden (not shown-and-gated) for everybody else —
+            offering a locked "new hire" door to a twenty-year veteran reads as an
+            insult, which is the opposite of the read-and-gate default the rest of
+            this dashboard uses.
+
+            ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (Floor Guide A). */}
+        {floorGuideActive && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>🧑‍🏭 Floor Guide</h2>
+              <p style={styles.resumeBannerSub}>
+                What the people who&apos;ve been doing this a while say matters most — and a
+                private place to ask anything you&apos;re not sure about.
+              </p>
+            </div>
+            <a href="/floor-guide" style={styles.resumeBannerLink}>Open Floor Guide →</a>
+          </div>
+        )}
+
+        {/* Codify — HIDDEN for contributors. The integrity rule says their input
+            never becomes canonical judgment, and the pattern_records trigger
+            enforces it; offering the session and refusing at the end would waste
+            somebody's afternoon and read as a bait-and-switch. Phase B is what
+            gives contributor input a real destination. */}
+        {!isContributor && (
         <div style={styles.resumeBanner}>
           <div>
             <h2 style={styles.resumeBannerTitle}>🌱 Codify a pattern</h2>
@@ -294,6 +337,7 @@ export default function DashboardPage() {
           </div>
           <a href="/codify" style={styles.resumeBannerLink}>Start a session →</a>
         </div>
+        )}
 
         {/* P-3 — Contextual retrieval (the Copilot moment). Describe a
             situation, get the org's matching framework(s). */}

@@ -1,7 +1,7 @@
 // TIER 1 / BUILD 1 — EDIT A PERSON.
 //
 // PATCH { display_name?, claimed_title?, role?, persona?, manager_id?,
-//         is_org_admin? }
+//         is_org_admin?, floor_guide_active? }
 //
 // This route is how an org's REPORTING STRUCTURE gets set — manager_id is what
 // makes is_manager_of() true, which is what routes coaching signals (P-6) and
@@ -13,6 +13,24 @@
 //   2. no reporting cycles — the coaching/prescription code walks this graph
 //   3. can't remove the last admin — an org with no admin is unadministrable
 //   4. can't demote yourself out of admin — same lockout, one click closer
+//
+// ─── FLOOR GUIDE PHASE A adds the two assignment actions and two more guards ──
+//   role: 'contributor'   — the rung below member. Their input never becomes
+//                           canonical judgment (enforced by the pattern_records
+//                           trigger, not by this route).
+//   floor_guide_active    — switch the onboarding surface on/off for a person.
+//
+//   5. a contributor cannot have direct reports. is_manager_of() and the
+//      coaching/prescription routing walk manager_id, so a contributor sitting in
+//      somebody's reporting line would receive manager-only person-level signals
+//      about them. is_manager() was hardened in SQL to refuse them the manager
+//      CAPABILITY; this refuses the inconsistent DATA so nobody has to rely on
+//      both halves agreeing.
+//   6. a contributor cannot also administer the account. Not a security hole (an
+//      admin can change roles anyway, including their own), but a genuinely
+//      confusing state to hold in your head while looking at a live console —
+//      "this person can promote anyone but cannot capture a framework." Refused
+//      with a sentence that says which order to do it in.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import {
@@ -41,11 +59,19 @@ export async function PATCH(
     // ─── Guard 1: the target must be in the caller's org ───
     const { data: targetRaw } = await service
       .from("profiles")
-      .select("id, org_id, is_org_admin, deactivated_at, manager_id")
+      .select("id, org_id, is_org_admin, deactivated_at, manager_id, role, floor_guide_active")
       .eq("id", id)
       .maybeSingle();
     const target = targetRaw as
-      | { id: string; org_id: string | null; is_org_admin: boolean | null; deactivated_at: string | null; manager_id: string | null }
+      | {
+          id: string;
+          org_id: string | null;
+          is_org_admin: boolean | null;
+          deactivated_at: string | null;
+          manager_id: string | null;
+          role: string | null;
+          floor_guide_active: boolean | null;
+        }
       | null;
     if (!target || target.org_id !== ctx.orgId) {
       // Same response for "doesn't exist" and "belongs to another org" — an
@@ -72,9 +98,65 @@ export async function PATCH(
 
     if (body?.role !== undefined) {
       if (!isRole(body.role)) {
-        return NextResponse.json({ error: "Role must be member or manager." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Role must be contributor, member or manager." },
+          { status: 400 }
+        );
+      }
+      // ─── Guards 5 + 6: the contributor rung has two prerequisites ───
+      if (body.role === "contributor") {
+        const { count: reports } = await service
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", ctx.orgId)
+          .eq("manager_id", id)
+          .is("deactivated_at", null);
+        if ((reports ?? 0) > 0) {
+          // ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (Floor Guide A).
+          return NextResponse.json(
+            {
+              error:
+                "People report to this person, so they can't be a contributor — coaching signals and approvals route through them. Move their reports to someone else first.",
+              code: "CONTRIBUTOR_HAS_REPORTS",
+            },
+            { status: 400 }
+          );
+        }
+        // The admin flag as it will stand AFTER this request, so turning both off
+        // in one save is allowed and only a genuinely conflicting end state is
+        // refused.
+        const adminAfter =
+          body?.is_org_admin !== undefined ? body.is_org_admin === true : !!target.is_org_admin;
+        if (adminAfter) {
+          return NextResponse.json(
+            {
+              error:
+                "This person administers the account, so they can't be a contributor at the same time. Take their admin access off first, then change the role.",
+              code: "CONTRIBUTOR_IS_ADMIN",
+            },
+            { status: 400 }
+          );
+        }
       }
       update.role = body.role;
+    }
+
+    // ─── FLOOR GUIDE ASSIGNMENT ───
+    // Deliberately NOT tied to the role. A new operator (contributor) and a new
+    // PM (member, or even manager) are both day-one nervous and both need the
+    // same thing; role-locking it would have meant the new PM never gets it.
+    //
+    // started_at is re-stamped on every switch-ON so the console shows how long
+    // THIS stint has been running, and is left alone on switch-off so the record
+    // of when they last onboarded survives. activated_by records which admin did
+    // it — an assignment nobody can account for is one nobody will turn off.
+    if (body?.floor_guide_active !== undefined) {
+      const wantFloorGuide = body.floor_guide_active === true;
+      update.floor_guide_active = wantFloorGuide;
+      if (wantFloorGuide && !target.floor_guide_active) {
+        update.floor_guide_started_at = new Date().toISOString();
+        update.floor_guide_activated_by = ctx.user.id;
+      }
     }
 
     if (body?.persona !== undefined) {

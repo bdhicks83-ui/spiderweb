@@ -32,6 +32,18 @@
 //      of the destination table before putting anything on a cross-surface
 //      write.)
 //
+//   5. ⭐ FLOOR GUIDE (Phase A) — A GAP MAY CARRY A COUNT WITH NO ASKER AT ALL.
+//      A gap flagged from Floor Guide is written with NO asker row and NO actor
+//      on its ledger signal. The org still learns that its onboarding has a hole
+//      here — which is coverage information, about the org, not about a person —
+//      but nothing records that THIS new hire asked THIS question. The cost is
+//      real and accepted: that person gets no /gaps/mine payoff row when it is
+//      filled. Recognition is worth less than the promise that made them
+//      willing to ask in the first place.
+//
+//      Suppression happens HERE, at the write, not in a reader. A row written
+//      and filtered later is a row the next feature will happily surface.
+//
 //   4. NEVER THROWS INTO THE CALLER'S HAPPY PATH for anything advisory — the
 //      ledger write, the notification stamp, the reconciler. A learning or
 //      housekeeping failure can never cost a user their action. Same discipline
@@ -129,6 +141,12 @@ export type FlagGapResult =
       reopened: boolean;
       /** 'exact' | 'semantic' | null — how it de-duped, for the write-up */
       matchedBy: "exact" | "semantic" | null;
+      /**
+       * FALSE when the asker was deliberately NOT recorded because this came in
+       * from Floor Guide. Reported rather than assumed: the caller needs to know
+       * not to promise a payoff notification that will never arrive.
+       */
+      askerRecorded: boolean;
     }
   | { ok: false; error: string };
 
@@ -138,6 +156,14 @@ type FlagGapInput = {
   questionText: string;
   /** The best near-miss similarity from the search that produced this gap. */
   topSimilarity?: number | null;
+  /**
+   * ⭐ FLOOR GUIDE MODE. TRUE means: record the GAP, record NO PERSON.
+   *
+   * The caller must derive this SERVER-SIDE from the asker's own
+   * profiles.floor_guide_active (resolveFloorGuideMode in
+   * src/lib/floor-guide.ts) — never straight off a request body.
+   */
+  floorGuide?: boolean;
 };
 
 /**
@@ -283,7 +309,21 @@ export async function flagKnowledgeGap(
 
   // ── 4. The asker. Advisory: a failure here costs the person their
   //    notification, not their gap, so it warns rather than failing the call.
-  await upsertAsker(service, { gapId, orgId: input.orgId, userId: input.userId, nowIso });
+  //
+  //    ⭐ FLOOR GUIDE: SKIPPED ENTIRELY. This is the row that makes a gap
+  //    person-attributable — it is what /gaps/mine reads and what would let a
+  //    future reader answer "who kept asking about this." A Floor Guide gap has
+  //    no such row, so the answer is structurally unavailable rather than
+  //    merely unrendered.
+  const floorGuide = input.floorGuide === true;
+  if (floorGuide) {
+    console.log(
+      "[floor-guide] suppressed knowledge_gap_askers row on gaps — Floor Guide is private " +
+        "by design (no person-level write). The gap itself was still recorded. Not an error."
+    );
+  } else {
+    await upsertAsker(service, { gapId, orgId: input.orgId, userId: input.userId, nowIso });
+  }
 
   // ── 5. Part 5 — the ledger. Demand-side intelligence: what this org keeps
   //    asking and cannot answer. Never throws (recordLearningSignal swallows).
@@ -303,14 +343,33 @@ export async function flagKnowledgeGap(
       matched_by: matchedBy,
       reopened,
       question_chars: question.length,
+      // A SHAPE, not a person: "this org's onboarding has an uncovered question
+      // here" is exactly the generalizable dimension a reader is allowed to key
+      // on, and it is the single most useful thing Phase A produces for the
+      // buyer. It survives scrubFeatures() because it names no one.
+      via_floor_guide: floorGuide,
     },
     payload: { question },
-    actorId: input.userId,
-    actorRole: "member",
+    // ⭐ FLOOR GUIDE: NO ACTOR. learning_signals is ORG-WIDE readable, so an
+    // actor_id here plus the question in the payload is a durable, peer-visible
+    // record of what a specific new hire did not know. That is precisely the
+    // thing Floor Guide promises does not exist. The signal still lands — the
+    // org keeps its coverage intelligence — it just has nobody's name on it.
+    actorId: floorGuide ? null : input.userId,
+    actorRole: floorGuide ? null : "member",
     writtenBy: "knowledge-gaps-v1",
   });
 
-  return { ok: true, gapId, question, askedCount, created, reopened, matchedBy };
+  return {
+    ok: true,
+    gapId,
+    question,
+    askedCount,
+    created,
+    reopened,
+    matchedBy,
+    askerRecorded: !floorGuide,
+  };
 }
 
 async function upsertAsker(

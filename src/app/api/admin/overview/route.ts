@@ -3,6 +3,13 @@
 // Returns: the org, its people (with role, title, manager, capture count and
 // sign-in state), the setup checklist, and whether the caller is an admin.
 //
+// FLOOR GUIDE PHASE A adds each person's floor_guide_active / _started_at, a
+// contributor count, and an `onboarding` list — the "who's in Floor Guide right
+// now" view. That list is a management fact (the admin switched it on), NOT a
+// window into anything private: it says WHO is onboarding and for how long, and
+// it structurally cannot say what any of them asked, because a Floor Guide
+// question is never written against a person in the first place.
+//
 // AUTHORIZATION IS THE ORG, TWICE OVER. requireOrgAdmin() proves the caller is
 // a live admin via the is_org_admin() RPC (evaluated by Postgres as the
 // caller), and every query below is scoped to the org_id read off the CALLER'S
@@ -109,6 +116,8 @@ export async function GET(_req: NextRequest) {
         manager_id: p.manager_id,
         manager_name: p.manager_id ? nameById[p.manager_id] ?? null : null,
         is_org_admin: !!p.is_org_admin,
+        floor_guide_active: !!p.floor_guide_active,
+        floor_guide_started_at: p.floor_guide_started_at,
         is_me: p.id === ctx.user.id,
         deactivated_at: p.deactivated_at,
         invited_at: p.invited_at,
@@ -140,7 +149,24 @@ export async function GET(_req: NextRequest) {
         deactivated: people.length - activeMembers.length,
         managers: activeMembers.filter((p) => p.role === "manager").length,
         admins: activeMembers.filter((p) => p.is_org_admin).length,
+        contributors: activeMembers.filter((p) => p.role === "contributor").length,
+        onboarding: activeMembers.filter((p) => p.floor_guide_active).length,
       },
+      // Longest-running stint first: the useful question an admin has about this
+      // list is "has anybody been left in onboarding mode for four months," and
+      // sorting by start date is the whole answer.
+      onboarding: activeMembers
+        .filter((p) => p.floor_guide_active)
+        .sort((a, b) =>
+          (a.floor_guide_started_at ?? "").localeCompare(b.floor_guide_started_at ?? "")
+        )
+        .map((p) => ({
+          id: p.id,
+          display_name: p.display_name,
+          claimed_title: p.claimed_title,
+          role: (p.role as string) ?? "member",
+          started_at: p.floor_guide_started_at,
+        })),
       checklist: checklist.items,
       setup_percent: checklist.percent,
       auth_warning: authWarning,

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { resolveGapWithRecord } from "@/lib/knowledge-gaps";
+import { requireCanCodify } from "@/lib/floor-guide";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -44,6 +45,19 @@ export async function POST(
       .maybeSingle();
     const orgId = (profile as { org_id: string | null } | null)?.org_id ?? null;
     if (!orgId) return NextResponse.json({ error: "Not in an org" }, { status: 409 });
+
+    // ─── FLOOR GUIDE PHASE A ───
+    // A contributor cannot own the act of declaring "this framework is now the
+    // team's answer to that question." The framework they'd be pointing at is
+    // somebody else's, but the resolution is attributed to the person who did
+    // it (knowledge_gaps.resolved_by) and shows up as such in the queue.
+    const codifyGate = await requireCanCodify(supabase);
+    if (!codifyGate.ok) {
+      return NextResponse.json(
+        { error: codifyGate.error, code: codifyGate.code },
+        { status: codifyGate.status }
+      );
+    }
 
     // THE AUTHORIZATION: the record is loaded through the caller's own RLS
     // first. A framework they cannot see cannot be used to close a gap.

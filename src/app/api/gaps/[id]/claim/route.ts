@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { claimGap } from "@/lib/knowledge-gaps";
+import { requireCanCodify } from "@/lib/floor-guide";
 
 export async function POST(
   _req: NextRequest,
@@ -28,6 +29,20 @@ export async function POST(
       .maybeSingle();
     const orgId = (profile as { org_id: string | null } | null)?.org_id ?? null;
     if (!orgId) return NextResponse.json({ error: "Not in an org" }, { status: 409 });
+
+    // ─── FLOOR GUIDE PHASE A ───
+    // Claiming a gap means "I'll answer this," and answering it means codifying
+    // a framework. A contributor who could claim would park a gap they are not
+    // permitted to fill — the claim would sit there until CLAIM_STALE_HOURS
+    // released it, which is worse than an honest refusal. Contributors CAN and
+    // should still FLAG gaps; that is the half of the loop that is theirs.
+    const codifyGate = await requireCanCodify(supabase);
+    if (!codifyGate.ok) {
+      return NextResponse.json(
+        { error: codifyGate.error, code: codifyGate.code },
+        { status: codifyGate.status }
+      );
+    }
 
     const service = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

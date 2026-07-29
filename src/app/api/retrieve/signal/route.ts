@@ -25,6 +25,31 @@
 // happen — and de-duplication is a READER's decision (count distinct subjects,
 // or window by session), not something to bake irreversibly into capture.
 //
+// ─────────────────────────────────────────────────────────────────────────────
+// ⭐⭐ FLOOR GUIDE PHASE A (2026-07-29) — THIS IS THE PRIVACY-CRITICAL WRITER.
+//
+// This route is the ONE person-level write the retrieval path performs. Every
+// row it writes carries actor_id (the asker) and, in payload.query, the exact
+// words they typed. learning_signals is ORG-WIDE readable. So on the /retrieve
+// surface these rows are the product's best training data — and on the Floor
+// Guide surface the very same row is a durable, peer-visible record of what the
+// new person did not know. Identical write, opposite meaning.
+//
+// SO: on a Floor-Guide-confirmed call, NOTHING IS WRITTEN. Not written-then-
+// filtered, not written-with-a-null-actor. There is no row.
+//
+// Why not just null the actor here, the way the gap signal does? Because a gap
+// signal describes the ORG ("we have no coverage on this question") and stays
+// useful anonymous. This signal describes a PERSON'S JUDGMENT of a result —
+// strip the actor and nothing meaningful is left, so an anonymised row would be
+// ledger noise bought at the cost of pretending we captured something.
+//
+// The response still says { success: true }, per the P-8 rule that a telemetry
+// control can never fail in a user's face. `suppressed: true` rides along for
+// the privacy proof — nothing in the UI reads it, and a suppressed write must
+// never look in a log like a writer that quietly died.
+// ─────────────────────────────────────────────────────────────────────────────
+//
 // AUTHORIZATION IS THE READ. The record is loaded through the SESSION client,
 // so "org library read" RLS decides whether this caller may signal about it. A
 // record they cannot see cannot be signalled about, and org_id comes off the
@@ -34,6 +59,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { recordLearningSignal, similarityBand } from "@/lib/learning-ledger";
+import { logSuppressed, resolveFloorGuideMode } from "@/lib/floor-guide";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -69,11 +95,23 @@ export async function POST(req: NextRequest) {
         : null;
 
     const supabase = await createSessionClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+
+    // Identity AND privacy mode from one read. See resolveFloorGuideMode() —
+    // the flag is a request from the surface, AND-ed with the server's own
+    // profiles.floor_guide_active. A client cannot fake its way into either
+    // state.
+    const mode = await resolveFloorGuideMode(supabase, body?.floor_guide);
+    if (!mode) {
       return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    }
+    const { viewer, floorGuide } = mode;
+
+    // ⭐ THE SUPPRESSION. Before the record read, before the service client is
+    // constructed, before anything can be written. There is no path from here
+    // to an insert.
+    if (floorGuide) {
+      logSuppressed("retrieve/signal", `learning_signals (${kind})`);
+      return NextResponse.json({ success: true, suppressed: true });
     }
 
     // THE AUTHORIZATION + the feature context, in one read the caller's own RLS
@@ -120,7 +158,7 @@ export async function POST(req: NextRequest) {
         // learned without knowing what was asked.
         query,
       },
-      actorId: user.id,
+      actorId: viewer.userId,
       actorRole: "member",
     });
 

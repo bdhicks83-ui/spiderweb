@@ -15,6 +15,12 @@
 // ⚠️ The org-wide payload carries asked_count and NEVER an asker identity. Who
 // asked lives in knowledge_gap_askers, which is readable only by its own asker
 // (/api/gaps/mine). See the read-boundary note in supabase/p9-knowledge-gaps.sql.
+//
+// ⭐ FLOOR GUIDE PHASE A — POST accepts { floor_guide?: true }. When the SERVER
+// confirms that flag against the caller's own profiles.floor_guide_active, the
+// gap is recorded with NO asker row and NO actor on its ledger signal. The org
+// learns that its onboarding has a hole here; nothing records who hit it. The
+// flag is a request, never an assertion — see resolveFloorGuideMode().
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
@@ -24,6 +30,7 @@ import {
   reconcileAnsweringGaps,
   type KnowledgeGapRow,
 } from "@/lib/knowledge-gaps";
+import { resolveFloorGuideMode } from "@/lib/floor-guide";
 
 function service() {
   return createServiceClient(
@@ -161,17 +168,15 @@ export async function POST(req: NextRequest) {
         : null;
 
     const supabase = await createSessionClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("org_id")
-      .eq("id", user.id)
-      .maybeSingle();
-    const orgId = (profile as { org_id: string | null } | null)?.org_id ?? null;
+    // ⭐ ONE read decides both identity and privacy mode. floorGuide is an AND of
+    // "the surface asked for it" and "the server says this person is actually in
+    // Floor Guide" — a client cannot turn privacy ON for somebody who isn't
+    // onboarding, and cannot turn it OFF for somebody who is.
+    const mode = await resolveFloorGuideMode(supabase, body?.floor_guide);
+    if (!mode) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const { viewer, floorGuide } = mode;
+    const orgId = viewer.orgId;
     if (!orgId) {
       return NextResponse.json(
         {
@@ -185,9 +190,10 @@ export async function POST(req: NextRequest) {
 
     const result = await flagKnowledgeGap(service(), {
       orgId,
-      userId: user.id,
+      userId: viewer.userId,
       questionText: question,
       topSimilarity,
+      floorGuide,
     });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 500 });
@@ -200,6 +206,12 @@ export async function POST(req: NextRequest) {
       created: result.created,
       reopened: result.reopened,
       matched_by: result.matchedBy,
+      // Shipped so the surface never promises a payoff that structurally cannot
+      // arrive: a Floor Guide flag has no asker row, so nothing will ever notify
+      // this person that it was filled. The Floor Guide copy says so plainly
+      // rather than borrowing /retrieve's "you'll be told when someone fills it."
+      floor_guide: floorGuide,
+      asker_recorded: result.askerRecorded,
     });
   } catch (err) {
     console.error("Unexpected error in gaps POST route:", err);

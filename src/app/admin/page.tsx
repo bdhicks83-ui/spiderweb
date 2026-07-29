@@ -74,6 +74,19 @@ const COPY = {
   deactivated: "seat closed",
   adminChip: "admin",
   managerChip: "manager",
+  // ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (Floor Guide A).
+  contributorChip: "contributor",
+  floorGuideChip: "in Floor Guide",
+  roleHelp:
+    "Contributors use everything — they ask, they search, they flag what's missing — but capturing a framework stays with your experts, so the library only ever carries judgment you'd stand behind.",
+  floorGuideLabel: "Floor Guide (their first few weeks)",
+  floorGuideHelp:
+    "Opens with what your veterans say matters most for their job, and gives them a private place to ask anything. What they ask there isn't reported to their manager — that's the part that makes them use it instead of guessing.",
+  onboardingTitle: "Currently onboarding",
+  onboardingSub:
+    "Floor Guide is on for these people. Switch it off when they've found their feet — nothing they've done is lost either way.",
+  onboardingSince: (days: number) =>
+    days <= 0 ? "started today" : `${days} day${days === 1 ? "" : "s"} in`,
   you: "you",
   capture: (n: number) =>
     n === 0 ? "nothing codified yet" : `${n} framework${n === 1 ? "" : "s"} codified`,
@@ -102,6 +115,8 @@ type Member = {
   manager_id: string | null;
   manager_name: string | null;
   is_org_admin: boolean;
+  floor_guide_active: boolean;
+  floor_guide_started_at: string | null;
   is_me: boolean;
   deactivated_at: string | null;
   invited_at: string | null;
@@ -132,9 +147,29 @@ type Overview = {
   members: Member[];
   checklist: ChecklistItem[];
   setup_percent: number;
-  counts: { active: number; deactivated: number; managers: number; admins: number };
+  counts: {
+    active: number;
+    deactivated: number;
+    managers: number;
+    admins: number;
+    contributors: number;
+    onboarding: number;
+  };
+  onboarding: {
+    id: string;
+    display_name: string | null;
+    claimed_title: string | null;
+    role: string;
+    started_at: string | null;
+  }[];
   auth_warning: string | null;
 };
+
+function daysSince(iso: string | null): number {
+  if (!iso) return 0;
+  const ms = Date.now() - new Date(iso).getTime();
+  return Math.max(0, Math.floor(ms / 86_400_000));
+}
 
 type IssuedLink = { url: string; who: string; expires: string } | null;
 
@@ -164,6 +199,7 @@ export default function AdminPage() {
   const [invTitle, setInvTitle] = useState("");
   const [invRole, setInvRole] = useState("member");
   const [invManager, setInvManager] = useState("");
+  const [invFloorGuide, setInvFloorGuide] = useState(false);
 
   // Inline person editor
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -172,6 +208,7 @@ export default function AdminPage() {
   const [edRole, setEdRole] = useState("member");
   const [edManager, setEdManager] = useState("");
   const [edAdmin, setEdAdmin] = useState(false);
+  const [edFloorGuide, setEdFloorGuide] = useState(false);
 
   // Org settings
   const [orgName, setOrgName] = useState("");
@@ -259,6 +296,7 @@ export default function AdminPage() {
           claimed_title: invTitle || null,
           role: invRole,
           manager_id: invManager || null,
+          floor_guide_active: invFloorGuide,
         }),
       });
       const body = await res.json();
@@ -273,6 +311,7 @@ export default function AdminPage() {
       setInvTitle("");
       setInvRole("member");
       setInvManager("");
+      setInvFloorGuide(false);
       await load();
     } catch {
       setError("Could not create that seat.");
@@ -288,6 +327,7 @@ export default function AdminPage() {
     setEdRole(m.role);
     setEdManager(m.manager_id ?? "");
     setEdAdmin(m.is_org_admin);
+    setEdFloorGuide(m.floor_guide_active);
     setError(null);
   }
 
@@ -305,6 +345,7 @@ export default function AdminPage() {
           role: edRole,
           manager_id: edManager || null,
           is_org_admin: edAdmin,
+          floor_guide_active: edFloorGuide,
         }),
       });
       const body = await res.json();
@@ -515,6 +556,45 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ─── FLOOR GUIDE PHASE A · Currently onboarding ───
+            Only renders when somebody is actually in Floor Guide, so an account
+            that isn't onboarding anyone sees nothing new.
+
+            ⭐ WHAT THIS VIEW IS AND ISN'T. It is a management fact: an admin
+            switched Floor Guide on for these people, and this is how long ago.
+            The useful question it answers is "has anyone been left in onboarding
+            mode for four months," which is a real thing to forget.
+
+            It is NOT a window into anything private, and it structurally cannot
+            become one: a Floor Guide question is never written against a person
+            at all (no learning_signals actor, no knowledge_gap_askers row), so
+            there is no per-person activity for a future version of this card to
+            start showing. The absence is in the data, not in this JSX. */}
+        {data && data.onboarding.length > 0 && (
+          <div style={styles.card}>
+            <div style={styles.cardHead}>
+              <h2 style={styles.cardTitle}>
+                {COPY.onboardingTitle} · {data.onboarding.length}
+              </h2>
+            </div>
+            <p style={styles.help}>{COPY.onboardingSub}</p>
+            {data.onboarding.map((p) => (
+              <div key={p.id} style={styles.person}>
+                <div style={styles.personTop}>
+                  <span style={styles.personName}>{p.display_name || "Unnamed seat"}</span>
+                  <span style={styles.floorGuideChip}>{COPY.floorGuideChip}</span>
+                  {p.role === "contributor" && (
+                    <span style={styles.roleChip}>{COPY.contributorChip}</span>
+                  )}
+                </div>
+                <div style={styles.personMeta}>
+                  {p.claimed_title || "no title set"} · {COPY.onboardingSince(daysSince(p.started_at))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ─── People ─── */}
         <div style={styles.card} id="people">
           <div style={styles.cardHead}>
@@ -573,6 +653,7 @@ export default function AdminPage() {
                     value={invRole}
                     onChange={(e) => setInvRole(e.target.value)}
                   >
+                    <option value="contributor">Contributor</option>
                     <option value="member">Member</option>
                     <option value="manager">Manager</option>
                   </select>
@@ -593,6 +674,19 @@ export default function AdminPage() {
                   </select>
                 </label>
               </div>
+              <p style={styles.help}>{COPY.roleHelp}</p>
+              {/* Floor Guide on from the first sign-in, which is the real
+                  onboarding moment — switching it on the day after somebody's
+                  first shift is a worse product. */}
+              <label style={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={invFloorGuide}
+                  onChange={(e) => setInvFloorGuide(e.target.checked)}
+                />
+                <span>{COPY.floorGuideLabel}</span>
+              </label>
+              <p style={styles.help}>{COPY.floorGuideHelp}</p>
               <button
                 type="button"
                 style={styles.primaryButton}
@@ -634,6 +728,7 @@ export default function AdminPage() {
                         value={edRole}
                         onChange={(e) => setEdRole(e.target.value)}
                       >
+                        <option value="contributor">Contributor</option>
                         <option value="member">Member</option>
                         <option value="manager">Manager</option>
                       </select>
@@ -663,7 +758,16 @@ export default function AdminPage() {
                       />
                       <span>Can administer this account</span>
                     </label>
+                    <label style={styles.checkboxRow}>
+                      <input
+                        type="checkbox"
+                        checked={edFloorGuide}
+                        onChange={(e) => setEdFloorGuide(e.target.checked)}
+                      />
+                      <span>{COPY.floorGuideLabel}</span>
+                    </label>
                   </div>
+                  <p style={styles.help}>{COPY.floorGuideHelp}</p>
                   <div style={styles.actionRow}>
                     <button
                       type="button"
@@ -688,6 +792,12 @@ export default function AdminPage() {
                     <span style={styles.personName}>{m.display_name || "Unnamed seat"}</span>
                     {m.is_org_admin && <span style={styles.adminChip}>{COPY.adminChip}</span>}
                     {m.role === "manager" && <span style={styles.roleChip}>{COPY.managerChip}</span>}
+                    {m.role === "contributor" && (
+                      <span style={styles.roleChip}>{COPY.contributorChip}</span>
+                    )}
+                    {m.floor_guide_active && (
+                      <span style={styles.floorGuideChip}>{COPY.floorGuideChip}</span>
+                    )}
                     {m.is_me && <span style={styles.youChip}>{COPY.you}</span>}
                     {m.pending && <span style={styles.pendingChip}>{COPY.pending}</span>}
                   </div>
@@ -1002,6 +1112,17 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--growth-deep)",
     background: "var(--white)",
     border: "1px solid var(--growth)",
+    borderRadius: 999,
+    padding: "2px 8px",
+  },
+  // Floor Guide: pale action tint, never a warning colour. Being in Floor Guide
+  // is a good thing happening to a new person, not a flag on them.
+  floorGuideChip: {
+    fontSize: "11px",
+    fontWeight: 700,
+    color: "var(--growth-deep)",
+    background: "var(--growth-soft)",
+    border: "1px solid var(--ok-border)",
     borderRadius: 999,
     padding: "2px 8px",
   },

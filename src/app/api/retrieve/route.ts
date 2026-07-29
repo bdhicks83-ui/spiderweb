@@ -45,6 +45,44 @@
 //      future failure is diagnosable from the Vercel log alone.
 // Diagnostic harness for this path: scripts/diag-retrieve.mjs (read-only).
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// ⭐⭐ FLOOR GUIDE PHASE A (2026-07-29) — ONE ENGINE, TWO SURFACES.
+//
+// POST now accepts { situation, floor_guide?: true }. Floor Guide is NOT a
+// second retrieval engine and must never become one: it is this route, with a
+// beginner-framed presentation layered on the same results, and with the
+// person-level writes around it suppressed. Forking the engine would mean the
+// 0.75 threshold, the visibility guard, the contested badges and the
+// effectiveness reader all had to be maintained twice, and the copy of them
+// that a nervous new hire depends on would be the one nobody was watching.
+//
+// ⭐ THE WRITE-PATH AUDIT (Guardrail 4), stated so the next person does not have
+// to re-derive it. Every write reachable from a retrieval call, and what
+// happens to it under floor_guide:
+//
+//   1. THIS ROUTE — writes NOTHING. Audited line by line: the only clients it
+//      constructs are for READS (the search RPC, the record load, the profile
+//      load, the conflict load, and the service-role effectiveness READER,
+//      which contains no insert/update/upsert). There is therefore nothing here
+//      to suppress, and that is a finding, not an omission.
+//   2. /api/retrieve/signal — learning_signals, actor_id = the asker, the typed
+//      query in the payload. SUPPRESSED ENTIRELY on a flagged call (no row).
+//   3. /api/gaps POST -> flagKnowledgeGap() — writes the org-level gap row
+//      (KEPT: coverage is about the org) but SKIPS knowledge_gap_askers and
+//      nulls actor_id on the knowledge_gap_opened ledger signal.
+//   4. Coaching Watch / retraining_signals — NOT reachable from retrieval at
+//      all. It is written only by /api/coaching/detect, which reads
+//      pattern_records (concern/friction records naming a registered person).
+//      Retrieval has never touched it. Nothing to suppress; confirmed, not
+//      assumed.
+//
+// The flag itself is never trusted from the client alone — resolveFloorGuideMode
+// AND-s it with the caller's own profiles.floor_guide_active, and a request that
+// ASKS for Floor Guide while not being in Floor Guide is refused loudly rather
+// than quietly served with the writes live. A privacy promise that silently
+// degrades is worse than one that errors.
+// ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
@@ -54,6 +92,7 @@ import {
   computeRetrievalEffectiveness,
   type RecordEffectiveness,
 } from "@/lib/retrieval-effectiveness";
+import { beginnerFrame, resolveFloorGuideMode, type BeginnerFrame } from "@/lib/floor-guide";
 
 // Below this cosine similarity a "match" is noise. A wrong framework is worse
 // than an empty result (a confident wrong answer erodes trust in the brain).
@@ -98,26 +137,46 @@ type ResultRow = {
 
 type MatchRow = { id?: unknown; similarity?: unknown };
 
+/** The Floor Guide display shape, exactly as this route ships it (or null). */
+type BeginnerField = BeginnerFrame | null;
+
 function log(msg: string, extra?: Record<string, unknown>) {
   console.log(`[retrieve] ${msg}${extra ? ` ${JSON.stringify(extra)}` : ""}`);
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { situation } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { situation } = body ?? {};
     if (!situation || typeof situation !== "string" || !situation.trim()) {
       return NextResponse.json({ error: "Describe a situation first." }, { status: 400 });
     }
     const query = situation.trim();
 
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+
+    // Identity + privacy mode in one own-row read.
+    const mode = await resolveFloorGuideMode(supabase, body?.floor_guide);
+    if (!mode) {
       return NextResponse.json({ error: "Not logged in" }, { status: 401 });
     }
-    log("start", { user: user.id, chars: query.length });
+    const { viewer, floorGuide, requestedButInactive } = mode;
+
+    // A surface that asked for privacy and cannot have it must NOT be quietly
+    // served without it — the Floor Guide page renders "nobody's grading you"
+    // and that sentence has to be true of the request that comes back.
+    if (requestedButInactive) {
+      return NextResponse.json(
+        {
+          error:
+            "Floor Guide isn't switched on for this account, so this can't be run privately. Ask whoever administers your account to turn it on.",
+          code: "FLOOR_GUIDE_NOT_ACTIVE",
+        },
+        { status: 403 }
+      );
+    }
+    const userId = viewer.userId;
+    log("start", { user: userId, chars: query.length, floorGuide });
 
     // ── 1. Embed the situation as a query. A failure is surfaced, never
     //    swallowed. (pattern_records embed as `document`, queries as `query` —
@@ -192,6 +251,7 @@ export async function POST(req: NextRequest) {
     if (strong.length === 0) {
       return NextResponse.json({
         noMatch: true,
+        floor_guide: floorGuide,
         message:
           "Nothing codified on this yet. No one on your team has captured a framework that matches this situation — this is a gap worth codifying.",
         topSimilarity: scored.length ? Math.round(scored[0].similarity * 1000) / 1000 : null,
@@ -331,7 +391,15 @@ export async function POST(req: NextRequest) {
           context_function: r.context_function,
           situation_type: r.situation_type,
           framework: r.framework,
-          is_mine: r.user_id === user.id,
+          // ⭐ Beginner framing — the SAME framework, same words, reordered so
+          // the call and the name of the person who owns it come first. Computed
+          // server-side and shipped as its own display shape, so the page needs
+          // no knowledge of the artifact's structure. Null off the Floor Guide
+          // surface: the expert-facing card is already right for experts.
+          beginner: (floorGuide
+            ? beginnerFrame(r.framework, authors[r.user_id] ?? null)
+            : null) as BeginnerField,
+          is_mine: r.user_id === userId,
           author: authors[r.user_id] ?? null,
           contested: contestedBy[r.id] ?? [],
           effectiveness: eff,
@@ -357,7 +425,10 @@ export async function POST(req: NextRequest) {
       proven: Object.values(effectiveness).filter((e) => e.level === "proven").length,
     });
 
-    return NextResponse.json({ noMatch, query, results });
+    // `floor_guide` is echoed so the surface can pass the SAME resolved value
+    // back on its follow-up calls (the "this helped" control, the gap flag)
+    // instead of each of them re-deriving what mode this search was in.
+    return NextResponse.json({ noMatch, query, results, floor_guide: floorGuide });
   } catch (err) {
     console.error("[retrieve] Unexpected error in retrieve route:", err);
     return NextResponse.json(

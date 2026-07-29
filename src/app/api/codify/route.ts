@@ -13,6 +13,7 @@
 // left off" instead of always starting fresh.
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireCanCodify } from "@/lib/floor-guide";
 import {
   MAX_QUESTIONS,
   OPENING_QUESTION,
@@ -115,6 +116,19 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    }
+
+    // ─── FLOOR GUIDE PHASE A — THE INTEGRITY RULE, FRIENDLY HALF ───
+    // A contributor may not create canonical judgment. The load-bearing guard
+    // is the pattern_records trigger (it covers the service-role paths this
+    // gate never sees); this one exists so a person reads a sentence instead of
+    // a Postgres exception. See src/lib/floor-guide.ts.
+    const codifyGate = await requireCanCodify(supabase);
+    if (!codifyGate.ok) {
+      return NextResponse.json(
+        { error: codifyGate.error, code: codifyGate.code },
+        { status: codifyGate.status }
+      );
     }
 
     const nowIso = new Date().toISOString();
