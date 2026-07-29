@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/org-admin.ts",
+    "src/lib/supabase/server.ts",
+    "src/lib/supabase/client.ts",
+    "src/app/api/admin/overview/route.ts",
+    "src/app/api/admin/members/route.ts",
+    "src/app/api/admin/members/[id]/route.ts",
+    "src/app/api/admin/members/[id]/status/route.ts",
+    "src/app/api/admin/members/[id]/invite-link/route.ts",
+    "src/app/api/admin/org/route.ts",
+    "src/app/api/admin/orgs/route.ts",
+    "src/app/admin/page.tsx",
+    "src/app/admin/start/page.tsx",
+    "src/app/auth/callback/route.ts",
+    "src/app/login/page.tsx",
+    "src/app/dashboard/page.tsx",
+    "src/components/BrandHeader.tsx"
+  ]
+}

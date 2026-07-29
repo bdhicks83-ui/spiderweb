@@ -4,6 +4,156 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-07-29 -- TIER 1 / BUILD 1: Admin & Onboarding Console (a customer can run their own account)
+
+**What shipped (code + migration staged; Brian runs the SQL, commits, and
+browser-verifies):** `/admin` — a customer's own admin can create the org,
+invite their people, set titles and roles, set who reports to whom, close a
+seat, rename the org, and watch a setup checklist fill in. **No SQL. No seed
+script. No Brian in the database.** That is the whole point: every org until
+now was born from `seed-awip-demo.mjs`, which meant a pilot customer could not
+onboard a single person without a hand-run script.
+
+Files: `supabase/t1b1-admin-console.sql` · `src/lib/org-admin.ts` ·
+`/api/admin/{overview,members,members/[id],members/[id]/status,members/[id]/invite-link,org,orgs}` ·
+`src/app/admin/page.tsx` · `src/app/admin/start/page.tsx` · modified
+`src/app/auth/callback/route.ts`, `src/app/dashboard/page.tsx`,
+`src/app/login/page.tsx` · `tsconfig.t1b1.json` (scoped typecheck: CLEAN).
+
+**Non-obvious decisions:**
+
+- **⭐ ORG ADMIN IS A SEPARATE BOOLEAN, NOT A THIRD `profiles.role` VALUE.** The
+  obvious move — `check (role in ('admin','manager','member'))` — is a live
+  regression. `is_manager()` (P-7) is `role = 'manager' OR anybody has you as
+  manager_id`. An admin promoted to `role='admin'` with no direct reports would
+  SILENTLY lose Training Studio access, the prescription manager gate, and
+  every other manager check — failing in a way nobody notices until a pilot
+  customer hits it. Administering seats and managing people are orthogonal
+  capabilities (an office manager administers without managing anyone; a plant
+  manager manages twelve people and has no business changing roles). So:
+  `profiles.is_org_admin boolean`, `role` keeps its two values and its exact
+  meaning, and **nothing that already checks role or `is_manager()` changes
+  behavior because of this build.**
+
+- **Two new SECURITY DEFINER functions, following the standing pattern:**
+  `is_org_admin()` (companion to P-7's `is_manager()`) and `is_org_admin_of(uuid)`
+  (companion to P-6's `is_manager_of(uuid)` — "am I an admin of the org THIS
+  person is in," the tenant boundary expressed in SQL rather than trusted to a
+  route handler). Deliberately not collapsed into one, same reasoning as P-4A's
+  two search functions.
+
+- **The gate is an RPC, not a column read.** Every `/api/admin/*` route calls
+  `supabase.rpc('is_org_admin')` on the SESSION client, so Postgres evaluates
+  the authority AS THE CALLER under SECURITY DEFINER. A column read would put
+  the answer in the route's hands; an RPC puts it in the database's. It also
+  means "a deactivated admin is not an admin" lives in exactly ONE place (the
+  SQL function) instead of being re-remembered in six handlers.
+
+- **⭐ INVITE MECHANISM: COPY-A-LINK, NOT EMAIL — and no new auth flow.** There
+  is no transactional email path in this codebase, and Supabase's built-in SMTP
+  is rate-limited below what a live onboarding session needs. So the console
+  calls Supabase's own `auth.admin.generateLink()` and hands the admin a URL to
+  send however they already reach their people. The app never creates, sees, or
+  stores a password, and never stores the token either. Wiring email later
+  replaces ONE function call.
+
+- **⚠️ THE PKCE TRAP (and why `/auth/callback` grew a second branch).** The
+  app's browser magic-link path is PKCE — a code verifier in the browser's
+  storage. A link generated SERVER-SIDE has no such verifier, so the existing
+  `?code=` exchange would fail for the invited person every single time, and it
+  would look exactly like a broken invite rather than a flow mismatch. The fix
+  is `?token_hash=&type=` → `verifyOtp()`, the documented shape for custom
+  invite delivery. Both branches now live in `/auth/callback`; the `?code=`
+  path is byte-identical to what shipped in P-1. `?next=` is validated to a
+  single-slash relative path — an open redirect on an auth callback is how a
+  sign-in link becomes a phishing link.
+
+- **🛑 SOFT-DEACTIVATE ONLY. There is no delete in this build and there never
+  will be.** `deactivated_at` + `deactivated_by` on the profile, plus a
+  REVERSIBLE GoTrue ban (`ban_duration`) so the person actually stops being able
+  to sign in. Zero rows dropped, nothing cascaded. Their frameworks stay in the
+  library under their name, their conflicts stay open, their Win Column
+  mentions stay, the gaps they filled stay filled. This is the `+test1` lesson
+  encoded as a product rule instead of a warning in a doc: "remove this person"
+  is almost never a request to destroy what they knew — it is a request to close
+  the seat. **The two halves are reported separately**: if the sign-in block
+  fails, the admin is TOLD the person can still sign in rather than being shown
+  a green check over a half-applied change (same reported-not-hidden posture as
+  the P-8 audit answer).
+
+- **The org-peer profiles read policy was deliberately NOT narrowed to active
+  people.** An author's `display_name` has to keep resolving on every framework
+  they ever captured, forever — that is the product's entire premise.
+
+- **Four guards on the edit route, each protecting something concrete:**
+  same-org (checked against the caller's own `org_id`, never the body) ·
+  no reporting cycles (`wouldCycle()` walks `manager_id` upward — the coaching
+  and prescription code WALKS this graph, so a loop is not cosmetic) · can't
+  remove the last admin · can't remove your own admin access. The last two are
+  the same lockout one click apart.
+
+- **Reads through the SESSION client, writes through the service role.** The
+  people list is read with the session client so the P-1 "org members read
+  profiles" policy is the real gate on it — an admin literally cannot SELECT
+  another org's profiles, not because the route filters but because the policy
+  does. Every write is service-role behind the admin gate, no new write
+  policies, same lockdown doctrine as prescriptions / learning_signals /
+  knowledge_gaps.
+
+- **Backfill: every existing org gets exactly one admin.** Without it this
+  migration would ship a console nobody can open. Choice order: top of the
+  reporting chain (a manager nobody manages) → else the org's earliest profile.
+  Only runs where no admin exists, so re-running never reshuffles a later human
+  decision. Brian's real account is always an admin. **`chuck.milner` is granted
+  the flag too** so the AWIP walkthrough seat can open the console — additive
+  capability only, no demo content, framework, conflict or count changes.
+
+- **The setup checklist is COMPUTED, never stored.** Four items (org named ·
+  experts invited · frameworks codified · reporting structure exists) derived
+  from real rows every load. A stored progress column drifts from the thing it
+  claims to describe. It is also the on-ramp to Build 2: the item that stays
+  unticked longest is always "your experts have codified something," which is
+  exactly what the Capture Campaign exists to solve.
+
+- **Org creation has two modes, chosen by WHO you are, never by the body.**
+  First-run (anyone with `org_id IS NULL` names an org and becomes its admin —
+  cannot touch an existing org) and platform-owner (Brian, per
+  `PLATFORM_OWNER_USER_IDS`, stands up an org + its first admin seat and hands
+  over the link). The caller's own org is never modified by either.
+
+- **Cross-org invite refusal.** An email already belonging to somebody in
+  ANOTHER org is refused with a plain-language message, not silently re-homed.
+  Moving an existing account across a tenant boundary would move that person's
+  captured judgment with it — the one thing the org model exists to prevent.
+  An orphan account (no org) or a previously-closed seat on THIS org is adopted
+  rather than duplicated.
+
+- **The admin tile is HIDDEN on the dashboard for non-admins**, unlike Coaching
+  Watch and the Training Studio which are shown-and-gated. Those are surfaces
+  everybody is meant to use; administering the account is not most people's job,
+  and a locked door on the dashboard reads as "there's a part of this you don't
+  get." The real gate is still `is_org_admin()` in Postgres.
+
+**⏳ Customer-facing copy: DRAFT, pending Brian.** Marked COPY blocks at the top
+of `src/app/admin/page.tsx` and `src/app/admin/start/page.tsx`, plus the
+expired-link line in `src/app/login/page.tsx`. Register: this is the first
+screen a paying customer's admin ever sees, so it reads like setting up a team
+— people have names and titles, seats open and close, the checklist is momentum
+and never a scold. No "users," no "records," no "provisioning."
+
+**Not done / deliberately deferred:** email delivery of invites (copy-a-link is
+v1, and the swap is one function call) · bulk/CSV import · an audit log of admin
+actions · per-seat billing or seat limits · self-serve signup from the marketing
+page (the org-creation path exists; wiring it to a public signup is a GTM
+decision, not a build one).
+
+**Lesson:** a capability that is orthogonal to an existing ladder must not be
+added as a rung on it. The tell is asking what breaks for someone who has the
+new capability and none of the old one — here, an admin with no direct reports
+losing every manager gate in the product, silently, with no error anywhere.
+
+---
+
 ## 2026-07-28 -- Demo reseed STAGED: Meridian → AWIP/IMP (authentic panel-line content, real names)
 
 **What was built (staged, not yet run -- Brian executes from his machine):**

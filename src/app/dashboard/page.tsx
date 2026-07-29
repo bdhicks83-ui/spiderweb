@@ -81,16 +81,34 @@ export default function DashboardPage() {
   const [snapshots, setSnapshots] = useState<GrowthSnapshot[]>([]);
   const [growthLoading, setGrowthLoading] = useState(false);
   const [needsContext, setNeedsContext] = useState<NeedsContext[]>([]);
+  // T1B1 — is this person the account's admin? Read off their OWN profile row
+  // (the "own profile read" policy allows it), so this costs no extra route
+  // and cannot report an authority the database wouldn't also grant.
+  const [isOrgAdmin, setIsOrgAdmin] = useState(false);
+  const [hasOrg, setHasOrg] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
-      await Promise.all([loadProfile(), loadGaps(), loadScore(), loadGrowth(), loadNeedsContext()]);
+      await Promise.all([loadProfile(), loadGaps(), loadScore(), loadGrowth(), loadNeedsContext(), loadAdminFlag()]);
       setLoading(false);
     })();
   }, [router]);
+
+  async function loadAdminFlag() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('is_org_admin, org_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const row = data as { is_org_admin: boolean | null; org_id: string | null } | null;
+    setIsOrgAdmin(!!row?.is_org_admin);
+    setHasOrg(!!row?.org_id);
+  }
 
   async function loadNeedsContext() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -336,6 +354,42 @@ export default function DashboardPage() {
           </div>
           <a href="/coaching" style={styles.resumeBannerLink}>Open →</a>
         </div>
+
+        {/* T1B1 — the admin console. Unlike the other tiles, this one is
+            HIDDEN for non-admins rather than shown-and-gated: everything else
+            in this app is a surface everybody is meant to use (the gate just
+            decides what renders inside it), whereas administering the account
+            is not most people's job and a locked door on the dashboard reads
+            as "there's a part of this you don't get." The real gate is still
+            is_org_admin() in Postgres, checked by every /api/admin route. */}
+        {isOrgAdmin && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>⚙️ Your account</h2>
+              <p style={styles.resumeBannerSub}>
+                Invite your people, set who reports to whom, and see how far along your
+                setup is.
+              </p>
+            </div>
+            <a href="/admin" style={styles.resumeBannerLink}>Manage →</a>
+          </div>
+        )}
+
+        {/* T1B1 — first run. Somebody with no organization has no shared
+            library, no gaps queue and no coaching routing; naming an org is
+            the one action that turns all of it on. */}
+        {!hasOrg && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>🏢 Set up your organization</h2>
+              <p style={styles.resumeBannerSub}>
+                Name your team and invite the people whose judgment you&apos;d lose if they
+                left tomorrow.
+              </p>
+            </div>
+            <a href="/admin/start" style={styles.resumeBannerLink}>Set it up →</a>
+          </div>
+        )}
 
         {/* hidden for Track B demo, recoverable — flip HIDE_TRACK_A in src/lib/demo-scope.ts */}
         {!HIDE_TRACK_A && (

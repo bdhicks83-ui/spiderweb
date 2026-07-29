@@ -40,12 +40,21 @@ export default function Login() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signup, setSignup] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Read ?mode=signup on the client — avoids useSearchParams' Suspense requirement.
   useEffect(() => {
-    setSignup(
-      new URLSearchParams(window.location.search).get("mode") === "signup"
-    );
+    const params = new URLSearchParams(window.location.search);
+    setSignup(params.get("mode") === "signup");
+    // T1B1 — an admin-issued invite link that expired or was already used. The
+    // single most common thing to go wrong in a live onboarding session, so it
+    // gets its own message: their account exists, only the link is stale.
+    // ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF.
+    if (params.get("error") === "link_expired") {
+      setNotice(
+        "That sign-in link has expired or was already used. Your account is fine — send yourself a magic link below, or ask your admin for a fresh one."
+      );
+    }
   }, []);
 
   const supabase = createClient();
@@ -116,6 +125,8 @@ export default function Login() {
       <div style={styles.card}>
         <h1 style={styles.title}>Log in</h1>
 
+        {notice && <p style={styles.notice}>{notice}</p>}
+
         <form onSubmit={signInPassword} style={styles.form}>
           <input
             style={styles.input}
@@ -156,4 +167,5 @@ const styles: Record<string, React.CSSProperties> = {
   subtle: { fontSize: '13px', color: 'var(--muted)', margin: 0, lineHeight: 1.5 },
   help: { fontSize: '14px', color: 'var(--pine-soft)', margin: 0, lineHeight: 1.5 },
   error: { fontSize: '13px', color: 'var(--danger)', margin: 0 },
+  notice: { fontSize: '13px', color: 'var(--warn-text)', background: 'var(--warn-bg)', border: '1px solid var(--warn-border)', borderRadius: '8px', padding: '10px 12px', margin: 0, lineHeight: 1.5 },
 };
