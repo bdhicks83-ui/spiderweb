@@ -418,21 +418,21 @@ const FRAMEWORKS = [
     signal_detail:
       "Off-standard profile requiring tooling. A color outside our standard coil coatings. A dimensional tolerance tighter than the line's proven capability. A thickness between our standard laminator setpoints.",
     judgment:
-      "Only promise a custom the plant has actually confirmed it can run at margin — not what we hope it can run. If it needs a new tool, an off-standard laminator setting, or a tolerance tighter than the line holds, that's a conversation with Brian Montes and Brian Ng before the quote, not after the PO.",
+      "If the deal is winnable, give the customer the yes at quote time and keep it moving — get the number out, win the PO, then sit down with Brian Montes and Brian Ng on how the plant hits it. Speed wins customs: the quote that waits on an internal capacity review loses to whoever answered first. Promise it or walk — the one thing we don't do is the slow maybe.",
     rationale:
-      "A custom promised at quote time that the plant can't cleanly run turns into expedite cost, scrap, and a late ship — and the margin we won the deal on evaporates. The deal that looks best on paper can be the one that loses money in the plant. Sales owns revenue, but revenue at a loss isn't a win. The discipline is a fast pre-quote reality check with Ops and R&D on anything non-standard, so the yes we give is a yes we can keep.",
+      "Custom buyers are comparing response speed as much as price — by the time a quote has been through an internal review loop, the competitor who said yes first has the PO. The plant has found a way every time the deal was real; the deals we lost waiting for sign-off never came back. An aggressive promise sometimes costs us expedite or overtime on the back end, but that's a cost we can manage down — a lost customer isn't. Sales' job is to win the order; the plant's job is to figure out how. If we only quote what's already proven, we never stretch the line's capability and we train customers to take their customs elsewhere.",
     boundaries:
-      "Standard profiles, standard colors, standard tolerances — promise them freely, that's what the line is built for. This gate is only for the non-standard ask.",
+      "If R&D has flat-out said the line can't hold it — physics, not preference — that's a walk, not a promise. Standard profiles, colors, and tolerances need none of this: quote them instantly. This is for the winnable non-standard ask, where hesitation is the deal-killer.",
     entity_map: [
       { type: "process", name: E_QUOTE_TIME, detail: "the non-standard ask" },
       { type: "department", name: "Sales", detail: null },
-      { type: "role_person", name: "Brian Montes", detail: "VP Operations — pre-quote reality check" },
-      { type: "role_person", name: "Brian Ng", detail: "R&D — pre-quote reality check" },
+      { type: "role_person", name: "Brian Montes", detail: "VP Operations — post-PO execution huddle" },
+      { type: "role_person", name: "Brian Ng", detail: "R&D — post-PO execution huddle" },
     ],
     framework: {
       name: "Custom Profile: Promise It or Walk",
       tagline:
-        "The yes we give has to be a yes we can keep — a fast pre-quote reality check with Ops and R&D on anything non-standard.",
+        "Speed wins customs — give the winnable yes at quote time and let the plant engineer to the commitment. The slow maybe is how deals die.",
       when_to_apply: [
         "A customer wants a custom profile, color, or tolerance, and Sales has to decide at quote time whether to promise it.",
       ],
@@ -443,11 +443,11 @@ const FRAMEWORKS = [
         "A thickness between our standard laminator setpoints.",
       ],
       the_play:
-        "Only promise a custom the plant has actually confirmed it can run at margin — not what we hope it can run. If it needs a new tool, an off-standard laminator setting, or a tolerance tighter than the line holds, that's a conversation with Brian Montes and Brian Ng before the quote, not after the PO.",
+        "If the deal is winnable, give the customer the yes at quote time and keep it moving — get the number out, win the PO, then sit down with Brian Montes and Brian Ng on how the plant hits it. Speed wins customs: the quote that waits on an internal capacity review loses to whoever answered first. Promise it or walk — the one thing we don't do is the slow maybe.",
       why_it_works:
-        "A custom promised at quote time that the plant can't cleanly run turns into expedite cost, scrap, and a late ship — and the margin we won the deal on evaporates. The deal that looks best on paper can be the one that loses money in the plant. Sales owns revenue, but revenue at a loss isn't a win. The discipline is a fast pre-quote reality check with Ops and R&D on anything non-standard, so the yes we give is a yes we can keep.",
+        "Custom buyers are comparing response speed as much as price — by the time a quote has been through an internal review loop, the competitor who said yes first has the PO. The plant has found a way every time the deal was real; the deals we lost waiting for sign-off never came back. An aggressive promise sometimes costs us expedite or overtime on the back end, but that's a cost we can manage down — a lost customer isn't. Sales' job is to win the order; the plant's job is to figure out how. If we only quote what's already proven, we never stretch the line's capability and we train customers to take their customs elsewhere.",
       boundaries: [
-        "Standard profiles, standard colors, standard tolerances — promise them freely, that's what the line is built for. This gate is only for the non-standard ask.",
+        "If R&D has flat-out said the line can't hold it — physics, not preference — that's a walk, not a promise. Standard profiles, colors, and tolerances need none of this: quote them instantly. This is for the winnable non-standard ask, where hesitation is the deal-killer.",
       ],
     },
   },

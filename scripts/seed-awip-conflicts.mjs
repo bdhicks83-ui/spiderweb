@@ -579,7 +579,7 @@ async function main() {
         },
       },
       generated_by: "seed-awip-demo",
-      created_at: AID_DELIVERED,
+      generated_at: AID_DELIVERED,
     });
     if (e1) throw new Error(`job aid insert: ${e1.message}`);
 
@@ -606,7 +606,7 @@ async function main() {
         },
       },
       generated_by: "seed-awip-demo",
-      created_at: DRILL_DELIVERED,
+      generated_at: DRILL_DELIVERED,
     });
     if (e2) throw new Error(`drill insert: ${e2.message}`);
     console.log(`  ✓ trainings: v1 Job aid → v2 hands-on drill (format switched)`);
@@ -716,7 +716,7 @@ async function main() {
         },
       },
       generated_by: "seed-awip-demo",
-      created_at: COIL_DELIVERED,
+      generated_at: COIL_DELIVERED,
     });
     console.log(`  ✓ prescription: coil-lot checklist — PROVEN EFFECTIVE (quiet ${quietDays}d)`);
   } else {
