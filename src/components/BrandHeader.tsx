@@ -8,6 +8,11 @@
 // the identifier rename is parked by standing decision; only visuals changed.
 import { useState, type CSSProperties } from 'react';
 import GapBadge from '@/components/GapBadge';
+// T1B2 — "somebody asked you to capture something." Sits next to GapBadge and
+// behaves identically: renders NOTHING when there is nothing to say, never
+// errors, never blocks. Green badge = something good arrived for you; amber
+// badge = something is waiting on you.
+import CaptureRequestBadge from '@/components/CaptureRequestBadge';
 
 const LOGO_SRC = '/brand/viridescent-horizontal.png';
 
@@ -88,6 +93,7 @@ export default function BrandHeader() {
         )}
       </a>
       <GapBadge />
+      <CaptureRequestBadge />
     </div>
   );
 }

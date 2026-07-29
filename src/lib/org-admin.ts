@@ -440,7 +440,10 @@ export function computeChecklist(input: ChecklistInput): {
           ? `${codifiedCount} of ${invitedCount} ${codifiedCount === 1 ? "person has" : "people have"} codified at least one.`
           : "Nothing is retrievable until somebody codifies something.",
       done: codifiedCount >= 3,
-      href: "/codify",
+      // T1B2 — this is the one checklist item an admin cannot tick alone, so it
+      // points at the surface that asks other people rather than at their own
+      // capture session.
+      href: "/campaigns",
     },
     {
       key: "reporting_structure",

@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/capture-campaign.ts",
+    "src/lib/org-admin.ts",
+    "src/lib/supabase/server.ts",
+    "src/lib/supabase/client.ts",
+    "src/app/api/campaigns/route.ts",
+    "src/app/api/campaigns/[id]/route.ts",
+    "src/app/api/requests/mine/route.ts",
+    "src/app/api/requests/[id]/route.ts",
+    "src/app/campaigns/page.tsx",
+    "src/app/campaigns/[id]/page.tsx",
+    "src/app/requests/page.tsx",
+    "src/components/CaptureRequestBadge.tsx",
+    "src/components/CaptureRequestBanner.tsx",
+    "src/components/BrandHeader.tsx",
+    "src/app/codify/page.tsx",
+    "src/app/dashboard/page.tsx"
+  ]
+}

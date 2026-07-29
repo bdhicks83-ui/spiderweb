@@ -86,6 +86,9 @@ export default function DashboardPage() {
   // and cannot report an authority the database wouldn't also grant.
   const [isOrgAdmin, setIsOrgAdmin] = useState(false);
   const [hasOrg, setHasOrg] = useState(true);
+  // T1B2 — capture campaigns.
+  const [canRunCampaigns, setCanRunCampaigns] = useState(false);
+  const [openAsks, setOpenAsks] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -108,6 +111,25 @@ export default function DashboardPage() {
     const row = data as { is_org_admin: boolean | null; org_id: string | null } | null;
     setIsOrgAdmin(!!row?.is_org_admin);
     setHasOrg(!!row?.org_id);
+
+    // T1B2 — can this person run a capture campaign? Manager OR admin, both
+    // evaluated by Postgres as the caller (SECURITY DEFINER), so the tile is
+    // never offered to somebody the API would refuse.
+    const [{ data: mgr }, { data: adm }] = await Promise.all([
+      supabase.rpc('is_manager'),
+      supabase.rpc('is_org_admin'),
+    ]);
+    setCanRunCampaigns(mgr === true || adm === true);
+
+    try {
+      const res = await fetch('/api/requests/mine?count=1');
+      if (res.ok) {
+        const body = await res.json();
+        if (typeof body?.open === 'number') setOpenAsks(body.open);
+      }
+    } catch {
+      // non-fatal: the tile just doesn't appear
+    }
   }
 
   async function loadNeedsContext() {
@@ -326,6 +348,39 @@ export default function DashboardPage() {
           </div>
           <a href="/training-studio" style={styles.resumeBannerLink}>Create training →</a>
         </div>
+
+        {/* T1B2 — "asked of you." Appears ONLY when something is actually
+            waiting: a permanently-visible empty queue teaches people to stop
+            looking at it. Amber, because it's waiting on them, not a prize. */}
+        {openAsks > 0 && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>📝 Asked of you</h2>
+              <p style={styles.resumeBannerSub}>
+                {openAsks === 1
+                  ? 'Someone asked you to write down how you handle something.'
+                  : `${openAsks} things your team has asked you to write down.`}
+              </p>
+            </div>
+            <a href="/requests" style={styles.resumeBannerLink}>Take a look →</a>
+          </div>
+        )}
+
+        {/* T1B2 — capture campaigns. Manager-or-admin only: the tile is the
+            entry point to ASKING people for things, which is a management
+            action. Everyone can still be asked. */}
+        {canRunCampaigns && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>📣 Capture campaigns</h2>
+              <p style={styles.resumeBannerSub}>
+                Ask specific people specific questions — starting with the ones your team
+                already asked and nobody could answer.
+              </p>
+            </div>
+            <a href="/campaigns" style={styles.resumeBannerLink}>Open →</a>
+          </div>
+        )}
 
         {/* P-9 — the shared gaps queue. Org-wide by design: anyone can see what
             the team can't answer, and anyone can pick one up. No routing in v1. */}

@@ -12,6 +12,12 @@ import BrandHeader from '@/components/BrandHeader';
 // or the gaps queue. Keeps the colleague's actual question on screen for the
 // whole interview, so nobody ends up answering from memory two clicks later.
 import GapAnswerBanner from '@/components/GapAnswerBanner';
+// T1B2 — renders only when /codify is opened with ?request=<id> from an ask in
+// a capture campaign. Same job as the gap banner: keep the exact question that
+// was asked on screen for the whole interview, so nobody ends up answering from
+// memory two clicks later. Both render nothing without their query param, so
+// /codify is unchanged for everyone arriving the normal way.
+import CaptureRequestBanner from '@/components/CaptureRequestBanner';
 import {
   TRIGGER_TYPES,
   METHODS,
@@ -387,6 +393,7 @@ export default function CodifyPage() {
         <BrandHeader />
         <h1 style={styles.title}>Codify a pattern</h1>
         <GapAnswerBanner />
+        <CaptureRequestBanner />
         <p style={styles.subtitle}>
           A short interview about a situation worth capturing. Answer in your own
           words — at the end you get a branded framework you could reuse or hand

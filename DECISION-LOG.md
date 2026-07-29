@@ -4,6 +4,147 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-07-29 -- TIER 1 / BUILD 2: Capture Campaign (the ask that turns an empty account into a full one)
+
+**What shipped (code + migration staged; Brian runs the SQL, commits, and
+browser-verifies):** `/campaigns` — a manager or admin names a push, picks
+specific people, and puts a specific QUESTION to each of them. `/requests` —
+"asked of you," the assignee's whole experience. The ask carries into `/codify`
+and links itself back when the framework lands.
+
+**The problem it solves:** Build 1 puts fifteen people on the account in ten
+minutes and then nothing happens. Nothing in this product ever ASKED any of
+them to codify anything, and an org with zero frameworks has no retrieval, no
+conflicts, no prescriptions, no gaps worth filling — every surface is dark.
+"Get the first frameworks captured" is the one setup-checklist item an admin
+cannot tick alone.
+
+Files: `supabase/t1b2-capture-campaign.sql` · `src/lib/capture-campaign.ts` ·
+`/api/campaigns`, `/api/campaigns/[id]`, `/api/requests/mine`,
+`/api/requests/[id]` · `src/app/campaigns/page.tsx` ·
+`src/app/campaigns/[id]/page.tsx` · `src/app/requests/page.tsx` ·
+`CaptureRequestBadge.tsx` · `CaptureRequestBanner.tsx` · modified `BrandHeader`,
+`/codify`, `/dashboard`, `src/lib/org-admin.ts` · `tsconfig.t1b2.json`
+(scoped typecheck CLEAN; T1B1 and P-9 configs re-checked CLEAN too).
+
+**Non-obvious decisions:**
+
+- **⭐ THE UNIT IS A QUESTION PUT TO A NAMED PERSON, not a task assigned to a
+  team.** "Please document your process" produces nothing and has been the
+  shipped feature of every knowledge-management product in history. "How do you
+  decide whether the first run after a profile changeover can ship before the
+  bond-strength check clears?" produces a framework. The schema enforces this —
+  `capture_requests.prompt` is required, per-person, and stored verbatim.
+
+- **⭐ THE FLYWHEEL CLOSES ON THE SUPPLY SIDE.** The primary way to build a
+  campaign is the "from questions nobody could answer" tab, which reads the P-9
+  `knowledge_gaps` queue — real questions real people typed, that retrieval
+  actually failed, ranked by `asked_count` — and turns a row into an assignment
+  with `source='gap'` and `source_gap_id` set. Demand → ask → capture →
+  retrieval → the next question. **No other surface in this product connects
+  those two ends.** The assignee sees "4 people hit this and found nothing,"
+  which is the most motivating sentence available and costs nothing to show.
+
+- **⭐ THE READ BOUNDARY (the load-bearing decision).** `capture_campaigns` is
+  ORG-WIDE readable — "we're capturing changeover judgment this quarter" is a
+  statement about the team. `capture_requests` is readable by exactly three
+  parties: **the person asked, their direct manager (`is_manager_of()`, P-6),
+  and an org admin (`is_org_admin()`, T1B1)**. Not the org.
+  A request row unavoidably carries "this person was asked N things and
+  captured none," which org-wide is a person-level negative signal on a
+  peer-visible surface — precisely what P-6 made manager-only and what P-9
+  refused to put on the shared gap row (a COUNT, never a NAME). **A capture
+  campaign must not become a leaderboard of who is behind.** This is the P-8
+  "an org-wide table can silently widen a narrower one" lesson applied BEFORE
+  it bit rather than after.
+
+- **⭐ DECLINE IS A FIRST-CLASS TERMINAL STATUS WITH A REQUIRED REASON.** "I'm
+  not the right person — Dana owns that call now" is the single most useful
+  thing a misrouted assignee can say, and it only ever gets said if saying it
+  is easy and carries no penalty. A system offering only done/not-done converts
+  that routing intelligence into silence that looks like non-compliance.
+  **And declines come OUT of the completion denominator** (`computeProgress()`):
+  a campaign where 3 of 10 passed and 7 of 7 captured is DONE and says 100%. If
+  declines counted against the number, managers would learn to stop offering
+  the option and the signal would disappear.
+
+- **Read-time reconciliation, never a client callback** (`reconcileStartedRequests()`).
+  "Capture this" hands off to a multi-turn interview that may finish in another
+  tab, tomorrow, or after a refresh. A client-side "mark it captured when the
+  session ends" is the close-the-loop step that silently doesn't happen — the
+  framework exists, the ask still says open, the campaign under-reports forever
+  with no error anywhere. Verbatim the P-9 lesson, verbatim the P-9 shape:
+  match on what exists in `pattern_records`, scoped to that person and that
+  org, plus a `CLAIM_STALE_HOURS` release. **Known imprecision stated, not
+  hidden:** codify something unrelated inside the window and the wrong
+  framework links; the assignee can re-link by hand, and the scale fix is a
+  similarity check, never a callback.
+
+- **`CLAIM_STALE_HOURS = 24` deliberately mirrors P-9's constant.** Same shape
+  of promise, same failure mode. Two different numbers for the same idea is how
+  a codebase starts lying to itself — change both or neither.
+
+- **⚠️ ONLY THE PERSON ASKED MAY MOVE THEIR OWN ASK.** Not their manager, not
+  an admin. A manager marking somebody else's ask "captured" would put a claim
+  about what a person knows into the record without that person ever having
+  said it — the one thing this product exists not to do. Managers can see the
+  row and can add or close asks; they cannot answer for someone. Linking is
+  additionally author-gated: you may only link a framework you captured
+  yourself.
+
+- **Campaign ownership is manager OR admin, deliberately broader than the admin
+  console.** Asking your people to write down how they decide something is
+  ordinary management, not account administration; gating it to admins would
+  put a purchasing decision in front of a coaching conversation. Both checks
+  are RPCs on the session client (SECURITY DEFINER, evaluated as the caller),
+  same doctrine as the T1B1 gate. Assignees are unrestricted — anyone can be
+  asked.
+
+- **`prompt_norm` is exact-normalized only, NOT the P-9 semantic de-dupe.** Its
+  only job is stopping the same person being asked the identical question twice
+  in one campaign. Two similarly-worded asks are a judgment call the ASKER is
+  allowed to make — maybe they want both angles — and silently merging them
+  would delete an instruction a human wrote on purpose.
+
+- **The unique index is PLAIN, never partial** (`campaign_id, person_id,
+  prompt_norm`). The add-people path genuinely upserts against it, so a partial
+  index would be the P-7 PostgREST silent-upsert trap in its purest form.
+
+- **Closing a campaign is not a delete and never touches its asks.** Captured
+  keeps its framework, declined keeps its reason. Closed means "we're done
+  pushing," not "none of that happened."
+
+- **The "asked of you" dashboard tile appears ONLY when something is waiting.**
+  A permanently-visible empty queue teaches people to stop looking at it. The
+  nav badge follows GapBadge's discipline exactly: renders nothing when there
+  is nothing to say, never errors, never blocks, and the count path skips the
+  reconciler because it runs on every page load in the app.
+
+**⏳ Customer-facing copy: DRAFT, pending Brian.** Marked COPY blocks in
+`src/app/campaigns/page.tsx`, `src/app/campaigns/[id]/page.tsx`,
+`src/app/requests/page.tsx`, `CaptureRequestBadge.tsx`,
+`CaptureRequestBanner.tsx`. Register: an ask is a colleague wanting your
+judgment, never a ticket. "Asked of you," not "assigned to you." Nothing may
+read as "you are behind," and passing on an ask has to look obviously
+acceptable or nobody will use it.
+
+**Not done / deliberately deferred:** email or push notification of an ask
+(badge + persistent list is v1, same call as P-9) · suggesting WHO to ask
+(routing implies the system knows who the expert is; inventing that would be a
+confident guess dressed as intelligence — same reasoning that kept routing out
+of the P-9 queue) · recurring campaigns · a reader over decline reasons ·
+learning-ledger signals (a capture request is an action, not a judgment about
+the engine's output, so it does not belong in the P-8 ledger).
+
+**Lesson:** when a new table's rows imply something about a named person, decide
+its read boundary before you decide anything else about it. Every other design
+question here — what the progress bar counts, what a peer sees on the detail
+page, whether declines are visible — fell straight out of that one decision, and
+getting it wrong would have shipped a compliance scoreboard wearing the brand
+of a knowledge product.
+
+---
+
 ## 2026-07-29 -- TIER 1 / BUILD 1: Admin & Onboarding Console (a customer can run their own account)
 
 **What shipped (code + migration staged; Brian runs the SQL, commits, and

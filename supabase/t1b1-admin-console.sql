@@ -226,13 +226,30 @@ update profiles
 
 -- ⭐ DEMO SEAT: chuck.milner is the seat the AWIP walkthrough logs in as, so he
 -- gets the admin flag too. Additive only — it grants a capability, it changes
--- no demo content, no framework, no conflict, no count. Remove this statement
--- if the demo should show a non-admin manager seat instead.
-update profiles
-  set is_org_admin = true, updated_at = now()
-  where id in (
-    select id from auth.users where email = 'chuck.milner@awip-demo.example'
-  );
+-- no demo content, no framework, no conflict, no count. Remove this block if
+-- the demo should show a non-admin manager seat instead.
+--
+-- ⚠️ SELF-REPORTING ON PURPOSE. The first run of this file used an exact
+-- `email = '…'` match and touched ZERO rows — silently. The console then
+-- deployed correctly and the demo seat simply couldn't open it, which looks
+-- identical to a broken gate. A grant that can no-op must SAY it no-opped:
+-- `ilike` for the match, and a notice with the row count either way.
+do $$
+declare
+  granted int;
+begin
+  update profiles p
+     set is_org_admin = true, updated_at = now()
+    from auth.users u
+   where u.id = p.id
+     and u.email ilike 'chuck.milner@%';
+  get diagnostics granted = row_count;
+  if granted = 0 then
+    raise notice 'T1B1 demo seat: NO row matched chuck.milner@% — the AWIP walkthrough seat is NOT an admin.';
+  else
+    raise notice 'T1B1 demo seat: granted admin to % row(s) matching chuck.milner@%%', granted;
+  end if;
+end $$;
 
 -- ═══ 8. ROW LEVEL SECURITY ═════════════════════════════════════════════════
 -- Deliberately NO new write policies. Every admin write (invite, edit role,
