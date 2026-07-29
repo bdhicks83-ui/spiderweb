@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/value-readout.ts",
+    "src/lib/readout-pdf.tsx",
+    "src/lib/supabase/server.ts",
+    "src/lib/supabase/client.ts",
+    "src/app/api/readout/route.ts",
+    "src/app/api/readout/pdf/route.ts",
+    "src/app/readout/page.tsx",
+    "src/components/BrandHeader.tsx",
+    "src/app/dashboard/page.tsx"
+  ]
+}

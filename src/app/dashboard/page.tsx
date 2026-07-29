@@ -382,6 +382,23 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* T1B3 — the value readout. Same manager-or-admin bar as campaigns:
+            it carries no person-level negative so a wider audience would be
+            safe, but a readout circulating before its owner has read it is how
+            a half-finished number reaches a VP. */}
+        {canRunCampaigns && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>📊 What your team wrote down</h2>
+              <p style={styles.resumeBannerSub}>
+                Built live from your own records — what&apos;s been captured, what people asked for,
+                and where it changed what someone did. Two pages you can forward.
+              </p>
+            </div>
+            <a href="/readout" style={styles.resumeBannerLink}>Open the readout →</a>
+          </div>
+        )}
+
         {/* P-9 — the shared gaps queue. Org-wide by design: anyone can see what
             the team can't answer, and anyone can pick one up. No routing in v1. */}
         <div style={styles.resumeBanner}>
