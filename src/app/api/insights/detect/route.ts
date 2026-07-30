@@ -196,12 +196,14 @@ export async function POST(req: NextRequest) {
       `[insights] passive candidate ${created.created ? "created" : "deduped"} ` +
         `(confidence=${detection.confidence.toFixed(2)}, surface=${surface})`
     );
+    // noticed:false ALWAYS on the passive path. The candidate exists and the
+    // admin will see it; the person who said it is told nothing until somebody
+    // acts. Brian's call (2026-07-30) — see createCandidateInsight for the why.
     return NextResponse.json({
       candidate: true,
       invite: false,
-      noticed: created.created,
+      noticed: false,
       id: created.candidate.id,
-      summary: detection.summary,
     });
   } catch (err) {
     // Fail-open at the outermost layer too. Nothing about detection is allowed

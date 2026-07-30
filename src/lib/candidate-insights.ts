@@ -141,9 +141,20 @@ export type CreateCandidateResult =
  * for session clients, on purpose — the route decides what a candidate is, not
  * whatever PostgREST is willing to accept from a browser.
  *
- * `notified_at` is stamped at creation for BOTH paths, because both are good
- * news: "you shared it and a person will read it" and "you said something that
- * looked like real judgment." `seen_at` stays null so the badge lights.
+ * ⭐ `notified_at` IS STAMPED FOR THE EXPLICIT PATH ONLY (Brian's call,
+ * 2026-07-30, and it reverses the design doc's original recommendation).
+ *
+ * The reasoning that changed it: most passive candidates will be dismissed, and
+ * dismissal is silent by design. So notifying at creation produces the sequence
+ * "leadership is taking a look" -> then nothing, forever. Being told you were
+ * noticed and then hearing nothing is worse than never being told.
+ *
+ * An explicit share is the opposite case: they took an action, so they get a
+ * receipt immediately. They already know they did it — the confirmation is
+ * honesty about where it went, not news.
+ *
+ * A passive candidate's badge lights when an admin PROMOTES or ROUTES it (see
+ * stampActed), which is the first moment there is anything true to say.
  *
  * ⚠️ The upsert targets candidate_insights_dedupe_idx, which is a PLAIN unique
  * index and must stay plain (the P-7 PostgREST trap: onConflict against a
@@ -184,7 +195,9 @@ export async function createCandidateInsight(
       confidence: input.confidence ?? null,
       detector: input.detector,
       status: "new",
-      notified_at: nowIso,
+      // Explicit only. See the note above — a passive candidate that nobody has
+      // acted on has nothing to tell its author yet.
+      notified_at: input.source === "explicit" ? nowIso : null,
       input_norm: inputNorm,
     })
     .select(CANDIDATE_COLUMNS)
@@ -405,8 +418,8 @@ export function withContributorCredit(
   const credit = {
     type: "role_person",
     name,
-    // ⚠️ Reads on the Win Column card. Draft copy, pending Brian.
-    detail: "Surfaced this from the floor.",
+    // Reads on the Win Column card, next to their name.
+    detail: "Surfaced this idea.",
   };
   // Credit first: entity_map has a display order in some surfaces and the person
   // whose idea this was should not be below a laminator.

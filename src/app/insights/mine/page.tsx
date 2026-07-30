@@ -53,10 +53,6 @@ const COPY = {
   noticedTitle: "Your idea's with your leadership team.",
   noticedBody: "Someone reads every one of these.",
 
-  spottedTitle: "You spotted something.",
-  spottedBody:
-    "Something you said reads like real judgment — a way of working the library doesn't have yet. It's in front of your leadership team now.",
-
   empty:
     "Nothing here yet. When you tell your team how you do something, it'll show up here — and you'll see where it goes.",
   loading: "Loading…",
@@ -172,13 +168,12 @@ export default function MyIdeasPage() {
                   <p style={styles.cardBody}>{COPY.routedBody}</p>
                 </>
               ) : (
+                // Only an EXPLICIT share can reach this state now: the RLS policy
+                // hides an un-acted passive candidate from its own author, so
+                // there is no "we noticed you" card and no source branch here.
                 <>
-                  <div style={styles.cardTitle}>
-                    {idea.source === "passive" ? COPY.spottedTitle : COPY.noticedTitle}
-                  </div>
-                  <p style={styles.cardBody}>
-                    {idea.source === "passive" ? COPY.spottedBody : COPY.noticedBody}
-                  </p>
+                  <div style={styles.cardTitle}>{COPY.noticedTitle}</div>
+                  <p style={styles.cardBody}>{COPY.noticedBody}</p>
                 </>
               )}
 

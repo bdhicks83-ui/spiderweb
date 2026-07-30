@@ -165,7 +165,7 @@ export default function LibraryDetailPage() {
             ⚠️ Draft copy, pending Brian. */}
         {record.codified_from?.surfaced_by?.name ? (
           <div style={styles.surfacedRow}>
-            <span style={styles.surfacedChip}>Surfaced from the floor</span>
+            <span style={styles.surfacedChip}>Surfaced from the team</span>
             <span>
               Surfaced by{" "}
               <strong style={styles.surfacedName}>

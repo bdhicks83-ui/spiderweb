@@ -35,7 +35,12 @@ const supabase = createClient();
 // Full draft set in claude/COPY-DRAFT-floorguide-phaseB.md.
 // ═════════════════════════════════════════════════════════════════════════════
 const COPY = {
-  title: "Ideas from the floor",
+  // Brian's call (2026-07-30): "your team", not "the floor". Phase A
+  // deliberately did not role-lock Floor Guide, so a contributor can be a new PM
+  // or analyst — and "the floor" means nothing to them. The doctrine language in
+  // the comments still says floor, because that is what the feature is FOR; the
+  // words on screen have to work in an office too.
+  title: "Ideas from your team",
   subtitle:
     "Your people see things the library doesn't have yet. Nothing here is judgment until you say so.",
   backToApp: "Dashboard",
@@ -61,7 +66,7 @@ const COPY = {
   openFramework: "See the framework →",
 
   empty:
-    "Nothing waiting. When someone on the floor says something worth writing down, it lands here.",
+    "Nothing waiting. When someone on your team says something worth writing down, it lands here.",
   emptyNotAdmin:
     "Nothing's been routed to you. When an admin sends you something from the floor, it'll show up here.",
   loading: "Loading…",
@@ -220,7 +225,7 @@ export default function InsightsQueuePage() {
                   {explicit ? COPY.sourceExplicit : COPY.sourcePassive}
                 </span>
                 <span style={styles.personName}>
-                  {item.person?.display_name ?? "Someone on the floor"}
+                  {item.person?.display_name ?? "Someone on your team"}
                 </span>
                 {item.person?.claimed_title && (
                   <span style={styles.personaTag}>{item.person.claimed_title}</span>

@@ -130,11 +130,13 @@ export default function ShareIdeaPanel({
         // invite → nothing was written; we're asking. candidate → it was
         // written on a surface that makes no privacy promise, and the person is
         // told so here rather than only via the badge.
+        // An INVITATION is the only thing detection may put on screen. A
+        // passive candidate that was written deliberately says NOTHING here:
+        // most get dismissed, dismissal is silent, and "leadership is taking a
+        // look" followed by permanent silence is worse than never being told.
+        // (Brian's call, 2026-07-30.) The badge lights when an admin acts.
         if (data?.invite === true) {
           setInvite(typeof data.summary === "string" ? data.summary : "");
-        } else if (data?.candidate === true && data?.noticed === true) {
-          setMessage(COPY.saved);
-          setState("done");
         }
       } catch {
         // Silent by design. Detection failing must be invisible.

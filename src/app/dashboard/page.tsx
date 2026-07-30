@@ -500,7 +500,7 @@ export default function DashboardPage() {
         {isOrgAdmin && (
           <div style={styles.resumeBanner}>
             <div>
-              <h2 style={styles.resumeBannerTitle}>💡 Ideas from the floor</h2>
+              <h2 style={styles.resumeBannerTitle}>💡 Ideas from your team</h2>
               <p style={styles.resumeBannerSub}>
                 Things your people know that the library doesn&apos;t. Nothing here is
                 judgment until you say so.
