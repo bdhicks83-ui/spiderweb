@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/onboarding-tracks.ts",
+    "src/app/api/welcome/route.ts",
+    "src/app/welcome/page.tsx",
+    "src/app/dashboard/page.tsx"
+  ]
+}

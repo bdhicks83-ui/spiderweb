@@ -106,6 +106,28 @@ export default function DashboardPage() {
     })();
   }, [router]);
 
+  // Role-based onboarding — route a brand-new seat to their track's welcome
+  // tour ONCE. /api/welcome answers needsOnboarding=true only when this person
+  // has never seen (or been exempted from) their OWN track; every seat that
+  // existed before the feature shipped was backfilled complete by
+  // supabase/role-onboarding.sql, so existing users and the AWIP demo are
+  // never hijacked. /welcome records "seen" the moment it loads, so this can
+  // fire at most once per person.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/welcome', { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled && j?.needsOnboarding) router.replace('/welcome');
+      } catch {
+        // Never block the dashboard on the tour check.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
   async function loadAdminFlag() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
