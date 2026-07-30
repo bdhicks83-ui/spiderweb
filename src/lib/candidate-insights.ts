@@ -30,12 +30,25 @@
 // ═══════════════════════════════════════════════════════════════════════════
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type CandidateSource = "explicit" | "passive";
+/**
+ * PHASE C ADDED 'deep_dive' AS A THIRD SOURCE, not a reuse of 'passive'. An
+ * admin weighing the queue needs to know a candidate was said in answer to a
+ * direct question with the DECISION-1 disclosure on screen — a different
+ * provenance from both "they chose to send this" and "we noticed." Everything
+ * downstream treats it like 'passive' where it matters: never notified at
+ * creation (the Call-1 rule — most candidates are dismissed, and dismissal is
+ * silent), invisible to its author until a human acts (the b2 RLS policy's
+ * not-explicit branch covers it untouched), and only ever created above the
+ * 0.85 bar.
+ */
+export type CandidateSource = "explicit" | "passive" | "deep_dive";
 export type CandidateStatus = "new" | "reviewing" | "promoted" | "routed" | "dismissed";
 
 /** The surfaces a candidate can come from. `floor_guide` is only ever paired
- *  with source='explicit' — see PASSIVE_SURFACES below for why. */
-export type CandidateSurface = "floor_guide" | "retrieve" | "ask";
+ *  with source='explicit' — see PASSIVE_SURFACES below for why. `deep_dive`
+ *  is only ever written by the /api/deep-dives answer route (server-side,
+ *  after the disclosure), never through /api/insights/detect. */
+export type CandidateSurface = "floor_guide" | "retrieve" | "ask" | "deep_dive";
 
 /**
  * ⭐⭐ THE PRIVACY LINE OF PHASE B, AND IT IS A SHORT LIST ON PURPOSE.
@@ -56,6 +69,14 @@ export type CandidateSurface = "floor_guide" | "retrieve" | "ask";
  *
  * ⚠️ If you add a surface here, you are asserting that surface makes no privacy
  * promise. Check the copy on it before you do.
+ *
+ * ⚠️ PHASE C: 'deep_dive' is DELIBERATELY NOT HERE even though that surface
+ * makes no privacy promise (its DECISION-1 disclosure says the opposite, out
+ * loud). This list gates the CLIENT-CALLABLE /api/insights/detect route, and
+ * deep-dive answers never flow through it — their detection runs server-side
+ * inside /api/deep-dives/[id], after ownership and disclosure are already
+ * settled. Keeping the client door shut to 'deep_dive' is least-privilege,
+ * not a privacy claim.
  */
 export const PASSIVE_SURFACES: readonly CandidateSurface[] = ["retrieve", "ask"];
 
@@ -67,7 +88,7 @@ export function passiveAllowedOn(surface: unknown): boolean {
 }
 
 export function isCandidateSurface(v: unknown): v is CandidateSurface {
-  return v === "floor_guide" || v === "retrieve" || v === "ask";
+  return v === "floor_guide" || v === "retrieve" || v === "ask" || v === "deep_dive";
 }
 
 export const EXPLICIT_DETECTOR = "contributor-explicit-v1";

@@ -17,6 +17,10 @@ import CaptureRequestBadge from '@/components/CaptureRequestBadge';
 // renders NOTHING when there is nothing to say, and it can only ever carry good
 // news because RLS never hands a dismissal to the person who surfaced it.
 import InsightBadge from '@/components/InsightBadge';
+// Floor Guide C — "someone asked how you really do it." Amber like the T1B2
+// badge (something waits on you), and it goes dark on answer OR decline alike,
+// because both remove you from the ask's live target list.
+import DeepDiveBadge from '@/components/DeepDiveBadge';
 
 const LOGO_SRC = '/brand/viridescent-horizontal.png';
 
@@ -99,6 +103,7 @@ export default function BrandHeader() {
       <GapBadge />
       <CaptureRequestBadge />
       <InsightBadge />
+      <DeepDiveBadge />
     </div>
   );
 }

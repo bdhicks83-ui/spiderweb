@@ -92,6 +92,9 @@ export default function DashboardPage() {
   const [isContributor, setIsContributor] = useState(false);
   const [floorGuideActive, setFloorGuideActive] = useState(false);
   const [openAsks, setOpenAsks] = useState(0);
+  // Floor Guide C — deep dives waiting on this person (the live target list;
+  // answer or decline both clear it).
+  const [openDives, setOpenDives] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -141,6 +144,17 @@ export default function DashboardPage() {
       if (res.ok) {
         const body = await res.json();
         if (typeof body?.open === 'number') setOpenAsks(body.open);
+      }
+    } catch {
+      // non-fatal: the tile just doesn't appear
+    }
+
+    // Floor Guide C — same shape, same silence on failure.
+    try {
+      const res = await fetch('/api/deep-dives/mine?count=1');
+      if (res.ok) {
+        const body = await res.json();
+        if (typeof body?.open === 'number') setOpenDives(body.open);
       }
     } catch {
       // non-fatal: the tile just doesn't appear
@@ -410,6 +424,24 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Floor Guide C — a deep dive waiting on this person. Same only-when-
+            real rule as "Asked of you," and the sub line carries the two facts
+            that make deep dives fair: it's assessed, and it's declinable.
+            ⚠️ Draft copy, pending Brian. */}
+        {openDives > 0 && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>🔍 A deep dive for you</h2>
+              <p style={styles.resumeBannerSub}>
+                {openDives === 1
+                  ? 'Someone running your account wants to know how you really do something. It says who sees your answer before you type — and you can decline, silently.'
+                  : `${openDives} deep dives waiting. Each says who sees your answer before you type — and you can decline any of them, silently.`}
+              </p>
+            </div>
+            <a href="/deep-dives/mine" style={styles.resumeBannerLink}>Take a look →</a>
+          </div>
+        )}
+
         {/* T1B2 — capture campaigns. Manager-or-admin only: the tile is the
             entry point to ASKING people for things, which is a management
             action. Everyone can still be asked. */}
@@ -507,6 +539,26 @@ export default function DashboardPage() {
               </p>
             </div>
             <a href="/insights" style={styles.resumeBannerLink}>Review →</a>
+          </div>
+        )}
+
+        {/* Floor Guide C — deep dives. Admin-only and HIDDEN for everybody
+            else, same T1B1 doctrine as the two tiles above. The contributor-
+            facing half is the "A deep dive for you" banner further up; a
+            manager with a report's answer to read reaches /deep-dives through
+            that answer's notification-free surface (the page renders their
+            RLS slice). The real gate is is_org_admin() on the create route.
+            ⚠️ Draft copy, pending Brian. */}
+        {isOrgAdmin && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>🔍 Deep dives</h2>
+              <p style={styles.resumeBannerSub}>
+                Ask the people doing the work how they actually do it — and see whether the
+                training needs fixing or the playbook has something to learn.
+              </p>
+            </div>
+            <a href="/deep-dives" style={styles.resumeBannerLink}>Open →</a>
           </div>
         )}
 

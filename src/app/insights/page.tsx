@@ -47,8 +47,13 @@ const COPY = {
 
   sourceExplicit: "Shared directly",
   sourcePassive: "Noticed",
+  // Phase C — the third provenance. Said in answer to a direct question, with
+  // the disclosure on screen; weigh it accordingly.
+  sourceDeepDive: "From a deep dive",
   explicitNote: (name: string) => `${name} chose to send this.`,
   passiveNote: "Surfaced automatically. High confidence only — you won't get flooded.",
+  deepDiveNote:
+    "Said while answering a deep dive — they knew leadership would read it. High confidence only.",
 
   promote: "Make it a Framework",
   promoting: "Writing it up…",
@@ -79,7 +84,7 @@ type ProfileLite = { id: string; display_name: string | null; claimed_title: str
 
 type QueueItem = {
   id: string;
-  source: "explicit" | "passive";
+  source: "explicit" | "passive" | "deep_dive";
   surface: string | null;
   raw_input: string;
   context_note: string | null;
@@ -222,7 +227,11 @@ export default function InsightsQueuePage() {
             <div key={item.id} style={explicit ? styles.cardExplicit : styles.cardPassive}>
               <div style={styles.cardTop}>
                 <span style={explicit ? styles.chipExplicit : styles.chipPassive}>
-                  {explicit ? COPY.sourceExplicit : COPY.sourcePassive}
+                  {explicit
+                    ? COPY.sourceExplicit
+                    : item.source === "deep_dive"
+                      ? COPY.sourceDeepDive
+                      : COPY.sourcePassive}
                 </span>
                 <span style={styles.personName}>
                   {item.person?.display_name ?? "Someone on your team"}
@@ -241,7 +250,9 @@ export default function InsightsQueuePage() {
               <p style={styles.sourceNote}>
                 {explicit
                   ? COPY.explicitNote(item.person?.display_name ?? "They")
-                  : COPY.passiveNote}
+                  : item.source === "deep_dive"
+                    ? COPY.deepDiveNote
+                    : COPY.passiveNote}
               </p>
 
               {item.status === "promoted" && (

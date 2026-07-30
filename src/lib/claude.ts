@@ -2434,3 +2434,101 @@ export async function draftSurfacedInsight(args: {
     return draft;
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLOOR GUIDE / PHASE C — THE DIVERGENCE READING
+//
+// One model call, riding on the contributor's answer submission — which puts
+// it on a person's critical path, so the posture is the strict one: single
+// attempt, hard fail-open, null means "the answer lands unread" and never
+// "the answer failed." A deep-dive answer somebody consented to give must
+// never bounce because a model flaked.
+//
+// The reading is INPUT for a human, twice over: the route stores it, and an
+// admin or the person's manager decides what it means. The prompt is
+// forbidden judgment words in both directions and must preserve the question
+// DIRECTION (the P-9 before-vs-after lesson) — see
+// prompts/deep-dive-divergence.md, which is most of this feature.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type DivergenceVerdict = "aligned" | "diverges" | "no_basis";
+
+export type DivergenceReading = {
+  verdict: DivergenceVerdict;
+  /** The specific point of difference. Null unless verdict is 'diverges'. */
+  point: string | null;
+};
+
+/** Set on every failure path so a fail-open is diagnosable from a log line
+ *  rather than from silence (the P-7 convention, same as translateSymptom). */
+export let lastDivergenceDiagnostic: string | null = null;
+
+function isDivergenceVerdict(v: unknown): v is DivergenceVerdict {
+  return v === "aligned" || v === "diverges" || v === "no_basis";
+}
+
+/**
+ * Compare one deep-dive answer against the anchored canon. Returns null on
+ * ANY failure; the caller stores divergence = null, which every surface
+ * renders as "the reading didn't run" — visibly distinct from no_basis.
+ *
+ * max_tokens sized for a thinking block plus a two-field JSON body (the P-7
+ * rule: budget the THINKING, not the output). content[0] never assumed text.
+ */
+export async function assessDivergence(args: {
+  topic: string;
+  answer: string;
+  frameworkName: string;
+  canon: string;
+  title: string | null;
+}): Promise<DivergenceReading | null> {
+  lastDivergenceDiagnostic = null;
+  try {
+    const prompt = await loadPrompt("deep-dive-divergence", {
+      topic: args.topic.trim(),
+      answer: args.answer.trim(),
+      framework_name: args.frameworkName.trim() || "(unnamed framework)",
+      canon: args.canon.trim() || "(nothing captured)",
+      title: args.title?.trim() || "not given",
+    });
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1200,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const blocks = msg.content as { type: string; text?: string }[];
+    const raw = firstText(blocks);
+    if (!raw) {
+      lastDivergenceDiagnostic = `no text block (stop_reason=${msg.stop_reason}, blocks=[${blocks
+        .map((b) => b.type)
+        .join(",")}])`;
+      return null;
+    }
+    const parsed = parseJson(raw) as Record<string, unknown> | null;
+    if (!parsed) {
+      lastDivergenceDiagnostic = `unparseable JSON (len=${raw.length}): ${raw.slice(0, 160)}`;
+      return null;
+    }
+    if (!isDivergenceVerdict(parsed.verdict)) {
+      lastDivergenceDiagnostic = `verdict not recognised: ${JSON.stringify(parsed.verdict)}`;
+      return null;
+    }
+    const point =
+      typeof parsed.point === "string" && parsed.point.trim() && parsed.point.trim().toLowerCase() !== "null"
+        ? parsed.point.trim().replace(/\s*\n+\s*/g, " ").slice(0, 600)
+        : null;
+    // A divergence with no named point is not actionable and reads as a bare
+    // accusation — refuse the shape (fail-open) rather than store it.
+    if (parsed.verdict === "diverges" && !point) {
+      lastDivergenceDiagnostic = "verdict 'diverges' arrived with no point of difference — refused";
+      return null;
+    }
+    return {
+      verdict: parsed.verdict,
+      point: parsed.verdict === "diverges" ? point : null,
+    };
+  } catch (err) {
+    lastDivergenceDiagnostic = `threw: ${err instanceof Error ? err.message : String(err)}`;
+    return null;
+  }
+}

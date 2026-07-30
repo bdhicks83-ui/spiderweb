@@ -595,6 +595,28 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ─── FLOOR GUIDE PHASE C · Deep dives ───
+            The admin's door to asking the floor how the work really gets done.
+            Lives HERE (and on the dashboard) and nowhere near Floor Guide:
+            the two surfaces carry opposite promises — Floor Guide records
+            nothing about a person, a deep dive is assessed and says so — and
+            keeping their entry points apart is part of keeping that legible.
+            ⚠️ Draft copy, pending Brian. */}
+        <div style={styles.card}>
+          <div style={styles.cardHead}>
+            <h2 style={styles.cardTitle}>🔍 Deep dives</h2>
+          </div>
+          <p style={styles.help}>
+            Ask people on contributor seats how they actually handle something, and compare
+            the answers with what&apos;s codified. Every ask discloses who reads the answer
+            before they type, and declining is silent — that honesty is why the answers are
+            worth having.{" "}
+            <a href="/deep-dives" style={styles.inlineLink}>
+              Open deep dives →
+            </a>
+          </p>
+        </div>
+
         {/* ─── People ─── */}
         <div style={styles.card} id="people">
           <div style={styles.cardHead}>
