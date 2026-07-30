@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "incremental": false },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/claude.ts",
+    "src/lib/candidate-insights.ts",
+    "src/lib/floor-guide.ts",
+    "src/lib/pattern-embedding.ts",
+    "src/lib/voyage.ts",
+    "src/lib/elicitation.ts",
+    "src/lib/supabase/server.ts",
+    "src/lib/supabase/client.ts",
+    "src/app/api/insights/route.ts",
+    "src/app/api/insights/detect/route.ts",
+    "src/app/api/insights/mine/route.ts",
+    "src/app/api/insights/[id]/route.ts",
+    "src/app/api/library/[id]/route.ts",
+    "src/app/insights/page.tsx",
+    "src/app/insights/mine/page.tsx",
+    "src/app/library/[id]/page.tsx",
+    "src/app/floor-guide/page.tsx",
+    "src/app/retrieve/page.tsx",
+    "src/app/dashboard/page.tsx",
+    "src/components/InsightBadge.tsx",
+    "src/components/ShareIdeaPanel.tsx",
+    "src/components/BrandHeader.tsx"
+  ]
+}

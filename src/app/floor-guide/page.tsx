@@ -40,8 +40,44 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import BrandHeader from "@/components/BrandHeader";
+// FLOOR GUIDE B — the invitation. Self-gating (renders only for a contributor)
+// and privacy-safe on this surface: passive detection is NOT permitted to write
+// from Floor Guide, so when something they said looks like a practice the panel
+// ASKS them to send it up and writes nothing until they click. See
+// PASSIVE_SURFACES in src/lib/candidate-insights.ts for the whole argument.
+import ShareIdeaPanel from "@/components/ShareIdeaPanel";
 
 const supabase = createClient();
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ⭐⭐ INVISIBLE COMPLEXITY — THE DEFAULT, AND IT IS A DELIBERATE ONE.
+//
+// Behind this surface a model now restates what the person typed in their own
+// team's vocabulary, and BOTH phrasings get searched (see /api/retrieve step 2).
+// That machinery is why "the panel looks bubbled along one edge" finds the
+// delamination frameworks at all. `SHOW_READING` decides one thing only: whether
+// the person is shown the restatement.
+//
+// FALSE — the shipped default — means they see none of it. They type what they
+// can see and they get what to do about it. No "did you mean," no second thing to
+// read above the answer, no exposed translation. That is the doctrine this whole
+// page is built on: the complexity is ours to carry, not theirs to evaluate.
+//
+// THE ARGUMENT FOR TRUE IS REAL, WHICH IS WHY THE PANEL AND COPY STAY WIRED
+// RATHER THAN DELETED. Not knowing what things are called here is a new hire's
+// biggest handicap, and handing them their team's words for what they just
+// described is genuine onboarding value — and a good demo beat.
+//
+// It loses on default anyway, for two reasons. It puts a second thing to read
+// ABOVE the answer at the exact moment somebody is stressed and wants the answer.
+// And the low-confidence variant ("I think you might mean this — worth checking")
+// is a did-you-mean by another name: it asks the one person who cannot yet tell
+// whether the reading is right to be the one who checks it.
+//
+// ⚠️ CUSTOMER-FACING ⇒ BRIAN'S CALL, and it is one line. Flip to true and the
+// readingLabel / readingTentative / readingTermsLabel strings below go live.
+// ═════════════════════════════════════════════════════════════════════════════
+const SHOW_READING: boolean = false;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ⚠️⚠️⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF ⚠️⚠️⚠️
@@ -93,11 +129,11 @@ const COPY = {
   askWorking: "Looking…",
 
   answersLead: "Here's what your team says about that.",
-  // ⭐ The vocabulary bridge, shown on purpose. A new hire's biggest handicap is
-  // not knowing what things are called here, so the restatement is handed to them
-  // rather than applied silently behind the search. Two versions: one for a solid
-  // mapping, one for a shaky one, because presenting a guess as a certainty to
-  // somebody who can't yet tell the difference is the thing to avoid.
+  // ⏸️ OFF BY DEFAULT — gated behind SHOW_READING at the top of this file, which
+  // is where the reasoning lives. Drafted and wired so turning the vocabulary
+  // bridge on is a one-line decision rather than a build. Two versions, because if
+  // it is ever shown, presenting a shaky mapping as a certainty to somebody who
+  // can't yet tell the difference is the thing to avoid.
   readingLabel: "Here's how I read that, in your team's words:",
   readingTentative: "I think you might mean this — worth checking if it looks off:",
   readingTermsLabel: "Words your team uses for this:",
@@ -583,7 +619,10 @@ export default function FloorGuidePage() {
           </div>
         )}
 
-        {(ask.kind === "answers" || ask.kind === "gap") && ask.reading && (
+        {/* ── THE READING. Rendered only when SHOW_READING is on; invisible by
+            default (see the note at the top of this file). The rephrase still
+            RUNS either way — it is what found the answer. */}
+        {SHOW_READING && (ask.kind === "answers" || ask.kind === "gap") && ask.reading && (
           <div style={styles.readingPanel}>
             <div style={styles.readingLabel}>
               {ask.reading.confident ? COPY.readingLabel : COPY.readingTentative}
@@ -648,6 +687,19 @@ export default function FloorGuidePage() {
             <p style={styles.gapAside}>{COPY.gapAskSomeone}</p>
           </div>
         )}
+
+        {/* ── THE OTHER DIRECTION. Everything above this line is the system
+            answering them. This is the one place on the page where they get to
+            answer back — and it sits below the answers on purpose, because
+            somebody who came here stuck needs help first and has nothing to
+            offer until they've had it. ── */}
+        <ShareIdeaPanel
+          surface="floor_guide"
+          observation={ask.kind === "answers" || ask.kind === "gap" ? ask.askedFor : null}
+          contextNote={
+            ask.kind === "answers" && ask.answers.length > 0 ? ask.answers[0].name : null
+          }
+        />
 
         {/* ── THE ORIENTATION CARDS. Below the ask once you've asked something,
             but present from the first paint so the page is never a blank box. ── */}

@@ -491,6 +491,25 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Floor Guide B — ideas from the floor. Admin-only and HIDDEN for
+            everybody else, following the T1B1 doctrine above: reviewing what the
+            floor surfaced is not most people's job, and a locked door reads worse
+            than no door. The real gate is is_org_admin() in Postgres, checked by
+            /api/insights/[id] on every action.
+            ⚠️ Draft copy, pending Brian. */}
+        {isOrgAdmin && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>💡 Ideas from the floor</h2>
+              <p style={styles.resumeBannerSub}>
+                Things your people know that the library doesn&apos;t. Nothing here is
+                judgment until you say so.
+              </p>
+            </div>
+            <a href="/insights" style={styles.resumeBannerLink}>Review →</a>
+          </div>
+        )}
+
         {/* T1B1 — first run. Somebody with no organization has no shared
             library, no gaps queue and no coaching routing; naming an org is
             the one action that turns all of it on. */}

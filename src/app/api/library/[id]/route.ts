@@ -12,7 +12,7 @@ const DETAIL_COLUMNS =
   "context_summary, context_org_size, context_industry, context_function, " +
   "situation_type, intervention_type, trigger_signal, signal_detail, judgment, " +
   "rationale, boundaries, entity_map, framework, framework_rendered_at, " +
-  "time_to_first_value_seconds";
+  "time_to_first_value_seconds, surfaced_by_user_id, codified_from";
 
 // Same GenericStringError cast-workaround as /api/library and
 // /api/codify/answer — a raw multi-column select string can't be inferred.

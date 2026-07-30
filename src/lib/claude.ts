@@ -2169,3 +2169,268 @@ export async function recommendNextFormat(
     };
   }, 1);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLOOR GUIDE / PHASE B — EMERGENT INSIGHT
+//
+// Two model calls, with deliberately opposite risk postures.
+//
+// detectCandidateInsight() runs on ordinary contributor input and decides
+// whether to spend an administrator's attention. It is tuned to say NO. It
+// FAILS OPEN — a detector that is down must never break the thing the person
+// was actually trying to do, and a missed candidate costs one idea while a
+// noisy queue costs the feature.
+//
+// draftSurfacedInsight() runs only AFTER a human has already decided this idea
+// belongs in the playbook. There is no judgment left to make, so it retries
+// like the other value-producing calls — a flake there is just a failed
+// promotion the admin has to click twice.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Rung the whole tiering rests on. Documented in DECISION-LOG; do not lower
+ *  it without re-reading why: an administrator who learns this queue wastes
+ *  their time stops opening it, and every real idea after that is lost too. */
+export const CANDIDATE_INSIGHT_CONFIDENCE_BAR = 0.85;
+
+/** The shortest input worth scoring. Below this you cannot tell whether
+ *  something is missing from a library — you can only guess. */
+export const CANDIDATE_INSIGHT_MIN_CHARS = 80;
+
+export type CandidateDetection = {
+  isPractice: boolean;
+  novel: boolean;
+  valuable: boolean;
+  alreadyCovered: boolean;
+  confidence: number;
+  summary: string | null;
+  suggestedTitle: string | null;
+};
+
+/** Set on every failure path so a fail-open is diagnosable from a log line
+ *  rather than from silence (the P-7 convention, same as translateSymptom). */
+export let lastCandidateDetectDiagnostic: string | null = null;
+
+/**
+ * Score one piece of contributor input. Returns null on ANY failure, and the
+ * caller treats null as "no candidate this turn" — never as an error.
+ *
+ * Single attempt, no internal retry: under the client's hard 60s ceiling a
+ * second attempt cannot return, and this call is riding along behind somebody's
+ * real request. max_tokens is sized for a thinking block plus a small JSON body.
+ */
+export async function detectCandidateInsight(
+  observation: string,
+  vocabulary: string[],
+  title: string | null
+): Promise<CandidateDetection | null> {
+  lastCandidateDetectDiagnostic = null;
+  const text = observation.trim();
+  if (text.length < CANDIDATE_INSIGHT_MIN_CHARS) {
+    lastCandidateDetectDiagnostic = `below min chars (${text.length} < ${CANDIDATE_INSIGHT_MIN_CHARS})`;
+    return null;
+  }
+  try {
+    const prompt = await loadPrompt("candidate-insight-detect", {
+      observation: text,
+      title: title?.trim() || "not given",
+      vocabulary:
+        vocabulary.length > 0
+          ? vocabulary.map((v) => `- ${v}`).join("\n")
+          : "(this team has not captured anything yet)",
+    });
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1200,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const blocks = msg.content as { type: string; text?: string }[];
+    const raw = firstText(blocks);
+    if (!raw) {
+      lastCandidateDetectDiagnostic = `no text block (stop_reason=${msg.stop_reason}, blocks=[${blocks
+        .map((b) => b.type)
+        .join(",")}])`;
+      return null;
+    }
+    const parsed = parseJson(raw) as Record<string, unknown> | null;
+    if (!parsed) {
+      lastCandidateDetectDiagnostic = `unparseable JSON (len=${raw.length}): ${raw.slice(0, 160)}`;
+      return null;
+    }
+    const num = typeof parsed.confidence === "number" ? parsed.confidence : Number(parsed.confidence);
+    if (!Number.isFinite(num)) {
+      lastCandidateDetectDiagnostic = `confidence not numeric: ${JSON.stringify(parsed.confidence)}`;
+      return null;
+    }
+    const str = (v: unknown, max: number): string | null =>
+      typeof v === "string" && v.trim() ? v.trim().replace(/\s*\n+\s*/g, " ").slice(0, max) : null;
+    return {
+      isPractice: parsed.is_practice === true,
+      novel: parsed.novel === true,
+      valuable: parsed.valuable === true,
+      alreadyCovered: parsed.already_covered === true,
+      // Clamp rather than trust: a model returning 1.4 must not outrank the bar
+      // by arithmetic accident.
+      confidence: Math.max(0, Math.min(1, num)),
+      summary: str(parsed.summary, 400),
+      suggestedTitle: str(parsed.suggested_title, 120),
+    };
+  } catch (err) {
+    lastCandidateDetectDiagnostic = `threw: ${err instanceof Error ? err.message : String(err)}`;
+    return null;
+  }
+}
+
+/**
+ * ⭐ THE ONE JUDGMENT CALL IN THIS PASS: does the detection clear the bar?
+ *
+ * Kept as a named function rather than inlined at the call site so there is
+ * exactly one place the tiering can be read, changed, or argued with — and so
+ * the verify script can assert against the same function the route uses.
+ */
+export function candidateClearsBar(d: CandidateDetection | null): boolean {
+  if (!d) return false;
+  return (
+    d.isPractice &&
+    d.novel &&
+    d.valuable &&
+    !d.alreadyCovered &&
+    d.confidence >= CANDIDATE_INSIGHT_CONFIDENCE_BAR
+  );
+}
+
+const SURFACED_ENTITY_TYPES = [
+  "equipment_asset",
+  "process",
+  "error_class",
+  "role_person",
+  "department",
+];
+
+export type SurfacedEntity = { type: string; name: string; detail: string | null };
+
+export type SurfacedFramework = {
+  name: string;
+  tagline: string;
+  when_to_apply: string[];
+  signals: string[];
+  the_play: string;
+  why_it_works: string;
+  boundaries: string[];
+};
+
+export type SurfacedDraft = {
+  context_summary: string;
+  situation_type: string;
+  intervention_type: string;
+  trigger_signal: string;
+  signal_detail: string;
+  judgment: string;
+  rationale: string;
+  boundaries: string;
+  outcome: string | null;
+  entity_map: SurfacedEntity[];
+  framework: SurfacedFramework;
+};
+
+function asStringList(v: unknown, max: number): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .map((s) => s.trim())
+    .slice(0, max);
+}
+
+/**
+ * Turn a promoted candidate into the record shape pattern_records requires.
+ *
+ * Every field pattern_record_complete_check demands must come back non-empty or
+ * this returns null — a half-drafted record would fail the constraint at insert
+ * time with a Postgres error the admin cannot act on, so it fails HERE where the
+ * route can say "couldn't draft that one, try again" instead.
+ */
+export async function draftSurfacedInsight(args: {
+  idea: string;
+  context: string | null;
+  contributor: string;
+  contributorTitle: string | null;
+  expert: string;
+  vocabulary: string[];
+}): Promise<SurfacedDraft | null> {
+  const prompt = await loadPrompt("candidate-insight-draft", {
+    idea: args.idea.trim(),
+    context: args.context?.trim() || "not recorded",
+    contributor: args.contributor,
+    contributor_title: args.contributorTitle?.trim() || "not given",
+    expert: args.expert,
+    vocabulary:
+      args.vocabulary.length > 0
+        ? args.vocabulary.map((v) => `- ${v}`).join("\n")
+        : "(this team has not captured anything yet)",
+  });
+  return withRetries("draftSurfacedInsight", async () => {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 3072,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const raw = firstText(msg.content as { type: string; text?: string }[]);
+    if (!raw) return null;
+    const parsed = parseJsonLoose(raw) as Record<string, unknown> | null;
+    if (!parsed) return null;
+
+    const text = (v: unknown, max: number): string =>
+      typeof v === "string" ? v.trim().replace(/\s*\n+\s*/g, " ").slice(0, max) : "";
+
+    const fw = (parsed.framework ?? null) as Record<string, unknown> | null;
+    if (!fw) return null;
+
+    const entities = (Array.isArray(parsed.entity_map) ? parsed.entity_map : [])
+      .map((e) => e as Record<string, unknown>)
+      .filter((e) => typeof e?.type === "string" && SURFACED_ENTITY_TYPES.includes(e.type as string))
+      .filter((e) => typeof e?.name === "string" && (e.name as string).trim().length > 0)
+      .map((e) => ({
+        type: e.type as string,
+        name: (e.name as string).trim().slice(0, 120),
+        detail: typeof e.detail === "string" && e.detail.trim() ? e.detail.trim().slice(0, 300) : null,
+      }))
+      .slice(0, 8);
+
+    const draft: SurfacedDraft = {
+      context_summary: text(parsed.context_summary, 1200),
+      situation_type: text(parsed.situation_type, 120),
+      intervention_type: text(parsed.intervention_type, 120),
+      trigger_signal: text(parsed.trigger_signal, 400),
+      signal_detail: text(parsed.signal_detail, 800),
+      judgment: text(parsed.judgment, 1600),
+      rationale: text(parsed.rationale, 1600),
+      boundaries: text(parsed.boundaries, 800),
+      outcome: text(parsed.outcome, 800) || null,
+      entity_map: entities,
+      framework: {
+        name: text(fw.name, 120),
+        tagline: text(fw.tagline, 200),
+        when_to_apply: asStringList(fw.when_to_apply, 4),
+        signals: asStringList(fw.signals, 4),
+        the_play: text(fw.the_play, 1200),
+        why_it_works: text(fw.why_it_works, 1200),
+        boundaries: asStringList(fw.boundaries, 4),
+      },
+    };
+
+    // Exactly the fields pattern_record_complete_check enforces, checked here so
+    // the failure is a product message rather than a constraint violation.
+    const required: (keyof SurfacedDraft)[] = [
+      "context_summary",
+      "trigger_signal",
+      "signal_detail",
+      "judgment",
+      "rationale",
+      "boundaries",
+    ];
+    for (const key of required) {
+      if (!draft[key]) return null;
+    }
+    if (!draft.framework.name || !draft.framework.the_play) return null;
+    return draft;
+  });
+}

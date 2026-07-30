@@ -13,6 +13,10 @@ import GapBadge from '@/components/GapBadge';
 // errors, never blocks. Green badge = something good arrived for you; amber
 // badge = something is waiting on you.
 import CaptureRequestBadge from '@/components/CaptureRequestBadge';
+// Floor Guide B — "something you shared is moving." Same discipline again:
+// renders NOTHING when there is nothing to say, and it can only ever carry good
+// news because RLS never hands a dismissal to the person who surfaced it.
+import InsightBadge from '@/components/InsightBadge';
 
 const LOGO_SRC = '/brand/viridescent-horizontal.png';
 
@@ -94,6 +98,7 @@ export default function BrandHeader() {
       </a>
       <GapBadge />
       <CaptureRequestBadge />
+      <InsightBadge />
     </div>
   );
 }

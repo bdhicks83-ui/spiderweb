@@ -75,6 +75,12 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import BrandHeader, { Daisy } from "@/components/BrandHeader";
+// FLOOR GUIDE B — "I do it differently." Self-gating: renders only for a
+// contributor, because an expert with a better way should codify it, not offer
+// it. Unlike /floor-guide, this surface permits PASSIVE detection (it makes no
+// privacy promise and its telemetry is already live), so a contributor
+// describing their own practice can be noticed without clicking anything.
+import ShareIdeaPanel from "@/components/ShareIdeaPanel";
 
 const supabase = createClient();
 
@@ -920,6 +926,31 @@ export default function RetrievePage() {
             </div>
           </>
         )}
+
+        {/* ── THE OTHER DIRECTION. Below the answers, because somebody who came
+            here with a problem needs it solved before they have anything to
+            offer. topSimilarity is passed through so a question the library
+            already answers well never becomes a candidate — a confident match
+            means this is covered, and re-surfacing it would be noise in the
+            admin's queue. ── */}
+        <ShareIdeaPanel
+          surface="retrieve"
+          observation={
+            view.kind === "results" || view.kind === "noMatch" ? view.askedFor : null
+          }
+          contextNote={
+            view.kind === "results" && view.results.length > 0
+              ? view.results[0].framework?.name ?? null
+              : null
+          }
+          topSimilarity={
+            view.kind === "results" && view.results.length > 0
+              ? view.results[0].similarity
+              : view.kind === "noMatch"
+                ? view.topSimilarity
+                : null
+          }
+        />
       </div>
     </div>
   );

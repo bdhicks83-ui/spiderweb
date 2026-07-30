@@ -46,6 +46,16 @@ type DetailRecord = {
     persona: string | null;
     claimed_title: string | null;
   } | null;
+  // Floor Guide B — where this framework came from, when it wasn't an interview.
+  // MODEL- AND SERVER-AUTHORED JSONB WITH NO SCHEMA ENFORCEMENT, so every field
+  // is optional and every read is defensive (the P-7 lesson: an artifact that
+  // "always" has a shape takes the React tree down the day it doesn't).
+  codified_from: {
+    kind?: string | null;
+    surfaced_by?: { user_id?: string | null; name?: string | null } | null;
+    codified_with?: { user_id?: string | null; name?: string | null } | null;
+  } | null;
+  surfaced_by_user_id: string | null;
   // P-2: open conflicts on this record. Surface-with-warning: the framework
   // below renders fully and stays usable — the banner only adds the warning
   // and the two links (other side + resolution thread).
@@ -145,6 +155,28 @@ export default function LibraryDetailPage() {
           {record.is_mine && <span style={styles.mineBadge}>Yours</span>}
           <span style={styles.date}>{new Date(record.created_at).toLocaleDateString()}</span>
         </div>
+
+        {/* ⭐ FLOOR GUIDE B — DUAL ATTRIBUTION. "Surfaced by X, codified with Y."
+            The author above is unchanged and still owns this judgment; this is a
+            SECOND credit, for the person on the floor whose idea it was. It reads
+            off codified_from, which the promote path writes — and which nothing
+            in this UI had ever rendered before now, so training-derived
+            provenance becomes visible here too.
+            ⚠️ Draft copy, pending Brian. */}
+        {record.codified_from?.surfaced_by?.name ? (
+          <div style={styles.surfacedRow}>
+            <span style={styles.surfacedChip}>Surfaced from the floor</span>
+            <span>
+              Surfaced by{" "}
+              <strong style={styles.surfacedName}>
+                {record.codified_from.surfaced_by.name}
+              </strong>
+              {record.codified_from.codified_with?.name
+                ? " · codified with " + record.codified_from.codified_with.name
+                : ""}
+            </span>
+          </div>
+        ) : null}
 
         {record.contested && record.contested.length > 0 &&
           record.contested.map((c) => (
@@ -263,6 +295,27 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--muted)",
   },
   authorName: { fontWeight: 700, color: "var(--pine)" },
+  // Floor Guide B — the second credit line. Same register as the author bar
+  // above it (13px, --muted) so it reads as attribution rather than a banner.
+  surfacedRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    margin: "0 0 8px",
+    fontSize: "13px",
+    color: "var(--muted)",
+  },
+  surfacedChip: {
+    fontSize: "11px",
+    fontWeight: 700,
+    color: "var(--growth-deep)",
+    background: "var(--new-leaf-light)",
+    border: "1px solid var(--new-leaf)",
+    borderRadius: 999,
+    padding: "2px 8px",
+  },
+  surfacedName: { color: "var(--pine)" },
   personaTag: {
     background: "var(--paper-2)",
     borderRadius: 999,
