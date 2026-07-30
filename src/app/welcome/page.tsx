@@ -44,11 +44,10 @@ type Status = {
   canSeeReadout: boolean;
 };
 
-// ⚠️⚠️ DRAFT CUSTOMER-FACING MICROCOPY — PENDING BRIAN'S SIGN-OFF.
-// Step/panel copy inside the track definitions is APPROVED (except the Admin
-// track, drafted — see onboarding-tracks.ts). Everything in THIS block is new
-// navigation chrome: button labels, the skip line, the view-only banner, the
-// switch-row heading.
+// ✅ APPROVED MICROCOPY (Brian, July 30, approved as-is). All navigation
+// chrome for the wizard: button labels, the skip line, the view-only banner,
+// the switch-row heading. Step/panel copy lives in onboarding-tracks.ts
+// (also fully approved).
 const UI = {
   next: "Next",
   back: "Back",

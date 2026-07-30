@@ -30,14 +30,14 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // COPY STATUS
 //
-// ✅ APPROVED (Brian, July 30, render near-verbatim — do not rewrite, do not
-//    add claims): operator, expert, executive step + panel copy, from
-//    ROLE-ONBOARDING-CONTENT-3-tracks.md.
-// ⚠️⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF:
-//    (1) the ADMIN track (its approved content file never made it into the
-//        project; this draft is grounded in the real system and flagged), and
-//    (2) all NEW nav/switch microcopy (seesLabel, viewingLabel, button
-//        labels, skip line).
+// ✅ ALL COPY APPROVED (Brian, July 30 — render near-verbatim, do not rewrite,
+//    do not add claims):
+//    · operator / expert / executive step + panel copy, from
+//      ROLE-ONBOARDING-CONTENT-3-tracks.md (approved with the design);
+//    · the ADMIN track (drafted in-session because the original Admin content
+//      file never surfaced; approved by Brian as-is, July 30);
+//    · all nav/switch microcopy (seesLabel, viewingLabel, button labels,
+//      skip line; approved by Brian as-is, July 30).
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type TrackKey = "admin" | "executive" | "expert" | "operator";
@@ -87,9 +87,9 @@ export type TrackDef = {
   label: string;
   /** The headline over the whole track. */
   tagline: string;
-  /** ⚠️ DRAFT microcopy — the switch link other roles see ("See what your operators see"). */
+  /** The switch link other roles see ("See what your operators see"). Approved copy. */
   seesLabel: string;
-  /** ⚠️ DRAFT microcopy — the banner noun when viewing this track ("the tour your operators get"). */
+  /** The banner noun when viewing this track ("the tour your operators get"). Approved copy. */
   viewingLabel: string;
   closing: string;
   /** Where "Finish" lands. Operator gets the floorGuide gate (→ /retrieve fallback). */
@@ -272,12 +272,10 @@ const EXECUTIVE: TrackDef = {
 };
 
 // ─── TRACK: ADMIN ───────────────────────────────────────────────────────────
-// ⚠️⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF (whole track).
-// The approved Admin content file (ADMIN-ONBOARDING-PANEL-CONTENT-DRAFT.md)
-// never made it into the project; this draft is grounded in the real system
-// (T1B1 console, roles ladder, elicitation methods, campaigns, readout) and
-// makes no claim the shipped product doesn't keep. Replace verbatim from the
-// approved file when it surfaces.
+// ✅ APPROVED (Brian, July 30). Drafted in-session (the original Admin content
+// file never surfaced), grounded in the real system (T1B1 console, roles
+// ladder, elicitation methods, campaigns, readout); makes no claim the shipped
+// product doesn't keep. Approved as-is — render near-verbatim.
 
 const ADMIN: TrackDef = {
   key: "admin",
@@ -285,7 +283,7 @@ const ADMIN: TrackDef = {
   tagline: "You're holding the keys — here's the whole machine.",
   seesLabel: "See what your admins see",
   viewingLabel: "the welcome your admins get",
-  copyStatus: "draft",
+  copyStatus: "approved",
   finish: { label: "Open the admin console", href: "/admin" },
   closing:
     "That's the machine: seats and roles you control, capture that respects your experts, human gates on everything that becomes official, and proof you can hand to anyone. Run it from the console — it'll tell you what's left to set up.",
