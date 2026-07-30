@@ -42,7 +42,7 @@ export default function DeepDiveBadge() {
   );
 }
 
-// ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF (Floor Guide C).
+// ✅ CUSTOMER-FACING COPY APPROVED BY BRIAN — July 29, 2026 (Floor Guide C).
 // "Wants to know" not "assigned": one is a person curious how you work, the
 // other is a ticket — same distinction T1B2 drew, and it matters more here
 // because this one is declinable and the wording has to feel that way.

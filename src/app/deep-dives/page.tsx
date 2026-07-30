@@ -32,7 +32,7 @@ import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
-// ⚠️⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF (Floor Guide C).
+// ✅ CUSTOMER-FACING COPY APPROVED BY BRIAN — July 29, 2026 (Floor Guide C).
 // The divergence lines must read "our training missed this," never "this
 // person is wrong" — that rule is the feature.
 // ═════════════════════════════════════════════════════════════════════════════

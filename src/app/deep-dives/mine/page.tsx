@@ -29,7 +29,7 @@ import BrandHeader from "@/components/BrandHeader";
 
 const supabase = createClient();
 
-// ⚠️⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S SIGN-OFF (Floor Guide C).
+// ✅ CUSTOMER-FACING COPY APPROVED BY BRIAN — July 29, 2026 (Floor Guide C).
 // The disclosure is the single most important string in this phase.
 // ═════════════════════════════════════════════════════════════════════════════
 const COPY = {
