@@ -176,8 +176,8 @@ const EXPERT: TrackDef = {
     {
       title: "Watch it stay in YOUR voice",
       body:
-        "Codify one thing — a call you make well that others get wrong. The system will interview you, then turn it into a framework. Read it back. It should sound like you, because it's built from your own words.",
-      link: { label: "Codify one thing", href: "/codify" },
+        "Capture one thing — a call you make well that others get wrong. The system will interview you, then turn it into a framework. Read it back. It should sound like you, because it's built from your own words.",
+      link: { label: "Capture one thing", href: "/codify" },
       panel: {
         label: "Peek under the hood",
         lead: "How your voice survives the machine.",

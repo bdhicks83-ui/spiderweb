@@ -365,10 +365,11 @@ export default function DashboardPage() {
         {!isContributor && (
         <div style={styles.resumeBanner}>
           <div>
-            <h2 style={styles.resumeBannerTitle}>🌱 Codify a pattern</h2>
+            <h2 style={styles.resumeBannerTitle}>🌱 Capture your judgment</h2>
             <p style={styles.resumeBannerSub}>
-              A short interview about work you&apos;ve already done — walk out with a
-              branded framework you could put in a proposal.
+              A short interview about a problem you know how to solve — or one
+              you&apos;ve solved before. Your judgment becomes a framework your whole
+              team can use, with your name on it.
             </p>
           </div>
           <a href="/codify" style={styles.resumeBannerLink}>Start a session →</a>

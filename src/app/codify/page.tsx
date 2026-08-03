@@ -208,7 +208,7 @@ export default function CodifyPage() {
         body: JSON.stringify({ triggerType, method }),
       });
       const data = await res.json();
-      if (res.status === 401) return fail('Please log in to codify a pattern.');
+      if (res.status === 401) return fail('Please log in to capture your judgment.');
       if (!res.ok) return fail(data.error || 'Something went wrong. Try again.');
 
       setTranscript([{ role: 'engine', text: data.question }]);
@@ -246,7 +246,7 @@ export default function CodifyPage() {
       });
       const data = await res.json();
 
-      if (res.status === 401) return fail('Please log in to codify a pattern.');
+      if (res.status === 401) return fail('Please log in to capture your judgment.');
       if (!res.ok) {
         // Model hiccup: nothing was saved — put the answer back so one click
         // retries it, and drop the optimistic transcript turn.
@@ -391,7 +391,7 @@ export default function CodifyPage() {
     <div style={styles.wrapper}>
       <div style={styles.container}>
         <BrandHeader />
-        <h1 style={styles.title}>Codify a pattern</h1>
+        <h1 style={styles.title}>Capture your judgment</h1>
         <GapAnswerBanner />
         <CaptureRequestBanner />
         <p style={styles.subtitle}>
@@ -697,7 +697,7 @@ export default function CodifyPage() {
                     style={styles.ghost}
                     onClick={() => setState({ phase: 'trigger-select', resumable: null })}
                   >
-                    Codify another pattern
+                    Capture another framework
                   </button>
                 </div>
                 {pdfError && <p style={styles.errorText}>{pdfError}</p>}

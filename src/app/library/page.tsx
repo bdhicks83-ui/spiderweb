@@ -125,7 +125,7 @@ export default function LibraryPage() {
               🏆 Win Column
             </a>
             <a href="/codify" style={styles.newLink}>
-              + Codify a pattern
+              + Capture your judgment
             </a>
           </div>
         </div>
@@ -139,7 +139,7 @@ export default function LibraryPage() {
           <div style={styles.empty}>
             <p>No frameworks yet.</p>
             <a href="/codify" style={styles.newLink}>
-              Codify your first pattern →
+              Capture your first framework →
             </a>
           </div>
         )}

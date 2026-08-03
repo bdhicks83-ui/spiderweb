@@ -607,7 +607,7 @@ export default function RetrievePage() {
             </a>
             {!isContributor && (
               <a href="/codify" style={styles.newLink}>
-                + Codify a pattern
+                + Capture your judgment
               </a>
             )}
           </div>
