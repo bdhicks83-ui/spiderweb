@@ -71,7 +71,7 @@ export async function draftFramework(
   });
   const msg = await anthropic.messages.create({
     model: "claude-sonnet-5",
-    max_tokens: 2048,
+    max_tokens: 6144,
     messages: [{ role: "user", content: prompt }],
   });
   const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -307,7 +307,7 @@ export async function recommendFromInsights(
   });
   const msg = await anthropic.messages.create({
     model: "claude-sonnet-5",
-    max_tokens: 2048,
+    max_tokens: 6144,
     messages: [{ role: "user", content: prompt }],
   });
   const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -680,7 +680,7 @@ export async function elicitNext(
   return withRetries("elicitNext", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 2048,
+      max_tokens: 6144,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -735,7 +735,7 @@ export async function scrubPII(text: string): Promise<ScrubResult | null> {
   return withRetries("scrubPII", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 2048,
+      max_tokens: 6144,
       messages: [{ role: "user", content: prompt }],
     });
     const out = firstText(msg.content as { type: string; text?: string }[]);
@@ -769,7 +769,7 @@ export async function scrubForExport(text: string): Promise<ScrubResult | null> 
   return withRetries("scrubForExport", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 2048,
+      max_tokens: 6144,
       messages: [{ role: "user", content: prompt }],
     });
     const out = firstText(msg.content as { type: string; text?: string }[]);
@@ -869,7 +869,7 @@ export async function synthesizeResume(
   });
   const msg = await anthropic.messages.create({
     model: "claude-sonnet-5",
-    max_tokens: 2048,
+    max_tokens: 6144,
     messages: [{ role: "user", content: prompt }],
   });
   const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -1524,7 +1524,7 @@ export async function generateTeachbackScenario(
   return withRetries("generateTeachbackScenario", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 2048,
+      max_tokens: 6144,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
