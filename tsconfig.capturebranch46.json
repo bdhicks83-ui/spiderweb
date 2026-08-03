@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/elicitation.ts",
+    "src/lib/claude.ts",
+    "src/app/api/codify/route.ts",
+    "src/app/api/codify/answer/route.ts",
+    "src/app/api/codify/frame/route.ts",
+    "src/app/codify/page.tsx"
+  ]
+}

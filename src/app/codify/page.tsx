@@ -1,9 +1,11 @@
 'use client';
 
 // P0 / P-0.5 — Capture your judgment: the elicitation session. Opens with
-// the 3-way "What are you bringing?" picker (Capture Your Judgment,
+// the six-card "What are you bringing?" picker (Capture Your Judgment,
 // 2026-08-03 — replaces the user-facing Methodology Router screens; every
-// branch runs the CDM engine internally), then runs the 8-rung ladder
+// branch runs the CDM engine internally; 2×3 on desktop via the grid's
+// min column width, collapsing to one column on mobile), then runs the
+// 8-rung ladder
 // (rung 6 is the Entity Map) ending in one branded framework in the
 // expert's own words. Each branch loads a tuned, approved interview script
 // (prompts/capture-*.md); the extraction/synthesis downstream is unchanged.
@@ -733,9 +735,12 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '12px',
   },
   pickerPrompt: { margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--pine)' },
+  // Six cards. 240px min column width → exactly 2 columns in the 680px
+  // container (a 2×3 grid), and a single column on narrow/mobile viewports —
+  // no media query needed with inline styles.
   captureGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
     gap: '10px',
   },
   captureCard: {

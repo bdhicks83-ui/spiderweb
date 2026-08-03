@@ -17,14 +17,16 @@
 //     doctrine does not apply to this field. See DECISION-LOG 2026-07-22.
 
 // ─── Capture branches — "Capture your judgment" (2026-08-03) ───────────────
-// The user-facing entry to /codify is now a 3-way picker ("What are you
-// bringing?") that selects an interview BRANCH by what the expert is bringing:
-// a live problem, a past resolution, or a general strategy. Each branch runs
-// a tuned question script (prompts/capture-*.md — approved copy, near-
-// verbatim from CAPTURE-JUDGMENT-interview-branches.md). The branches change
-// the ENTRY and FRAMING only — all three drive to the same CDM destination
-// (signals, the call, the failure mode, a concrete anchor), and the
-// downstream extraction/synthesis (framePattern) is UNCHANGED.
+// The user-facing entry to /codify is now a picker ("What are you bringing?")
+// that selects an interview BRANCH by what the expert is bringing. Six
+// branches (4-6 added 2026-08-03, same day as 1-3): a live problem, a past
+// resolution, a general strategy, a most-asked topic, a mistake they can
+// catch, or an early-warning tell. Each branch runs a tuned question script
+// (prompts/capture-*.md — approved copy, near-verbatim from
+// CAPTURE-JUDGMENT-interview-branches.md). The branches change the ENTRY and
+// FRAMING only — all six drive to the same CDM destination (signals, the
+// call, the failure mode, a concrete anchor), and the downstream
+// extraction/synthesis (framePattern) is UNCHANGED.
 //
 // Internally every branch runs the CDM engine (trigger_type='judgment',
 // method='cdm') so downstream consumers of those columns see nothing new —
@@ -32,7 +34,13 @@
 // Watch ('concern'/'friction') side channels by accident. The Methodology
 // Router below stays intact in code for in-flight legacy sessions.
 
-export type CaptureType = "current_issue" | "past_resolution" | "strategy";
+export type CaptureType =
+  | "current_issue"
+  | "past_resolution"
+  | "strategy"
+  | "top_topic"
+  | "common_mistake"
+  | "tell_early";
 
 export type CaptureOption = {
   id: CaptureType;
@@ -83,6 +91,36 @@ export const CAPTURE_TYPES: CaptureOption[] = [
       "Tell me about how you approach a kind of situation that comes up more than once. Not one specific time yet — your general way of handling it when it comes up.",
     closing:
       "That’s a complete approach now — the way you handle it, the traps, and where it’s headed when it works. Your team can apply it and know what they’re driving toward.",
+  },
+  {
+    id: "top_topic",
+    label: "Topics I get asked about the most",
+    subline: "The things people keep coming to you for.",
+    promptFile: "capture-top-topic",
+    opening:
+      "What’s the thing people keep coming to you for? If you named the question you get asked most, what would it be?",
+    closing:
+      "Good — that question just got a permanent answer. If your topic holds more questions like it, come back for the next one.",
+  },
+  {
+    id: "common_mistake",
+    label: "A mistake I see people make",
+    subline: "Something people keep getting wrong that you know how to catch.",
+    promptFile: "capture-common-mistake",
+    opening:
+      "What’s a mistake you keep seeing people make — something you can spot a mile away? Tell me what it looks like when it’s happening.",
+    closing:
+      "Captured. Now the catch travels — people can learn to see this one coming without having to make it first.",
+  },
+  {
+    id: "tell_early",
+    label: "How I tell early",
+    subline: "The signs you see before a problem becomes obvious to everyone else.",
+    promptFile: "capture-tell-early",
+    opening:
+      "Tell me about something you can see coming before anyone else does. What’s the problem, and how early do you catch it?",
+    closing:
+      "That’s the kind of thing that usually retires with the person who can see it. Not anymore — it’s got your name on it now.",
   },
 ];
 
@@ -500,6 +538,42 @@ const CAPTURE_FALLBACK_QUESTIONS: Record<CaptureType, BranchQuestionSet> = {
       "Who or what does this involve when it fires — which roles, processes, or equipment? A named role is fine here.",
     boundaries:
       "What do less-experienced people get wrong about this? What’s the trap — and where does this approach NOT apply?",
+  },
+  // Branches 4-6 (2026-08-03). The approved per-branch fallback triplets land
+  // in their natural rung slots; the remaining slots are worded from the same
+  // approved arc so a flaked turn still sounds like the branch. The anchor
+  // fallbacks ("think of the last time…") have no slot in this ladder — the
+  // deterministic net ends at boundaries; anchor drive lives in the prompt
+  // files, same as branches 1-3.
+  top_topic: {
+    classify: "What’s the one call inside that topic people most need you for?",
+    call: "What’s the full answer — the one you give when you have time to explain it right?",
+    signal: "What do you check before you answer — and what changes the answer?",
+    reasoning: "What does someone get wrong if they only hear the quick version?",
+    entity:
+      "Who keeps coming to you with this one, and which equipment or process does it touch? Names and roles are fine — they stay internal to your org.",
+    boundaries:
+      "When would your usual answer be the WRONG one — what condition flips it?",
+  },
+  common_mistake: {
+    classify: "Why do reasonable people make this one? What makes it look like the right move?",
+    call: "What should they do instead — and why that?",
+    signal: "What tips you off that it’s happening, or about to?",
+    reasoning: "Why is that the right move, and not what they were doing?",
+    entity:
+      "Which process or equipment does this show up in, and which roles tend to hit it? No names needed for who made it — a role is plenty.",
+    boundaries:
+      "What does this cost when nobody catches it — and is there a situation where what looks like this mistake is actually the right call?",
+  },
+  tell_early: {
+    classify: "What kind of situation puts you on alert for this?",
+    call: "Once you see it coming, what do you do that early?",
+    signal: "What are the small signs — the ones that don’t look like a problem yet?",
+    reasoning: "How do you know it’s the real thing and not a false alarm?",
+    entity:
+      "Where do the early signs show up — which equipment or process — and who acts on the warning? Names are fine — they stay internal to your org.",
+    boundaries:
+      "When would the same early signs point somewhere else — or acting early be the wrong move?",
   },
 };
 
