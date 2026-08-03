@@ -83,6 +83,28 @@
 // than quietly served with the writes live. A privacy promise that silently
 // degrades is worse than one that errors.
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// ⭐⭐ THE BEGINNER-REPHRASE PASS (2026-07-29) — FLOOR GUIDE ONLY.
+//
+// Floor Guide's promise on screen is "you don't need the right words for it," and
+// that promise was measurably false: beginner phrasing of a problem the library
+// covers twice over scored 0.665 while expert phrasing of the SAME problem scored
+// 0.823. See step 1b for why lowering the bar cannot fix that, and step 2 for the
+// two-query merge.
+//
+// ⛔ GATED TO THIS SURFACE ON PURPOSE. Experts already type the org's vocabulary,
+// so on /retrieve the extra model call would buy latency, cost and drift risk for
+// no recall. Everything the pass adds hangs off `floorGuide` being true; with it
+// false this route runs one embed on the typed words, exactly as it always has.
+// Do not "promote" the pass to /retrieve without re-measuring.
+//
+// AND THE MACHINERY IS INVISIBLE. The rephrase is not a "did you mean" — the
+// person types what they can see and gets what to do. Whether the reading is ever
+// SHOWN to them is a copy decision that lives on the page (SHOW_READING in
+// src/app/floor-guide/page.tsx), not a retrieval decision; this route ships it in
+// the payload either way so the surface can decide without a second round-trip.
+// ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
@@ -266,7 +288,9 @@ export async function POST(req: NextRequest) {
       return { ok: true, scored: rawMatches as { id: string; similarity: number }[] };
     };
 
-    const aboveBar = (rows: { similarity: number }[]) =>
+    // Generic on purpose: it is applied to the MERGED hit rows in step 2, which
+    // carry a `from` field the caller needs to keep after filtering.
+    const aboveBar = <T extends { similarity: number }>(rows: T[]): T[] =>
       rows.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
 
     // ── 1b. ⭐ FLOOR GUIDE — CLOSE THE VOCABULARY GAP ON THE QUERY, NOT THE BAR.
@@ -280,8 +304,11 @@ export async function POST(req: NextRequest) {
     //
     // So the threshold does NOT move — 0.75 still governs both surfaces, and
     // /retrieve is untouched. What changes is the QUERY: the observation is
-    // restated in the org's own captured vocabulary and that is what gets
-    // embedded. Fails open in every direction (see translateSymptom).
+    // restated in the org's own captured vocabulary, and BOTH that reading and the
+    // person's own words are searched (step 2 merges them). Fails open in every
+    // direction: no vocabulary, a refused mapping, a flaked model call or a failed
+    // embed on the reading all land on "search exactly what they typed," which is
+    // what would have happened without any of this.
     let reading: string | null = null;
     let readingTerms: string[] = [];
     let readingConfident = false;
@@ -319,38 +346,81 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── 2. The search itself. Translated reading first when we have one.
-    const primary = await runSearch(reading ?? query);
-    if (!primary.ok) return primary.response;
-    let scored = primary.scored;
-    let searchedRaw = reading === null;
+    // ── 2. THE SEARCH.
+    //
+    // EXPERT SURFACE: one search, on the words the expert typed. Byte-for-byte
+    // what this route has always done — `reading` is null off Floor Guide, so the
+    // branch below is never taken and /retrieve gains no model call, no second
+    // embed and no extra latency.
+    //
+    // ⭐ FLOOR GUIDE: BOTH PHRASINGS RUN, ALWAYS, AND THE UNION IS SCORED.
+    //
+    // Belt and suspenders, and it is not decoration. The translation is a model
+    // reading a beginner's words through a vocabulary list, so it can drift — and
+    // sometimes the literal words were already the right ones. Searching the
+    // reading FIRST and falling back to the raw words only when the reading
+    // clears nothing loses a good literal match every time the reading clears
+    // something WEAKER: one mediocre hit off the translation would hide two
+    // bullseye hits off the person's own sentence, and nothing in the response
+    // would show that it had happened.
+    //
+    // So both searches run and the merge keeps the HIGHER similarity per record —
+    // a framework that clears 0.75 on either phrasing has cleared 0.75. This can
+    // only ADD recall: the raw search is exactly what /retrieve would have run, so
+    // Floor Guide can never end up worse off than the expert surface on the same
+    // question. The two embeds are issued concurrently, so the second costs no
+    // wall-clock.
+    const [readingSearch, rawSearch]: [SearchOutcome | null, SearchOutcome] =
+      reading !== null
+        ? await Promise.all([runSearch(reading), runSearch(query)])
+        : [null, await runSearch(query)];
 
-    // The reading found nothing above the bar → try the person's own words before
-    // declaring a gap. This can only ADD recall: the raw search is exactly what
-    // would have run without any of this, so Floor Guide can never end up worse
-    // off than /retrieve on the same question.
-    if (floorGuide && reading !== null && aboveBar(scored).length === 0) {
-      const rawAttempt = await runSearch(query);
-      if (!rawAttempt.ok) return rawAttempt.response;
-      searchedRaw = true;
-      if (aboveBar(rawAttempt.scored).length > 0) {
-        log("reading missed, raw words hit — using the raw search");
-        scored = rawAttempt.scored;
-        reading = null; // don't show a reading that didn't produce the answer
-      } else {
-        // Keep whichever near-miss was closer, purely so the honest empty state
-        // reports the better number.
-        const bestRaw = rawAttempt.scored[0]?.similarity ?? 0;
-        const bestReading = scored[0]?.similarity ?? 0;
-        if (bestRaw > bestReading) scored = rawAttempt.scored;
-      }
+    // The raw search is the BASELINE — it is /retrieve's own behaviour — so a
+    // failure there is a real failure and returns loudly. A failure of the READING
+    // search alone degrades to the person's own words rather than taking the
+    // surface down: same fail-open direction as the translation itself, for the
+    // same reason (never block retrieval on the rephrase).
+    if (!rawSearch.ok) return rawSearch.response;
+    if (readingSearch && !readingSearch.ok) {
+      log("reading search FAILED — falling back to the raw words only");
     }
 
-    const strong = scored.filter((m) => m.similarity >= SIMILARITY_THRESHOLD);
+    type Hit = { id: string; similarity: number; from: "reading" | "raw" };
+    const merged = new Map<string, Hit>();
+    const absorb = (rows: { id: string; similarity: number }[], from: Hit["from"]) => {
+      for (const r of rows) {
+        const prev = merged.get(r.id);
+        if (!prev || r.similarity > prev.similarity) merged.set(r.id, { ...r, from });
+      }
+    };
+    // Raw absorbed first so that on an exact tie the attribution stays with the
+    // person's own words. Only `from` turns on this order; `similarity` is a max.
+    absorb(rawSearch.scored, "raw");
+    if (readingSearch && readingSearch.ok) absorb(readingSearch.scored, "reading");
+
+    const scored = Array.from(merged.values())
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, MATCH_COUNT);
+    const searchedRaw = true; // the words the person typed are now ALWAYS searched
+    const strong = aboveBar(scored);
+
+    // Don't attribute the find to a reading that didn't make it. If every result
+    // above the bar came from the raw words, the translation is not what answered
+    // the question and shipping it as the bridge would be theatre. (Deliberately
+    // KEPT on the no-match path: "I read it as X and still found nothing" is the
+    // honest thing to say there, and it is what makes the gap row diagnosable.)
+    if (reading !== null && strong.length > 0 && !strong.some((m) => m.from === "reading")) {
+      log("raw words carried it — dropping the reading from the response");
+      reading = null;
+    }
+
     log("search", {
-      returned: scored.length,
+      readingHits: !readingSearch ? null : readingSearch.ok ? readingSearch.scored.length : "failed",
+      rawHits: rawSearch.scored.length,
+      merged: scored.length,
       aboveThreshold: strong.length,
       top: scored.length ? Number(scored[0].similarity.toFixed(3)) : null,
+      topFrom: scored.length ? scored[0].from : null,
     });
 
     // ── 3. Nothing codified on this yet → say so honestly. Echo the near-miss

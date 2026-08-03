@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "incremental": false },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/claude.ts",
+    "src/lib/floor-guide.ts",
+    "src/lib/voyage.ts",
+    "src/lib/elicitation.ts",
+    "src/lib/retrieval-effectiveness.ts",
+    "src/lib/knowledge-gaps.ts",
+    "src/lib/learning-ledger.ts",
+    "src/lib/supabase/server.ts",
+    "src/lib/supabase/client.ts",
+    "src/app/api/retrieve/route.ts",
+    "src/app/api/retrieve/signal/route.ts",
+    "src/app/api/floor-guide/route.ts",
+    "src/app/api/gaps/route.ts",
+    "src/app/floor-guide/page.tsx",
+    "src/app/retrieve/page.tsx",
+    "src/components/BrandHeader.tsx"
+  ]
+}
