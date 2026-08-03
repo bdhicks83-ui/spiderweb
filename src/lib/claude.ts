@@ -617,10 +617,12 @@ import {
   type MethodId,
   type TriggerType,
   type Persona,
+  type CaptureType,
   EMPTY_FIELDS,
   TRIGGER_TYPES,
   METHODS,
   methodPromptFile,
+  captureBranchPromptFile,
   personaPromptFile,
   formatRecordState,
   formatElicitQAPairs,
@@ -646,12 +648,18 @@ export async function elicitNext(
   maxRemaining: number,
   method: MethodId,
   triggerType: TriggerType,
-  persona: Persona | null
+  persona: Persona | null,
+  // Capture branch (2026-08-03): when set, the branch's approved interview
+  // script (prompts/capture-*.md) rides in the method-guidance slot — it
+  // embeds the CDM rung character PLUS the branch's arc/tone. null = legacy
+  // session, method guidance loads exactly as before. The extraction step
+  // (framePattern) is untouched either way.
+  captureType: CaptureType | null = null
 ): Promise<ElicitStep | null> {
   const methodMeta = METHODS[method];
   const triggerMeta = TRIGGER_TYPES.find((t) => t.id === triggerType);
   const [methodGuidance, personaGuidance] = await Promise.all([
-    loadPrompt(methodPromptFile(method)),
+    loadPrompt(captureType ? captureBranchPromptFile(captureType) : methodPromptFile(method)),
     loadPrompt(personaPromptFile(persona)),
   ]);
   const prompt = await loadPrompt("elicit-next", {

@@ -1,10 +1,21 @@
 'use client';
 
-// P0 / P-0.5 — Codify a Pattern: the elicitation session. Opens with the
-// Methodology Router ("What are we capturing?"), suggests a method, then
-// runs an 8-rung ladder (rung 6 is the new Entity Map) ending in one branded
-// framework you'd put in a proposal or team playbook. Mirrors the Ask page's
-// chat pattern. Auth is enforced by the API routes (401 → friendly message).
+// P0 / P-0.5 — Capture your judgment: the elicitation session. Opens with
+// the 3-way "What are you bringing?" picker (Capture Your Judgment,
+// 2026-08-03 — replaces the user-facing Methodology Router screens; every
+// branch runs the CDM engine internally), then runs the 8-rung ladder
+// (rung 6 is the Entity Map) ending in one branded framework in the
+// expert's own words. Each branch loads a tuned, approved interview script
+// (prompts/capture-*.md); the extraction/synthesis downstream is unchanged.
+// Mirrors the Ask page's chat pattern. Auth is enforced by the API routes
+// (401 → friendly message).
+//
+// Gap-fill (/codify?gap=<id>) + campaign asks (?request=<id>): DECIDED
+// 2026-08-03 — the picker still shows (no forced default branch). The
+// banner keeps the colleague's question on screen; which branch fits is the
+// expert's call (they may be facing it now, may have solved it before, or
+// may have a general approach). All three produce a framework that closes
+// the gap the same way (P-9 reconciliation is capture-time, branch-blind).
 
 import { useEffect, useState } from 'react';
 import BrandHeader from '@/components/BrandHeader';
@@ -22,7 +33,11 @@ import {
   TRIGGER_TYPES,
   METHODS,
   RUNG_LABELS,
-  suggestedMethodFor,
+  CAPTURE_TYPES,
+  CAPTURE_PICKER_PROMPT,
+  CAPTURE_PICKER_MICROCOPY,
+  captureOption,
+  type CaptureType,
   type TriggerType,
   type MethodId,
   type EntityType,
@@ -60,18 +75,14 @@ type ResumableSession = {
   rungsReached: number[];
   triggerType: TriggerType;
   method: MethodId;
+  // null = legacy Methodology Router session (pre-branching) — resumes fine.
+  captureType: CaptureType | null;
   sessionStart: string;
 };
 
 type CodifyState =
   | { phase: 'loading' }
-  | { phase: 'trigger-select'; resumable: ResumableSession | null }
-  | {
-      phase: 'method-select';
-      trigger: TriggerType;
-      method: MethodId;
-      resumable: ResumableSession | null;
-    }
+  | { phase: 'picker'; resumable: ResumableSession | null }
   | { phase: 'starting' }
   | {
       phase: 'interview';
@@ -83,6 +94,7 @@ type CodifyState =
       sending: boolean;
       triggerType: TriggerType;
       method: MethodId;
+      captureType: CaptureType | null;
       sessionStart: string;
     }
   | { phase: 'error'; message: string }
@@ -96,6 +108,7 @@ type CodifyState =
       frameError: string | null;
       triggerType: TriggerType;
       method: MethodId;
+      captureType: CaptureType | null;
     };
 
 const RUNGS = Object.entries(RUNG_LABELS).map(([n, label]) => ({ n: Number(n), label }));
@@ -138,9 +151,9 @@ export default function CodifyPage() {
         const res = await fetch('/api/codify');
         const data = await res.json();
         if (cancelled) return;
-        setState({ phase: 'trigger-select', resumable: data?.active ?? null });
+        setState({ phase: 'picker', resumable: data?.active ?? null });
       } catch {
-        if (!cancelled) setState({ phase: 'trigger-select', resumable: null });
+        if (!cancelled) setState({ phase: 'picker', resumable: null });
       }
     })();
     return () => {
@@ -161,16 +174,6 @@ export default function CodifyPage() {
     setState({ phase: 'error', message });
   }
 
-  function pickTrigger(trigger: TriggerType) {
-    if (state.phase !== 'trigger-select') return;
-    setState({
-      phase: 'method-select',
-      trigger,
-      method: suggestedMethodFor(trigger),
-      resumable: state.resumable,
-    });
-  }
-
   async function resumeSession(r: ResumableSession) {
     setTranscript([
       {
@@ -189,11 +192,15 @@ export default function CodifyPage() {
       sending: false,
       triggerType: r.triggerType,
       method: r.method,
+      captureType: r.captureType ?? null,
       sessionStart: r.sessionStart,
     });
   }
 
-  async function start(triggerType: TriggerType, method: MethodId) {
+  // One click on a picker card starts the interview — the branch's opener is
+  // fixed server-side, so starting is instant ("it takes a few minutes"
+  // starts being true at the first tap).
+  async function start(captureType: CaptureType) {
     if (busy) return;
     setTranscript([]);
     setPdfError(null);
@@ -205,7 +212,7 @@ export default function CodifyPage() {
       const res = await fetch('/api/codify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ triggerType, method }),
+        body: JSON.stringify({ captureType }),
       });
       const data = await res.json();
       if (res.status === 401) return fail('Please log in to capture your judgment.');
@@ -222,6 +229,7 @@ export default function CodifyPage() {
         sending: false,
         triggerType: data.triggerType,
         method: data.method,
+        captureType: data.captureType ?? captureType,
         sessionStart: data.sessionStart,
       });
     } catch {
@@ -272,6 +280,7 @@ export default function CodifyPage() {
           sending: false,
           triggerType: state.triggerType,
           method: state.method,
+          captureType: state.captureType,
           sessionStart: state.sessionStart,
         });
         return;
@@ -289,6 +298,7 @@ export default function CodifyPage() {
           : 'The framework didn’t render on the first try — your record is saved. Generate it below.',
         triggerType: state.triggerType,
         method: state.method,
+        captureType: state.captureType,
       });
     } catch {
       fail('Something went wrong. Try again.');
@@ -299,7 +309,7 @@ export default function CodifyPage() {
     if (state.phase !== 'interview') return;
     setPausedNotice(true);
     setState({
-      phase: 'trigger-select',
+      phase: 'picker',
       resumable: {
         recordId: state.recordId,
         question: state.question,
@@ -308,6 +318,7 @@ export default function CodifyPage() {
         rungsReached: state.rungsReached,
         triggerType: state.triggerType,
         method: state.method,
+        captureType: state.captureType,
         sessionStart: state.sessionStart,
       },
     });
@@ -408,7 +419,7 @@ export default function CodifyPage() {
           </p>
         )}
 
-        {state.phase === 'trigger-select' && (
+        {state.phase === 'picker' && (
           <>
             {(() => {
               const resumable = state.resumable;
@@ -426,7 +437,7 @@ export default function CodifyPage() {
                     </button>
                     <button
                       style={styles.ghost}
-                      onClick={() => setState({ phase: 'trigger-select', resumable: null })}
+                      onClick={() => setState({ phase: 'picker', resumable: null })}
                     >
                       Start fresh instead
                     </button>
@@ -436,15 +447,16 @@ export default function CodifyPage() {
             })()}
 
             <div style={styles.introCard}>
-              <p style={styles.introText}>What are we capturing?</p>
-              <div style={styles.triggerGrid}>
-                {TRIGGER_TYPES.map((t) => (
-                  <button key={t.id} style={styles.triggerCard} onClick={() => pickTrigger(t.id)}>
-                    <span style={styles.triggerEmoji}>{t.emoji}</span>
-                    <span style={styles.triggerLabel}>{t.label}</span>
+              <p style={styles.pickerPrompt}>{CAPTURE_PICKER_PROMPT}</p>
+              <div style={styles.captureGrid}>
+                {CAPTURE_TYPES.map((c) => (
+                  <button key={c.id} style={styles.captureCard} onClick={() => start(c.id)}>
+                    <span style={styles.captureLabel}>{c.label}</span>
+                    <span style={styles.captureSubline}>{c.subline}</span>
                   </button>
                 ))}
               </div>
+              <p style={styles.pickerMicrocopy}>{CAPTURE_PICKER_MICROCOPY}</p>
               <p style={styles.nudge}>
                 {'\u{1F512}'} Names of people on your own team are fine to use — they stay
                 private inside your organization, and are only stripped from
@@ -453,57 +465,6 @@ export default function CodifyPage() {
             </div>
           </>
         )}
-
-        {state.phase === 'method-select' && (() => {
-          const { trigger, method, resumable } = state;
-          const triggerMeta = TRIGGER_TYPES.find((t) => t.id === trigger);
-          return (
-            <div style={styles.introCard}>
-              <p style={styles.introText}>
-                {triggerMeta?.emoji} {triggerMeta?.label}
-              </p>
-              <div style={styles.methodCard}>
-                <span style={styles.frameworkKicker}>Suggested method</span>
-                <h2 style={styles.methodName}>{METHODS[method].name}</h2>
-                <p style={styles.frameworkTagline}>
-                  {METHODS[method].origin} · outputs a {METHODS[method].outputLabel.toLowerCase()}
-                </p>
-                <p style={styles.introText}>
-                  {method === suggestedMethodFor(trigger)
-                    ? triggerMeta?.why
-                    : 'You’ve swapped off the suggested method — that’s fine, use whatever fits.'}
-                </p>
-              </div>
-
-              <div style={styles.actionRow}>
-                <button style={styles.primary} onClick={() => start(trigger, method)}>
-                  Use this method
-                </button>
-              </div>
-
-              <details style={styles.swapDetails}>
-                <summary style={styles.swapSummary}>Choose a different method</summary>
-                <div style={styles.methodList}>
-                  {(Object.keys(METHODS) as MethodId[]).map((m) => (
-                    <button
-                      key={m}
-                      style={{
-                        ...styles.methodListItem,
-                        ...(m === method ? styles.methodListItemActive : {}),
-                      }}
-                      onClick={() => setState({ phase: 'method-select', trigger, method: m, resumable })}
-                    >
-                      <strong>{METHODS[m].name}</strong>
-                      <span style={styles.methodListMeta}>
-                        {METHODS[m].origin} · {METHODS[m].outputLabel}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </details>
-            </div>
-          );
-        })()}
 
         {(interviewing || state.phase === 'done') && (
           <>
@@ -536,8 +497,11 @@ export default function CodifyPage() {
             </div>
             {(state.phase === 'interview' || state.phase === 'done') && (
               <p style={styles.methodBadgeRow}>
-                {TRIGGER_TYPES.find((t) => t.id === state.triggerType)?.emoji}{' '}
-                {TRIGGER_TYPES.find((t) => t.id === state.triggerType)?.label} · {METHODS[state.method].name}
+                {state.captureType
+                  ? captureOption(state.captureType).label
+                  : `${TRIGGER_TYPES.find((t) => t.id === state.triggerType)?.emoji ?? ''} ${
+                      TRIGGER_TYPES.find((t) => t.id === state.triggerType)?.label ?? ''
+                    } · ${METHODS[state.method].name}`}
               </p>
             )}
           </>
@@ -627,7 +591,9 @@ export default function CodifyPage() {
         {state.phase === 'done' && (
           <>
             <p style={styles.doneBadge}>
-              ✅ Pattern captured — {METHODS[state.method].name}, all eight fields including entities and boundaries.
+              {state.captureType
+                ? `✅ ${captureOption(state.captureType).closing}`
+                : `✅ Pattern captured — ${METHODS[state.method].name}, all eight fields including entities and boundaries.`}
             </p>
 
             {state.record.entity_map.length > 0 && (
@@ -695,7 +661,7 @@ export default function CodifyPage() {
                   </button>
                   <button
                     style={styles.ghost}
-                    onClick={() => setState({ phase: 'trigger-select', resumable: null })}
+                    onClick={() => setState({ phase: 'picker', resumable: null })}
                   >
                     Capture another framework
                   </button>
@@ -766,6 +732,28 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--new-leaf-light)',
     borderRadius: '12px',
   },
+  pickerPrompt: { margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--pine)' },
+  captureGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+    gap: '10px',
+  },
+  captureCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    textAlign: 'left',
+    gap: '6px',
+    padding: '16px 14px',
+    backgroundColor: 'var(--paper-2)',
+    border: '1px solid var(--line)',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  captureLabel: { fontSize: '15px', fontWeight: 700, color: 'var(--pine)', lineHeight: 1.3 },
+  captureSubline: { fontSize: '13px', color: 'var(--muted)', lineHeight: 1.45 },
+  pickerMicrocopy: { margin: 0, fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5 },
   triggerGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',

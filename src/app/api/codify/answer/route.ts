@@ -31,9 +31,11 @@ import { embedPatternRecord } from "@/lib/pattern-embedding";
 import {
   EMPTY_FIELDS,
   MAX_QUESTIONS,
+  isCaptureType,
   isMethodId,
   isTriggerType,
   isPersona,
+  type CaptureType,
   type ElicitQA,
   type PatternFields,
   type MethodId,
@@ -53,6 +55,7 @@ type RecordRow = {
   scrub_status: string;
   trigger_type: string | null;
   method: string | null;
+  capture_type: string | null;
   session_start: string;
 } & PatternFields;
 
@@ -96,7 +99,7 @@ export async function POST(req: NextRequest) {
     const { data: record, error: loadError } = await supabase
       .from("pattern_records")
       .select(
-        `id, qa_pairs, pending_question, pending_rung, status, scrub_status, trigger_type, method, session_start, ${FIELD_COLUMNS}`
+        `id, qa_pairs, pending_question, pending_rung, status, scrub_status, trigger_type, method, capture_type, session_start, ${FIELD_COLUMNS}`
       )
       .eq("id", recordId)
       .single();
@@ -122,6 +125,12 @@ export async function POST(req: NextRequest) {
     }
     const method: MethodId = row.method;
     const triggerType: TriggerType = row.trigger_type;
+    // Capture branch (2026-08-03): selects which approved interview script
+    // shades the questions. null = legacy Methodology Router session — the
+    // interview runs exactly as it did before this feature.
+    const captureType: CaptureType | null = isCaptureType(row.capture_type)
+      ? row.capture_type
+      : null;
 
     // Persona shades wording only — never routing/ladder logic. Best-effort:
     // a lookup failure just falls back to neutral phrasing.
@@ -158,7 +167,8 @@ export async function POST(req: NextRequest) {
       maxRemaining,
       method,
       triggerType,
-      persona
+      persona,
+      captureType
     );
     const fields = step ? step.fields : currentFields;
 
@@ -171,7 +181,7 @@ export async function POST(req: NextRequest) {
       const next =
         !atCap && step && !step.done && step.question && step.nextRung
           ? { rung: step.nextRung, question: step.question }
-          : fallbackQuestion(fields, method);
+          : fallbackQuestion(fields, method, captureType);
 
       if (!next) {
         // Every required field is filled but the model didn't say done —

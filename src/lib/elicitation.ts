@@ -16,6 +16,92 @@
 //     exception: names are KEPT here (org-scoped RLS) — the general scrub
 //     doctrine does not apply to this field. See DECISION-LOG 2026-07-22.
 
+// ─── Capture branches — "Capture your judgment" (2026-08-03) ───────────────
+// The user-facing entry to /codify is now a 3-way picker ("What are you
+// bringing?") that selects an interview BRANCH by what the expert is bringing:
+// a live problem, a past resolution, or a general strategy. Each branch runs
+// a tuned question script (prompts/capture-*.md — approved copy, near-
+// verbatim from CAPTURE-JUDGMENT-interview-branches.md). The branches change
+// the ENTRY and FRAMING only — all three drive to the same CDM destination
+// (signals, the call, the failure mode, a concrete anchor), and the
+// downstream extraction/synthesis (framePattern) is UNCHANGED.
+//
+// Internally every branch runs the CDM engine (trigger_type='judgment',
+// method='cdm') so downstream consumers of those columns see nothing new —
+// and, deliberately, so no branch feeds the Win Column ('win') or Coaching
+// Watch ('concern'/'friction') side channels by accident. The Methodology
+// Router below stays intact in code for in-flight legacy sessions.
+
+export type CaptureType = "current_issue" | "past_resolution" | "strategy";
+
+export type CaptureOption = {
+  id: CaptureType;
+  /** Picker card title (approved copy). */
+  label: string;
+  /** Picker card subline (approved copy). */
+  subline: string;
+  /** prompts/<file>.md — the branch's interview script (replaces method guidance). */
+  promptFile: string;
+  /** Fixed rung-1 opener — instant, no model call (approved copy; the
+   *  strategy opener is adapted to be self-contained, flagged DRAFT). */
+  opening: string;
+  /** Closing frame shown when the capture completes (approved copy). */
+  closing: string;
+};
+
+export const CAPTURE_PICKER_PROMPT = "What are you bringing?";
+export const CAPTURE_PICKER_MICROCOPY =
+  "Either way, it takes a few minutes, and it ends as a framework with your name on it.";
+
+export const CAPTURE_TYPES: CaptureOption[] = [
+  {
+    id: "current_issue",
+    label: "A problem I’m facing now",
+    subline: "Something on your plate right now that you know how to handle.",
+    promptFile: "capture-current-issue",
+    opening:
+      "Tell me about the problem you’re looking at right now — the one you already know how to handle. What’s going on?",
+    closing:
+      "Got it. I’ll turn this into a framework in your words — so the next person who hits this doesn’t have to come find you.",
+  },
+  {
+    id: "past_resolution",
+    label: "Something I solved before",
+    subline: "A problem you worked through in the past, and how it turned out.",
+    promptFile: "capture-past-resolution",
+    opening:
+      "Walk me through something you solved — a problem you worked through, start to finish. Take me back to when it started.",
+    closing:
+      "That’s a good one. I’ll capture how you worked through it — so it’s not just in your head anymore.",
+  },
+  {
+    id: "strategy",
+    label: "How I approach a kind of situation",
+    subline: "Your way of handling a type of problem that comes up more than once.",
+    promptFile: "capture-strategy",
+    opening:
+      "Tell me about how you approach a kind of situation that comes up more than once. Not one specific time yet — your general way of handling it when it comes up.",
+    closing:
+      "That’s a complete approach now — the way you handle it, the traps, and where it’s headed when it works. Your team can apply it and know what they’re driving toward.",
+  },
+];
+
+export function isCaptureType(v: unknown): v is CaptureType {
+  return typeof v === "string" && CAPTURE_TYPES.some((c) => c.id === v);
+}
+
+export function captureOption(t: CaptureType): CaptureOption {
+  return CAPTURE_TYPES.find((c) => c.id === t)!;
+}
+
+export function captureBranchPromptFile(t: CaptureType): string {
+  return captureOption(t).promptFile;
+}
+
+// Every capture branch runs the CDM engine internally (see block comment).
+export const CAPTURE_BRANCH_TRIGGER = "judgment" as const;
+export const CAPTURE_BRANCH_METHOD = "cdm" as const;
+
 // ─── Methodology Router (P-0.5 §1) ─────────────────────────────────────────
 
 export type TriggerType = "broke" | "win" | "concern" | "friction" | "judgment";
@@ -372,31 +458,81 @@ const METHOD_FALLBACK_QUESTIONS: Record<MethodId, MethodQuestionSet> = {
   },
 };
 
+// Capture-branch deterministic backstop (2026-08-03). Same job as the
+// method-flavored sets above, but worded from the approved branch scripts so
+// even a model-failure turn stays inside the branch's arc. Branch takes
+// precedence over method flavoring when both are known.
+type BranchQuestionSet = MethodQuestionSet & {
+  classify: string;
+  call: string;
+};
+
+const CAPTURE_FALLBACK_QUESTIONS: Record<CaptureType, BranchQuestionSet> = {
+  current_issue: {
+    classify: "What makes this one hard? What would trip up someone who hasn’t seen it before?",
+    call: "So what’s the move? Walk me through what you’d do.",
+    signal:
+      "What are you actually looking at to know what’s going on? The signals most people would miss.",
+    reasoning: "Why that and not the obvious thing? Walk me through your reasoning.",
+    entity:
+      "Who’s involved in this one — who makes the call, who else is affected, and which equipment or process does it touch? Names are fine — they stay internal to your org.",
+    boundaries:
+      "What happens if someone gets this wrong — what’s the cost, and where would this same move be the WRONG one?",
+  },
+  past_resolution: {
+    classify:
+      "What kind of problem did this turn out to be — and what first told you something was wrong?",
+    call: "What did you do about it? Walk me through the steps.",
+    signal: "When did you know what was really going on? What did you see that told you?",
+    reasoning:
+      "Was there a point where you could’ve gone a different way? What made you choose the path you did?",
+    entity:
+      "Who was part of this one — who made the call, who else was involved, and which equipment or process did it touch? Names are fine — they stay internal to your org.",
+    boundaries:
+      "If someone on your team hit this tomorrow, what’s the one thing you’d want them to know — and when would your fix have been the wrong move?",
+  },
+  strategy: {
+    classify: "When does this come up? How do you know you’re in this kind of situation?",
+    call: "What’s your approach? The rule of thumb you go by.",
+    signal: "What do you actually look at when you’re deciding — the tells that matter most?",
+    reasoning: "What are you weighing when you decide? What matters most?",
+    entity:
+      "Who or what does this involve when it fires — which roles, processes, or equipment? A named role is fine here.",
+    boundaries:
+      "What do less-experienced people get wrong about this? What’s the trap — and where does this approach NOT apply?",
+  },
+};
+
 export function fallbackQuestion(
   fields: PatternFields,
-  method: MethodId | null
+  method: MethodId | null,
+  captureType?: CaptureType | null
 ): { rung: number; question: string } | null {
+  const b = captureType ? CAPTURE_FALLBACK_QUESTIONS[captureType] : null;
   const m = method ? METHOD_FALLBACK_QUESTIONS[method] : null;
   if (!fields.context_summary) {
-    return { rung: 1, question: OPENING_QUESTION };
+    return {
+      rung: 1,
+      question: captureType ? captureOption(captureType).opening : OPENING_QUESTION,
+    };
   }
   if (!fields.trigger_signal) {
-    return { rung: 2, question: GENERIC_CLASSIFY_QUESTION };
+    return { rung: 2, question: b?.classify ?? GENERIC_CLASSIFY_QUESTION };
   }
   if (!fields.judgment) {
-    return { rung: 3, question: GENERIC_CALL_QUESTION };
+    return { rung: 3, question: b?.call ?? GENERIC_CALL_QUESTION };
   }
   if (!fields.signal_detail) {
-    return { rung: 4, question: m?.signal ?? GENERIC_SIGNAL_QUESTION };
+    return { rung: 4, question: b?.signal ?? m?.signal ?? GENERIC_SIGNAL_QUESTION };
   }
   if (!fields.rationale) {
-    return { rung: 5, question: m?.reasoning ?? GENERIC_REASONING_QUESTION };
+    return { rung: 5, question: b?.reasoning ?? m?.reasoning ?? GENERIC_REASONING_QUESTION };
   }
   if (!fields.entity_map || fields.entity_map.length === 0) {
-    return { rung: 6, question: m?.entity ?? GENERIC_ENTITY_QUESTION };
+    return { rung: 6, question: b?.entity ?? m?.entity ?? GENERIC_ENTITY_QUESTION };
   }
   if (!fields.boundaries) {
-    return { rung: 7, question: m?.boundaries ?? GENERIC_BOUNDARIES_QUESTION };
+    return { rung: 7, question: b?.boundaries ?? m?.boundaries ?? GENERIC_BOUNDARIES_QUESTION };
   }
   return null;
 }

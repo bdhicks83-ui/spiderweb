@@ -1,12 +1,17 @@
 // P0 / P-0.5 — Elicitation Engine, step 1: start (or resume) a codify session.
 //
-// POST { triggerType, method } → creates a pattern_records row and returns
-// the fixed rung-1 opener. No model call for the opener itself — starting
-// must be instant. RLS scopes the row to the logged-in user. triggerType +
-// method come from the Methodology Router screen (P-0.5 §1): the router
-// suggests a method for the picked trigger, but the expert may swap to any
-// of the 5 — "offer + suggest, never force" — so any valid combination is
-// accepted here.
+// POST { captureType } → creates a pattern_records row and returns the
+// branch's fixed rung-1 opener (Capture Your Judgment, 2026-08-03: the
+// user-facing entry is the 3-way "What are you bringing?" picker; every
+// branch runs the CDM engine internally — see src/lib/elicitation.ts).
+// No model call for the opener itself — starting must be instant. RLS
+// scopes the row to the logged-in user.
+//
+// Legacy shape POST { triggerType, method } is still accepted (Methodology
+// Router, P-0.5 §1 — "offer + suggest, never force") so scripts and any
+// in-flight callers keep working; those sessions run exactly as before.
+// NOTE: the picker path writes pattern_records.capture_type — run
+// supabase/capture-branches.sql before deploying this route.
 //
 // GET → session guardrails (P-0.5 §Build 3): checks for an existing ACTIVE
 // session and returns it if found, so the UI can offer "resume where you
@@ -17,17 +22,22 @@ import { requireCanCodify } from "@/lib/floor-guide";
 import {
   MAX_QUESTIONS,
   OPENING_QUESTION,
+  CAPTURE_BRANCH_TRIGGER,
+  CAPTURE_BRANCH_METHOD,
+  captureOption,
+  isCaptureType,
   isMethodId,
   isTriggerType,
   rungsReached,
   mergeFields,
   EMPTY_FIELDS,
+  type CaptureType,
   type ElicitQA,
   type PatternFields,
 } from "@/lib/elicitation";
 
 const RESUME_FIELD_COLUMNS =
-  "id, qa_pairs, pending_question, pending_rung, trigger_type, method, session_start, " +
+  "id, qa_pairs, pending_question, pending_rung, trigger_type, method, capture_type, session_start, " +
   "context_summary, context_org_size, context_industry, context_function, " +
   "situation_type, intervention_type, trigger_signal, signal_detail, " +
   "judgment, rationale, boundaries, entity_map";
@@ -42,6 +52,7 @@ type ResumeRow = {
   pending_rung: number | null;
   trigger_type: string | null;
   method: string | null;
+  capture_type: string | null;
   session_start: string;
 } & PatternFields;
 
@@ -90,6 +101,7 @@ export async function GET() {
         rungsReached: rungsReached(fields),
         triggerType: active.trigger_type,
         method: active.method,
+        captureType: isCaptureType(active.capture_type) ? active.capture_type : null,
         sessionStart: active.session_start,
       },
     });
@@ -102,12 +114,33 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { triggerType, method } = body ?? {};
-    if (!isTriggerType(triggerType)) {
-      return NextResponse.json({ error: "Missing or invalid triggerType" }, { status: 400 });
-    }
-    if (!isMethodId(method)) {
-      return NextResponse.json({ error: "Missing or invalid method" }, { status: 400 });
+    const { triggerType, method, captureType } = body ?? {};
+
+    // Capture branch path (the picker) vs legacy Methodology Router path.
+    // Exactly one shape must be valid; the branch path derives trigger/method
+    // internally so downstream trigger_type consumers see nothing new.
+    let resolvedCapture: CaptureType | null = null;
+    let resolvedTrigger: string;
+    let resolvedMethod: string;
+    let openingQuestion: string;
+    if (captureType !== undefined) {
+      if (!isCaptureType(captureType)) {
+        return NextResponse.json({ error: "Invalid captureType" }, { status: 400 });
+      }
+      resolvedCapture = captureType;
+      resolvedTrigger = CAPTURE_BRANCH_TRIGGER;
+      resolvedMethod = CAPTURE_BRANCH_METHOD;
+      openingQuestion = captureOption(captureType).opening;
+    } else {
+      if (!isTriggerType(triggerType)) {
+        return NextResponse.json({ error: "Missing or invalid triggerType" }, { status: 400 });
+      }
+      if (!isMethodId(method)) {
+        return NextResponse.json({ error: "Missing or invalid method" }, { status: 400 });
+      }
+      resolvedTrigger = triggerType;
+      resolvedMethod = method;
+      openingQuestion = OPENING_QUESTION;
     }
 
     const supabase = await createClient();
@@ -132,19 +165,23 @@ export async function POST(req: Request) {
     }
 
     const nowIso = new Date().toISOString();
+    // capture_type only rides on the picker path — the legacy insert shape is
+    // byte-for-byte what it was, so legacy callers work even pre-migration.
+    const insertRow: Record<string, unknown> = {
+      user_id: user.id,
+      qa_pairs: [],
+      pending_question: openingQuestion,
+      pending_rung: 1,
+      status: "active",
+      trigger_type: resolvedTrigger,
+      method: resolvedMethod,
+      session_start: nowIso,
+      entity_map: [],
+    };
+    if (resolvedCapture) insertRow.capture_type = resolvedCapture;
     const { data: record, error: insertError } = await supabase
       .from("pattern_records")
-      .insert({
-        user_id: user.id,
-        qa_pairs: [],
-        pending_question: OPENING_QUESTION,
-        pending_rung: 1,
-        status: "active",
-        trigger_type: triggerType,
-        method,
-        session_start: nowIso,
-        entity_map: [],
-      })
+      .insert(insertRow)
       .select("id, session_start")
       .single();
 
@@ -157,12 +194,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       recordId: record.id,
-      question: OPENING_QUESTION,
+      question: openingQuestion,
       rung: 1,
       questionNumber: 1,
       maxQuestions: MAX_QUESTIONS,
-      triggerType,
-      method,
+      triggerType: resolvedTrigger,
+      method: resolvedMethod,
+      captureType: resolvedCapture,
       sessionStart: record.session_start,
     });
   } catch (err) {
