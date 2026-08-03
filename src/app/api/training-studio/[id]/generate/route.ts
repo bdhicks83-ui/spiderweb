@@ -44,21 +44,25 @@ import {
   groundingForIssue,
   rungForFormat,
 } from "@/lib/training-studio";
+import { computeRoutingTargets } from "@/lib/training-routing";
 
 export const maxDuration = 60;
 
 type RequestRow = {
   id: string;
   org_id: string;
+  requested_by: string;
   issue_text: string;
   issue_restated: string | null;
   issue_type: string | null;
   subject_entities: { type: string; name: string; detail: string | null }[];
+  audience_role: string | null;
   audience_summary: string;
   chosen_format: string | null;
   recommendations: { ranked?: { format_key: string; rationale: string }[] } | null;
   prescription_id: string | null;
   current_training_id: string | null;
+  routing_targets: unknown;
   status: string;
   attempt_count: number;
 };
@@ -99,7 +103,7 @@ export async function POST(
     const { data: reqRaw } = await supabase
       .from("training_requests")
       .select(
-        "id, org_id, issue_text, issue_restated, issue_type, subject_entities, audience_summary, chosen_format, recommendations, prescription_id, current_training_id, status, attempt_count"
+        "id, org_id, requested_by, issue_text, issue_restated, issue_type, subject_entities, audience_role, audience_summary, chosen_format, recommendations, prescription_id, current_training_id, routing_targets, status, attempt_count"
       )
       .eq("id", id)
       .maybeSingle();
@@ -181,6 +185,42 @@ export async function POST(
           .from("training_requests")
           .update({ status: "generated" })
           .eq("id", request.id);
+
+        // ⭐ The "who else needs it" beat, computed the moment the training is
+        // complete — the panel is already waiting when the leader reads the
+        // draft, no extra click. Fail-soft: a routing miss never costs the
+        // leader their generated training. Seeded demo requests arrive with
+        // curated targets already present, so an empty check keeps them.
+        try {
+          const existing = request.routing_targets;
+          if (!Array.isArray(existing) || existing.length === 0) {
+            const exclude = new Set<string>([request.requested_by]);
+            const { data: rxRaw } = await service
+              .from("prescriptions")
+              .select("experts")
+              .eq("id", request.prescription_id)
+              .maybeSingle();
+            for (const e of ((rxRaw as { experts: { user_id: string }[] | null } | null)
+              ?.experts || [])) {
+              exclude.add(e.user_id);
+            }
+            const targets = await computeRoutingTargets(service, {
+              orgId: request.org_id,
+              audienceRole: request.audience_role,
+              audienceSummary: request.audience_summary,
+              subjectEntities: request.subject_entities || [],
+              excludeUserIds: [...exclude],
+            });
+            if (targets.length > 0) {
+              await service
+                .from("training_requests")
+                .update({ routing_targets: targets })
+                .eq("id", request.id);
+            }
+          }
+        } catch (routingErr) {
+          console.warn("routing-target suggestion skipped:", routingErr);
+        }
       }
 
       return NextResponse.json({
@@ -231,7 +271,11 @@ export async function POST(
       issueType: request.issue_type ?? "unclassified",
       audience: request.audience_summary,
       attemptNote,
-      frameworks: grounding.groundingText.slice(0, 9000),
+      frameworks: grounding.groundingText.slice(0, 12000),
+      // When the grounding frameworks carry an OPEN conflict, generation
+      // teaches the BOUNDARY between the two experts (P-2's X-ray finally
+      // feeding the Studio). Empty string when the sources agree.
+      conflictNote: grounding.conflictNote,
     });
     if (!artifact) {
       // Fail open — nothing half-built is stored.

@@ -97,6 +97,17 @@ function trackRecordLine(tr: TrackRecord, formatKey: string): string | null {
 
 type Altitude = { title: string; body: string };
 
+// ⭐ The "who else needs it" beat — who shares this gap, and WHY each one is
+// flagged. Reasons are exposure/recency/role only (the server structurally
+// cannot emit a performance-based reason — see src/lib/training-routing.ts).
+type RoutingTarget = {
+  kind: "person" | "role";
+  user_id: string | null;
+  label: string;
+  detail: string | null;
+  reason: string;
+};
+
 type Training = {
   id: string;
   version: number;
@@ -148,6 +159,9 @@ type Detail = {
     requested_by_name: string;
     approved_by_name: string | null;
     approved_at: string | null;
+    routing_targets: RoutingTarget[] | null;
+    routed_at: string | null;
+    routed_by_name: string | null;
   };
   prescription: {
     efficacy_status: string | null;
@@ -617,6 +631,70 @@ export default function TrainingStudioDetailPage({
                 . Nothing is overwritten.
               </p>
             )}
+
+            {/* ── ⭐ Who else needs it — the money beat ─────────────────── */}
+            {/* ═══════════════════════════════════════════════════════════════
+                ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (training demo)
+                Doctrine on screen: reasons are exposure/recency/role, never
+                performance. Routing addresses the gap for the seat — "who
+                needs this training," never "who's failing."
+               ═══════════════════════════════════════════════════════════════ */}
+            {(r.routing_targets ?? []).length > 0 && (
+              <div style={styles.routingCard}>
+                <span style={styles.routingLabel}>Who else needs this</span>
+                <p style={styles.routingIntro}>
+                  Same gap, other seats. Each one is flagged by exposure and
+                  role — never by performance.
+                </p>
+                {(r.routing_targets ?? []).map((t, i) => (
+                  <div key={i} style={styles.routingTarget}>
+                    <div style={styles.formatOptionTop}>
+                      <span style={styles.routingName}>
+                        {t.kind === "role" ? "Everyone in the role: " : ""}
+                        {t.label}
+                      </span>
+                      {t.detail && (
+                        <span style={styles.formatOptionEffort}>{t.detail}</span>
+                      )}
+                    </div>
+                    <p style={styles.routingReason}>{t.reason}</p>
+                  </div>
+                ))}
+                {!r.routed_at && data.can_act && (
+                  <div style={styles.chooseBar}>
+                    <button
+                      type="button"
+                      style={styles.primaryButton}
+                      disabled={busy !== null}
+                      onClick={() => post("/route-targets", "route", { confirm: true })}
+                    >
+                      {busy === "route"
+                        ? "Routing…"
+                        : `Route it to ${
+                            (r.routing_targets ?? []).filter((t) => t.kind === "person").length > 0
+                              ? `these ${(r.routing_targets ?? []).length}`
+                              : "the role"
+                          }`}
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.ghostButton}
+                      disabled={busy !== null}
+                      onClick={() => post("/route-targets", "route-refresh")}
+                    >
+                      {busy === "route-refresh" ? "Rechecking…" : "Recheck who needs it"}
+                    </button>
+                  </div>
+                )}
+                {r.routed_at && (
+                  <p style={styles.routedLine}>
+                    ✓ Routed{r.routed_by_name ? ` by ${r.routed_by_name}` : ""} ·{" "}
+                    {new Date(r.routed_at).toLocaleDateString()} — delivered as
+                    closing a gap for the seat, never a mark against a person.
+                  </p>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -1047,4 +1125,31 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
   },
   empty: { color: "var(--muted)", fontSize: "14px" },
+  // ⭐ The "who else needs it" panel — quiet growth-green frame, same register
+  // as the chosen-format card: an opportunity surface, never an alert.
+  routingCard: {
+    marginTop: 18,
+    background: "var(--white)",
+    border: "1px solid var(--growth)",
+    borderRadius: 12,
+    padding: "16px 18px",
+  },
+  routingLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase" as const,
+    color: "var(--growth-deep)",
+  },
+  routingIntro: { fontSize: "13px", color: "var(--pine-soft)", margin: "6px 0 4px", lineHeight: 1.5 },
+  routingTarget: {
+    background: "var(--paper-2)",
+    border: "1px solid var(--line)",
+    borderRadius: 10,
+    padding: "10px 12px",
+    marginTop: 8,
+  },
+  routingName: { fontSize: "14px", fontWeight: 700, color: "var(--pine)" },
+  routingReason: { fontSize: "12px", color: "var(--muted)", margin: "4px 0 0", lineHeight: 1.5 },
+  routedLine: { fontSize: "12px", color: "var(--growth-deep)", fontWeight: 600, margin: "12px 0 0", lineHeight: 1.5 },
 };

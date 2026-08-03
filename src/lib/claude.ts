@@ -1923,6 +1923,11 @@ export type FormatTrainingInput = {
   attemptNote: string;
   /** The expert framework material — the ONLY permitted source of substance. */
   frameworks: string;
+  /** When two grounding frameworks CONFLICT (open framework_conflicts row),
+   *  this carries the teach-the-boundary instruction block built by
+   *  groundingForIssue(). Empty string when the sources agree — the prompt
+   *  variable renders to nothing and the generation is unchanged. */
+  conflictNote: string;
 };
 
 // Reuses the P-4B TrainingArtifact shape + validator: same three altitudes,
@@ -1977,12 +1982,18 @@ export async function generateFormatTraining(
     audience: input.audience,
     attempt_note: input.attemptNote,
     frameworks: input.frameworks,
+    conflict_note: input.conflictNote,
   });
   return withRetries("generateFormatTraining", async () => {
     try {
       const msg = await anthropic.messages.create({
         model: "claude-sonnet-5",
-        max_tokens: 6000,
+        // ⭐ TOKEN BUDGET COVERS THE THINKING BLOCK, NOT JUST THE OUTPUT
+        // (standing P-7 gotcha). The richer artifact (450-900 words + JSON
+        // wrapper) plus reasoning needs real headroom; a bigger ceiling costs
+        // no wall-clock because the model stops when done. Single attempt,
+        // fail open — the timeout is the real constraint, never the tokens.
+        max_tokens: 12000,
         messages: [{ role: "user", content: prompt }],
       });
       const text = firstText(msg.content as { type: string; text?: string }[]);
@@ -2019,7 +2030,7 @@ export async function generateFormatTraining(
 // trainings.
 export const ALTITUDE_SPEC: Record<"supervisor" | "exec", string> = {
   supervisor:
-    'The SUPERVISOR / lead altitude: how to RUN this with the crew. What to set up, what to watch for while it happens, how to tell it landed, and when the boundaries say it does not fit and you escalate instead. Address the supervisor directly. At most 250 words.',
+    'The SUPERVISOR / lead altitude: how to RUN this with the crew. What to set up, what to watch for while it happens, how to tell it landed, and when the boundaries say it does not fit and you escalate instead. Address the supervisor directly. At most 300 words.',
   exec:
     'The EXECUTIVE altitude: why this matters and what it costs. The pattern behind it, what knowledge is moving from whom to whom, and what "it worked" will look like. No procedural detail. At most 120 words — read in under a minute or it does not get read.',
 };
@@ -2045,7 +2056,9 @@ export async function reframeTrainingAltitude(input: {
   return withRetries(`reframeTrainingAltitude:${input.altitude}`, async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 5000,
+      // Sized for thinking + output (standing P-7 gotcha): the floor body this
+      // re-frames is now up to ~900 words of input, and headroom is free.
+      max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);

@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "incremental": false },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/claude.ts",
+    "src/lib/training-studio.ts",
+    "src/lib/training-formats.ts",
+    "src/lib/training-routing.ts",
+    "src/lib/prescription.ts",
+    "src/lib/pattern-embedding.ts",
+    "src/lib/voyage.ts",
+    "src/lib/supabase/server.ts",
+    "src/lib/supabase/client.ts",
+    "src/app/api/training-studio/route.ts",
+    "src/app/api/training-studio/[id]/route.ts",
+    "src/app/api/training-studio/[id]/recommend/route.ts",
+    "src/app/api/training-studio/[id]/format/route.ts",
+    "src/app/api/training-studio/[id]/generate/route.ts",
+    "src/app/api/training-studio/[id]/approve/route.ts",
+    "src/app/api/training-studio/[id]/route-targets/route.ts",
+    "src/app/api/training-studio/[id]/efficacy/route.ts",
+    "src/app/api/training-studio/[id]/enhance/route.ts",
+    "src/app/training-studio/page.tsx",
+    "src/app/training-studio/[id]/page.tsx",
+    "src/components/BrandHeader.tsx"
+  ]
+}

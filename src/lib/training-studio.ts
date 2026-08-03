@@ -79,6 +79,15 @@ export type StudioGrounding = {
   captureFirst: boolean;
   /** Why grounding failed, when it did. */
   note: string | null;
+  /** OPEN framework_conflicts pairs found AMONG the grounding records.
+   *  Empty when the sources agree. Same lookup shape as the contested-badge
+   *  block on /api/retrieve — this is the Studio finally seeing what the
+   *  X-ray already knows about its own source material. */
+  conflicts: { conflict_id: string; record_a_id: string; record_b_id: string }[];
+  /** The teach-the-boundary prompt block for generation ("" when no conflict).
+   *  Doctrine: two experts who disagree are BOTH right somewhere — the
+   *  training teaches WHEN each path applies, never an average of the two. */
+  conflictNote: string;
 };
 
 /**
@@ -108,6 +117,8 @@ export async function groundingForIssue(
     topSimilarity: null,
     captureFirst: true,
     note,
+    conflicts: [],
+    conflictNote: "",
   });
 
   const embed = await embedText(issueQuery, { inputType: "query" });
@@ -179,6 +190,60 @@ export async function groundingForIssue(
   // carries on the detected path.
   const experts = records.map((r) => ({ user_id: r.user_id, record_id: r.id }));
 
+  // ── Do the grounding frameworks DISAGREE with each other? ─────────────────
+  // Same lookup the /retrieve contested badge runs, pointed at the grounding
+  // set. When an OPEN conflict pairs two of the source records, generation
+  // must teach the BOUNDARY between the two experts' judgment — when each
+  // one's path applies — never an average. Fail-soft: a conflict read that
+  // errors just means the note is empty and generation runs as before.
+  let conflicts: { conflict_id: string; record_a_id: string; record_b_id: string }[] = [];
+  let conflictNote = "";
+  if (ids.length > 1) {
+    const { data: confRaw, error: confError } = await service
+      .from("framework_conflicts")
+      .select("id, record_a_id, record_b_id, territory, rationale")
+      .eq("org_id", orgId)
+      .eq("status", "open")
+      .in("record_a_id", ids)
+      .in("record_b_id", ids);
+    if (!confError && confRaw && confRaw.length > 0) {
+      const byId = new Map(records.map((r) => [r.id, r]));
+      const pairs = (confRaw as {
+        id: string;
+        record_a_id: string;
+        record_b_id: string;
+        territory: string | null;
+        rationale: string;
+      }[]).filter((c) => byId.has(c.record_a_id) && byId.has(c.record_b_id));
+      conflicts = pairs.map((c) => ({
+        conflict_id: c.id,
+        record_a_id: c.record_a_id,
+        record_b_id: c.record_b_id,
+      }));
+      if (pairs.length > 0) {
+        const lines = pairs.map((c) => {
+          const a = byId.get(c.record_a_id)!;
+          const b = byId.get(c.record_b_id)!;
+          return (
+            `- "${a.framework?.name ?? "Framework A"}" (${authorName(a.user_id)}) vs ` +
+            `"${b.framework?.name ?? "Framework B"}" (${authorName(b.user_id)})` +
+            `${c.territory ? ` — shared territory: ${c.territory}` : ""}. ${c.rationale}`
+          );
+        });
+        conflictNote = [
+          "⚠️ THE SOURCE EXPERTS DISAGREE — TEACH THE BOUNDARY, NEVER THE AVERAGE.",
+          "The organization's conflict X-ray has an OPEN flag between grounding frameworks:",
+          ...lines,
+          "Both experts are right somewhere; the whole skill is knowing WHICH situation you are in. The training MUST:",
+          "- Name both experts and state each framework's rule fairly, in its own terms.",
+          "- Make the DECIDING TELL explicit: the observable condition that says which expert's path applies (draw it from the frameworks' own signals and boundaries).",
+          "- Practice the boundary: at least one practice item must land on each side of it.",
+          "- Never blend the two rules into one mushy middle rule, never pick a winner, and never present the disagreement as a problem — knowing the boundary IS the expertise.",
+        ].join("\n");
+      }
+    }
+  }
+
   return {
     records,
     experts,
@@ -187,6 +252,8 @@ export async function groundingForIssue(
     topSimilarity: matches[0]?.similarity ?? null,
     captureFirst: false,
     note: null,
+    conflicts,
+    conflictNote,
   };
 }
 

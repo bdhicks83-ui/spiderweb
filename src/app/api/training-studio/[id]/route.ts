@@ -40,6 +40,10 @@ type RequestRow = {
   deployed_at: string | null;
   attempt_count: number;
   created_at: string;
+  // ⭐ The "who else needs it" beat — exposure/role-framed targets + reasons.
+  routing_targets: unknown;
+  routed_at: string | null;
+  routed_by: string | null;
 };
 
 const DETAIL_COLUMNS =
@@ -48,7 +52,8 @@ const DETAIL_COLUMNS =
   "subject_entities, understanding_note, detection_id, prescription_id, " +
   "recommendations, recommended_format, recommended_at, chosen_format, " +
   "format_overridden, override_reason, format_chosen_at, status, " +
-  "current_training_id, approved_by, approved_at, deployed_at, attempt_count, created_at";
+  "current_training_id, approved_by, approved_at, deployed_at, attempt_count, created_at, " +
+  "routing_targets, routed_at, routed_by";
 
 type TrainingRow = {
   id: string;
@@ -149,7 +154,9 @@ export async function GET(
 
     const nameIds = [
       ...new Set(
-        [request.requested_by, request.approved_by].filter((v): v is string => !!v)
+        [request.requested_by, request.approved_by, request.routed_by].filter(
+          (v): v is string => !!v
+        )
       ),
     ];
     let names: Record<string, string | null> = {};
@@ -175,6 +182,9 @@ export async function GET(
         requested_by_name: names[request.requested_by] ?? "Org leader",
         approved_by_name: request.approved_by
           ? (names[request.approved_by] ?? "Org leader")
+          : null,
+        routed_by_name: request.routed_by
+          ? (names[request.routed_by] ?? "Org leader")
           : null,
       },
       prescription,

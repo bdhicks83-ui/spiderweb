@@ -15,7 +15,15 @@ WHY THIS FORMAT WAS CHOSEN (design intent - build toward this):
 
 THE FLOOR ALTITUDE: concrete and immediately usable. Second person, plain shop language. Someone should be able to act on it during their next shift.
 
-LENGTH DISCIPLINE (hard limit): at most 300 words. A training nobody finishes teaches nobody. Say each thing once; do not restate the situation in every section.
+DEPTH DISCIPLINE (this is a COMPLETE, ready-to-deliver training, not an outline — a leader should be able to hand it to the team today). Inside the format's structure above, where the format's own sections call for it, the artifact must carry:
+- A SHORT WHY up front: 2-4 sentences on why this matters right now, drawn from the issue and the frameworks — never a generic pep line.
+- THE DECISION, WALKED: the actual judgment step by step — what you check, in what order, and what each check tells you. Name the authoring expert next to the judgment that is theirs.
+- PRACTICE WITH FEEDBACK, when the format includes practice (drill reps, scenarios, teach-back checkpoints): 3-5 concrete items, each with the CORRECT call stated and one line of feedback explaining why, tied back to the named expert whose framework decides it. Practice items must be constructible from the framework material - vary the framework's own signals and boundaries; never invent equipment, people, or failure modes the material doesn't contain.
+- THE ONE THING TO NEVER DO: close with the single most dangerous shortcut, stated plainly, and what it costs — taken from the frameworks' boundaries or rationale.
+
+LENGTH DISCIPLINE: 450-900 words. Rich enough to deliver as-is; tight enough to finish. A training nobody finishes teaches nobody — say each thing once, spend the words on the decision and the practice, never on restating the situation per section. A one-page format (job aid) stays one page: its depth goes into precision of the steps and the stop conditions, not word count.
+
+{{conflict_note}}
 
 WRITING FORMAT: plain text only - NO markdown syntax (no #, no **, no backticks). Structure with SHORT ALL-CAPS section headers on their own line, numbered steps (1. 2. 3.) and simple dashes for lists. Blank line between sections.
 
