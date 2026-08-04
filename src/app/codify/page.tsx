@@ -1,11 +1,13 @@
 'use client';
 
 // P0 / P-0.5 — Capture your judgment: the elicitation session. Opens with
-// the six-card "What are you bringing?" picker (Capture Your Judgment,
-// 2026-08-03 — replaces the user-facing Methodology Router screens; every
-// branch runs the CDM engine internally; 2×3 on desktop via the grid's
-// min column width, collapsing to one column on mobile), then runs the
-// 8-rung ladder
+// the seven-card "What are you bringing?" picker (Capture Your Judgment,
+// 2026-08-03; branch 7 "A win worth telling" + grouped layout 2026-08-04 —
+// replaces the user-facing Methodology Router screens; every branch runs the
+// CDM engine internally — trigger_type='judgment' for all EXCEPT the win
+// branch, which runs 'win' to feed the Win Column; cards render in two
+// labeled groups, multi-column on desktop via the grid's min column width,
+// collapsing to one column on mobile), then runs the 8-rung ladder
 // (rung 6 is the Entity Map) ending in one branded framework in the
 // expert's own words. Each branch loads a tuned, approved interview script
 // (prompts/capture-*.md); the extraction/synthesis downstream is unchanged.
@@ -35,7 +37,7 @@ import {
   TRIGGER_TYPES,
   METHODS,
   RUNG_LABELS,
-  CAPTURE_TYPES,
+  CAPTURE_GROUPS,
   CAPTURE_PICKER_PROMPT,
   CAPTURE_PICKER_MICROCOPY,
   captureOption,
@@ -44,6 +46,11 @@ import {
   type MethodId,
   type EntityType,
 } from '@/lib/elicitation';
+// Branch 7 — the win closing frame deep-links to the named person's Win
+// Column card. normalizePersonKey is the SAME normalization the Win Column
+// aggregation and /win-column/[person] use, so the link can never point at a
+// key the column wouldn't produce. Pure module, safe in a client page.
+import { normalizePersonKey } from '@/lib/win-column';
 
 type Framework = {
   name: string;
@@ -101,6 +108,18 @@ const WALKED_COPY = {
   doneContested: (otherAuthor: string, managerName: string | null) =>
     `⚡ This one's CONTESTED with ${otherAuthor} — a compare session is queued for ${managerName ?? 'your manager'} to launch.`,
   doneConflictLink: 'View the conflict →',
+};
+
+// ─── Branch 7 — "A win worth telling" (2026-08-04) ─────────────────────────
+// The closing frame closes the recognition loop VISIBLY: it deep-links to the
+// Win Column card of the person(s) the expert named. Fail-open: a genuinely
+// solo win links nothing (the table closing already says the win's in the
+// library). ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S WALK.
+const WIN_COPY = {
+  oneSeen: (name: string) => `${name} just got seen.`,
+  oneLink: 'See their column →',
+  manySeen: 'The people who made this happen just got seen.',
+  manyLink: 'See the Win Column →',
 };
 
 type ResumableSession = {
@@ -577,14 +596,28 @@ export default function CodifyPage() {
 
             <div style={styles.introCard}>
               <p style={styles.pickerPrompt}>{CAPTURE_PICKER_PROMPT}</p>
-              <div style={styles.captureGrid}>
-                {CAPTURE_TYPES.map((c) => (
-                  <button key={c.id} style={styles.captureCard} onClick={() => start(c.id)}>
-                    <span style={styles.captureLabel}>{c.label}</span>
-                    <span style={styles.captureSubline}>{c.subline}</span>
-                  </button>
-                ))}
-              </div>
+              {/* Grouped picker (2026-08-04, approved): seven cards in TWO
+                  labeled row-groups — no extra click, layout-only. The grid
+                  inside each group keeps the minmax(240px,1fr) auto-fill, so
+                  desktop gets multi-column rows and mobile collapses to one
+                  column with no media query. Group headers are
+                  ⚠️ DRAFT COPY — PENDING BRIAN. */}
+              {CAPTURE_GROUPS.map((g) => (
+                <div key={g.label} style={styles.captureGroup}>
+                  <span style={styles.captureGroupLabel}>{g.label}</span>
+                  <div style={styles.captureGrid}>
+                    {g.ids.map((id) => {
+                      const c = captureOption(id);
+                      return (
+                        <button key={c.id} style={styles.captureCard} onClick={() => start(c.id)}>
+                          <span style={styles.captureLabel}>{c.label}</span>
+                          <span style={styles.captureSubline}>{c.subline}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
               <p style={styles.pickerMicrocopy}>{CAPTURE_PICKER_MICROCOPY}</p>
               <p style={styles.nudge}>
                 {'\u{1F512}'} Names of people on your own team are fine to use — they stay
@@ -786,6 +819,41 @@ export default function CodifyPage() {
               </p>
             )}
 
+            {/* Branch 7 — the recognition loop, closed on screen. Only the
+                win branch renders this; the people come from the entity map's
+                role_person entries (field #8 — the Win Column reads the same
+                rows, so this link and the column can never disagree).
+                ⚠️ DRAFT COPY — PENDING BRIAN'S WALK. */}
+            {state.captureType === 'win' &&
+              (() => {
+                const named = state.record.entity_map.filter(
+                  (e) => e.type === 'role_person' && e.name.trim()
+                );
+                if (named.length === 0) return null; // solo win — fail-open, no link
+                if (named.length === 1) {
+                  const person = named[0];
+                  return (
+                    <p style={styles.winSeenLine}>
+                      🏆 {WIN_COPY.oneSeen(person.name)}{' '}
+                      <a
+                        href={`/win-column/${encodeURIComponent(normalizePersonKey(person.name))}`}
+                        style={styles.winSeenLink}
+                      >
+                        {WIN_COPY.oneLink}
+                      </a>
+                    </p>
+                  );
+                }
+                return (
+                  <p style={styles.winSeenLine}>
+                    🏆 {WIN_COPY.manySeen}{' '}
+                    <a href="/win-column" style={styles.winSeenLink}>
+                      {WIN_COPY.manyLink}
+                    </a>
+                  </p>
+                );
+              })()}
+
             {state.record.entity_map.length > 0 && (
               <div style={styles.entityRow}>
                 {state.record.entity_map.map((e, i) => (
@@ -923,9 +991,19 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '12px',
   },
   pickerPrompt: { margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--pine)' },
-  // Six cards. 240px min column width → exactly 2 columns in the 680px
-  // container (a 2×3 grid), and a single column on narrow/mobile viewports —
-  // no media query needed with inline styles.
+  // Grouped picker (2026-08-04): each labeled group stacks its header over
+  // its own card grid.
+  captureGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  captureGroupLabel: {
+    fontSize: '12px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    color: 'var(--muted)',
+  },
+  // Seven cards across two groups. 240px min column width → 2-up rows in the
+  // 680px container, and a single column on narrow/mobile viewports — no
+  // media query needed with inline styles.
   captureGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
@@ -1145,6 +1223,20 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     alignSelf: 'flex-start',
   },
+  // Branch 7 — the "just got seen" recognition line on the win completion
+  // screen. Green family: it carries good news, never a warning.
+  winSeenLine: {
+    margin: 0,
+    fontSize: '14px',
+    lineHeight: 1.55,
+    fontWeight: 600,
+    color: 'var(--ok-text)',
+    backgroundColor: 'var(--ok-bg)',
+    border: '1px solid var(--ok-border)',
+    borderRadius: '8px',
+    padding: '10px 14px',
+  },
+  winSeenLink: { fontSize: '13px', fontWeight: 700, color: 'var(--growth-deep)' },
   entityRow: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
   entityChip: {
     fontSize: '12px',

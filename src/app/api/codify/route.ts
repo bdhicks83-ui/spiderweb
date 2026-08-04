@@ -22,7 +22,7 @@ import { requireCanCodify } from "@/lib/floor-guide";
 import {
   MAX_QUESTIONS,
   OPENING_QUESTION,
-  CAPTURE_BRANCH_TRIGGER,
+  captureTriggerType,
   CAPTURE_BRANCH_METHOD,
   captureOption,
   isCaptureType,
@@ -128,7 +128,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Invalid captureType" }, { status: 400 });
       }
       resolvedCapture = captureType;
-      resolvedTrigger = CAPTURE_BRANCH_TRIGGER;
+      // Table-driven (2026-08-04): 'judgment' for every branch EXCEPT the win
+      // branch, which runs 'win' so its records feed the Win Column — the one
+      // deliberate exception, documented in src/lib/elicitation.ts.
+      resolvedTrigger = captureTriggerType(captureType);
       resolvedMethod = CAPTURE_BRANCH_METHOD;
       openingQuestion = captureOption(captureType).opening;
     } else {

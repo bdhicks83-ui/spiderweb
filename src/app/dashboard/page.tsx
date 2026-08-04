@@ -92,16 +92,26 @@ export default function DashboardPage() {
   const [isContributor, setIsContributor] = useState(false);
   const [floorGuideActive, setFloorGuideActive] = useState(false);
   const [openAsks, setOpenAsks] = useState(0);
-  // Floor Guide C — deep dives waiting on this person (the live target list;
-  // answer or decline both clear it).
-  const [openDives, setOpenDives] = useState(0);
+  // ─── "Needs attention" strip (dashboard simplification, 2026-08-04) ───
+  // Every count here is a SECOND RENDERER of data an existing, verified
+  // endpoint already serves — the strip adds zero new count queries:
+  //   openGapsCount   ← /api/gaps            (the gaps queue's own payload)
+  //   gapAnswers      ← /api/gaps/mine       (GapBadge's exact data path)
+  //   openAsks        ← /api/requests/mine   (CaptureRequestBadge's path)
+  //   ideasWaiting    ← /api/insights        (the review queue's own counts)
+  // Each item skips rendering independently at zero; the whole strip renders
+  // NOTHING when every count is zero (the existing tile doctrine: a
+  // permanently-visible empty queue teaches people to stop looking).
+  const [openGapsCount, setOpenGapsCount] = useState(0);
+  const [gapAnswers, setGapAnswers] = useState(0);
+  const [ideasWaiting, setIdeasWaiting] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
-      await Promise.all([loadProfile(), loadGaps(), loadScore(), loadGrowth(), loadNeedsContext(), loadAdminFlag()]);
+      await Promise.all([loadProfile(), loadGaps(), loadScore(), loadGrowth(), loadNeedsContext(), loadAdminFlag(), loadStrip()]);
       setLoading(false);
     })();
   }, [router]);
@@ -168,18 +178,48 @@ export default function DashboardPage() {
         if (typeof body?.open === 'number') setOpenAsks(body.open);
       }
     } catch {
-      // non-fatal: the tile just doesn't appear
+      // non-fatal: the strip item just doesn't appear
     }
 
-    // Floor Guide C — same shape, same silence on failure.
+    // Strip: ideas waiting for review — admin only, and only fetched for
+    // admins (the endpoint is the review queue's own GET; its counts.waiting
+    // is already verified data). Same badge discipline: silent on failure.
+    if (row?.is_org_admin) {
+      try {
+        const res = await fetch('/api/insights');
+        if (res.ok) {
+          const body = await res.json();
+          if (typeof body?.counts?.waiting === 'number') setIdeasWaiting(body.counts.waiting);
+        }
+      } catch {
+        // non-fatal: the strip item just doesn't appear
+      }
+    }
+  }
+
+  // ─── "Needs attention" strip loads (2026-08-04) ───
+  // Reuses the EXISTING endpoints end to end — see the state block comment.
+  async function loadStrip() {
+    // Open gaps: the same payload the /gaps queue page renders (default fetch
+    // already excludes resolved rows, so the length IS the open count).
     try {
-      const res = await fetch('/api/deep-dives/mine?count=1');
+      const res = await fetch('/api/gaps');
       if (res.ok) {
         const body = await res.json();
-        if (typeof body?.open === 'number') setOpenDives(body.open);
+        if (body?.org === true && Array.isArray(body.gaps)) setOpenGapsCount(body.gaps.length);
       }
     } catch {
-      // non-fatal: the tile just doesn't appear
+      // non-fatal: the strip item just doesn't appear
+    }
+    // New answers for you: GapBadge's exact data path.
+    try {
+      const res = await fetch('/api/gaps/mine?count=1');
+      if (res.ok) {
+        const body = await res.json();
+        if (typeof body?.unread === 'number') setGapAnswers(body.unread);
+      }
+    } catch {
+      // non-fatal: the strip item just doesn't appear
     }
   }
 
@@ -322,6 +362,13 @@ export default function DashboardPage() {
         <div style={styles.titleRow}>
           <h1 style={styles.title}>Your Dashboard</h1>
           <div style={styles.headerLinks}>
+            {/* Dashboard simplification (2026-08-04): the admin console and
+                the value readout lost their tiles in the 4-card collapse but
+                keep quiet doors here — small header links, role-hidden, so
+                "exactly four cards" holds without orphaning either route.
+                (Design call in the build; Brian can move or drop these.) */}
+            {isOrgAdmin && <a href="/admin" style={styles.settingsLink}>Admin</a>}
+            {canRunCampaigns && <a href="/readout" style={styles.settingsLink}>Readout</a>}
             <a href="/settings" style={styles.settingsLink}>Settings</a>
             <button
               style={styles.signOutLink}
@@ -335,72 +382,119 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ⭐ FLOOR GUIDE PHASE A — FIRST TILE ON THE PAGE WHEN IT'S ON.
-            Position is the point: somebody in their second week should not have
-            to scan nine tiles to find the one built for them. Admin-assigned per
-            person, so it is hidden (not shown-and-gated) for everybody else —
-            offering a locked "new hire" door to a twenty-year veteran reads as an
-            insult, which is the opposite of the read-and-gate default the rest of
-            this dashboard uses.
+        {/* ═══ DASHBOARD SIMPLIFICATION (2026-08-04) ═══════════════════════
+            The ~10 feature tiles collapse into ONE "Needs attention" strip +
+            FOUR verb cards, organized by what the person is DOING. No route
+            was removed and no logic was forked: the old routes all stay live
+            (nav badges, the demo script, and muscle memory point at them);
+            the two hub pages (/knowledge, /people) render the existing page
+            components as-is. Role math: a contributor sees TWO cards (Ask +
+            Knowledge), an expert three (+ Capture), a manager/admin four
+            (+ Your people) plus whatever the strip has to say.
+            ⚠️ ALL strip + card copy below is DRAFT — PENDING BRIAN'S WALK. */}
 
-            ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN (Floor Guide A). */}
-        {floorGuideActive && (
+        {/* "Needs attention" — renders ONLY when non-empty (existing tile
+            doctrine: a permanently-visible empty queue teaches people to stop
+            looking). Every count is a second renderer of an existing verified
+            endpoint — see the state block comment; zero new count queries.
+            Each item skips rendering independently at zero. */}
+        {(openGapsCount > 0 || gapAnswers > 0 || openAsks > 0 || ideasWaiting > 0) && (
+          <div style={styles.attentionStrip}>
+            <span style={styles.attentionHeader}>Needs attention</span>
+            <div style={styles.attentionRow}>
+              {openGapsCount > 0 && (
+                <a href="/knowledge?tab=gaps" style={styles.attentionItem}>
+                  🧩 {openGapsCount === 1 ? '1 open gap' : `${openGapsCount} open gaps`}
+                </a>
+              )}
+              {gapAnswers > 0 && (
+                <a href="/gaps/mine" style={styles.attentionItem}>
+                  ✅ {gapAnswers === 1 ? '1 new answer for you' : `${gapAnswers} new answers for you`}
+                </a>
+              )}
+              {openAsks > 0 && (
+                <a href="/requests" style={styles.attentionItem}>
+                  📝 {openAsks === 1 ? '1 asked of you' : `${openAsks} asked of you`}
+                </a>
+              )}
+              {ideasWaiting > 0 && (
+                <a href="/knowledge?tab=ideas" style={styles.attentionItem}>
+                  💡 {ideasWaiting === 1 ? '1 idea waiting for review' : `${ideasWaiting} ideas waiting for review`}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 🌱 CAPTURE — hidden for contributors (existing doctrine: the
+            integrity rule says their input never becomes canonical judgment,
+            and the pattern_records trigger enforces it; offering the session
+            and refusing at the end would read as a bait-and-switch). Absorbs
+            the old Capture tile; the picker now includes Branch 7 (win). */}
+        {!isContributor && (
           <div style={styles.resumeBanner}>
             <div>
-              <h2 style={styles.resumeBannerTitle}>🧑‍🏭 Floor Guide</h2>
+              <h2 style={styles.resumeBannerTitle}>🌱 Capture</h2>
               <p style={styles.resumeBannerSub}>
-                What the people who&apos;ve been doing this a while say matters most — and a
-                private place to ask anything you&apos;re not sure about.
+                A short interview about a problem you know how to solve — or a win worth
+                telling. Your judgment, with your name on it.
               </p>
             </div>
-            <a href="/floor-guide" style={styles.resumeBannerLink}>Open Floor Guide →</a>
+            <a href="/codify" style={styles.resumeBannerLink}>Start a session →</a>
           </div>
         )}
 
-        {/* Codify — HIDDEN for contributors. The integrity rule says their input
-            never becomes canonical judgment, and the pattern_records trigger
-            enforces it; offering the session and refusing at the end would waste
-            somebody's afternoon and read as a bait-and-switch. Phase B is what
-            gives contributor input a real destination. */}
-        {!isContributor && (
+        {/* 💬 ASK — ONE card, the routing decides. Absorbs Ask-the-brain and
+            the Floor Guide tile: a contributor whose Floor Guide seat is on
+            goes to /floor-guide, everyone else to /retrieve. floorGuideActive
+            is the dashboard's existing viewer-context read (own profile row,
+            floor_guide_active AND the seat is open — mirrors
+            resolveFloorGuideMode's required conjunct); no new role check. */}
         <div style={styles.resumeBanner}>
           <div>
-            <h2 style={styles.resumeBannerTitle}>🌱 Capture your judgment</h2>
+            <h2 style={styles.resumeBannerTitle}>💬 Ask</h2>
             <p style={styles.resumeBannerSub}>
-              A short interview about a problem you know how to solve — or one
-              you&apos;ve solved before. Your judgment becomes a framework your whole
-              team can use, with your name on it.
+              Your team&apos;s judgment, the moment you need it.
             </p>
           </div>
-          <a href="/codify" style={styles.resumeBannerLink}>Start a session →</a>
+          <a
+            href={floorGuideActive ? '/floor-guide' : '/retrieve'}
+            style={styles.resumeBannerLink}
+          >
+            Ask →
+          </a>
         </div>
+
+        {/* 🧠 YOUR TEAM'S KNOWLEDGE — the /knowledge hub (Library · Gaps ·
+            Ideas as tabs; Ideas admin-only and hidden inside the hub). */}
+        <div style={styles.resumeBanner}>
+          <div>
+            <h2 style={styles.resumeBannerTitle}>🧠 Your team&apos;s knowledge</h2>
+            <p style={styles.resumeBannerSub}>
+              What&apos;s written down, what&apos;s missing, and what your people are surfacing.
+            </p>
+          </div>
+          <a href="/knowledge" style={styles.resumeBannerLink}>Open →</a>
+        </div>
+
+        {/* 👥 YOUR PEOPLE — managers + org admins only, HIDDEN (never
+            shown-and-gated) for everyone else, per the T1B1 doctrine. The
+            gate is the same is_manager()/is_org_admin() RPC pair the old
+            campaigns/readout tiles used (canRunCampaigns). The /people hub
+            groups Win Column · Coaching · Training · Deep Dives · Campaigns
+            without widening anyone's access — every per-tab gate applies
+            exactly as on the standalone routes. */}
+        {canRunCampaigns && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>👥 Your people</h2>
+              <p style={styles.resumeBannerSub}>
+                Who&apos;s getting named, who needs a hand, and what to teach next.
+              </p>
+            </div>
+            <a href="/people" style={styles.resumeBannerLink}>Open →</a>
+          </div>
         )}
-
-        {/* P-3 — Contextual retrieval (the Copilot moment). Describe a
-            situation, get the org's matching framework(s). */}
-        <div style={styles.resumeBanner}>
-          <div>
-            <h2 style={styles.resumeBannerTitle}>🔍 Ask your team&apos;s brain</h2>
-            <p style={styles.resumeBannerSub}>
-              Describe a situation in plain language — the right codified framework surfaces,
-              in your team&apos;s own words.
-            </p>
-          </div>
-          <a href="/retrieve" style={styles.resumeBannerLink}>Find a framework →</a>
-        </div>
-
-        {/* P-1 Build 2 — shared org library. Solo users with no org yet still
-            see their own completed frameworks here (RLS falls back to
-            own-rows-only), so this is additive, not a behavior change. */}
-        <div style={styles.resumeBanner}>
-          <div>
-            <h2 style={styles.resumeBannerTitle}>📚 Team Library</h2>
-            <p style={styles.resumeBannerSub}>
-              Every completed framework your org has captured, with attribution.
-            </p>
-          </div>
-          <a href="/library" style={styles.resumeBannerLink}>Browse library →</a>
-        </div>
 
         {/* hidden for Track B demo, recoverable — flip HIDE_TRACK_A in src/lib/demo-scope.ts */}
         {!HIDE_TRACK_A && (
@@ -412,176 +506,6 @@ export default function DashboardPage() {
               </p>
             </div>
             <a href="/resume" style={styles.resumeBannerLink}>Generate my resume →</a>
-          </div>
-        )}
-
-        {/* P-7 — the On-Demand Training Studio. The manager+ gate lives in
-            the API route (is_manager()); the link is safe to show to
-            everyone, same "link is visible, the gate is real" pattern as
-            Coaching Watch. */}
-        <div style={styles.resumeBanner}>
-          <div>
-            <h2 style={styles.resumeBannerTitle}>✨ Training Studio</h2>
-            <p style={styles.resumeBannerSub}>
-              Something going wrong right now? Describe it, name who it&apos;s for, and get
-              the right kind of training — with the reasoning shown.
-            </p>
-          </div>
-          <a href="/training-studio" style={styles.resumeBannerLink}>Create training →</a>
-        </div>
-
-        {/* T1B2 — "asked of you." Appears ONLY when something is actually
-            waiting: a permanently-visible empty queue teaches people to stop
-            looking at it. Amber, because it's waiting on them, not a prize. */}
-        {openAsks > 0 && (
-          <div style={styles.resumeBanner}>
-            <div>
-              <h2 style={styles.resumeBannerTitle}>📝 Asked of you</h2>
-              <p style={styles.resumeBannerSub}>
-                {openAsks === 1
-                  ? 'Someone asked you to write down how you handle something.'
-                  : `${openAsks} things your team has asked you to write down.`}
-              </p>
-            </div>
-            <a href="/requests" style={styles.resumeBannerLink}>Take a look →</a>
-          </div>
-        )}
-
-        {/* Floor Guide C — a deep dive waiting on this person. Same only-when-
-            real rule as "Asked of you," and the sub line carries the two facts
-            that make deep dives fair: it's assessed, and it's declinable.
-            ⚠️ Draft copy, pending Brian. */}
-        {openDives > 0 && (
-          <div style={styles.resumeBanner}>
-            <div>
-              <h2 style={styles.resumeBannerTitle}>🔍 A deep dive for you</h2>
-              <p style={styles.resumeBannerSub}>
-                {openDives === 1
-                  ? 'Someone running your account wants to know how you really do something. It says who sees your answer before you type — and you can decline, silently.'
-                  : `${openDives} deep dives waiting. Each says who sees your answer before you type — and you can decline any of them, silently.`}
-              </p>
-            </div>
-            <a href="/deep-dives/mine" style={styles.resumeBannerLink}>Take a look →</a>
-          </div>
-        )}
-
-        {/* T1B2 — capture campaigns. Manager-or-admin only: the tile is the
-            entry point to ASKING people for things, which is a management
-            action. Everyone can still be asked. */}
-        {canRunCampaigns && (
-          <div style={styles.resumeBanner}>
-            <div>
-              <h2 style={styles.resumeBannerTitle}>📣 Capture campaigns</h2>
-              <p style={styles.resumeBannerSub}>
-                Ask specific people specific questions — starting with the ones your team
-                already asked and nobody could answer.
-              </p>
-            </div>
-            <a href="/campaigns" style={styles.resumeBannerLink}>Open →</a>
-          </div>
-        )}
-
-        {/* T1B3 — the value readout. Same manager-or-admin bar as campaigns:
-            it carries no person-level negative so a wider audience would be
-            safe, but a readout circulating before its owner has read it is how
-            a half-finished number reaches a VP. */}
-        {canRunCampaigns && (
-          <div style={styles.resumeBanner}>
-            <div>
-              <h2 style={styles.resumeBannerTitle}>📊 What your team wrote down</h2>
-              <p style={styles.resumeBannerSub}>
-                Built live from your own records — what&apos;s been captured, what people asked for,
-                and where it changed what someone did. Two pages you can forward.
-              </p>
-            </div>
-            <a href="/readout" style={styles.resumeBannerLink}>Open the readout →</a>
-          </div>
-        )}
-
-        {/* P-9 — the shared gaps queue. Org-wide by design: anyone can see what
-            the team can't answer, and anyone can pick one up. No routing in v1. */}
-        <div style={styles.resumeBanner}>
-          <div>
-            <h2 style={styles.resumeBannerTitle}>🧩 Gaps worth filling</h2>
-            <p style={styles.resumeBannerSub}>
-              Questions your team asked that nobody has codified yet — and the ones you asked,
-              waiting on an answer.
-            </p>
-          </div>
-          <a href="/gaps" style={styles.resumeBannerLink}>Open the queue →</a>
-        </div>
-
-        {/* New — manager-only coaching watch. Visible link for everyone, but
-            RLS (is_manager_of()) means it renders empty for anyone with no
-            direct reports on file — same "link is safe to show, RLS is the
-            real gate" pattern as the rest of the app. */}
-        <div style={styles.resumeBanner}>
-          <div>
-            <h2 style={styles.resumeBannerTitle}>🧭 Coaching Watch</h2>
-            <p style={styles.resumeBannerSub}>
-              Private, for your direct reports only — an early signal from concern or friction
-              records, before it becomes a documented failure.
-            </p>
-          </div>
-          <a href="/coaching" style={styles.resumeBannerLink}>Open →</a>
-        </div>
-
-        {/* T1B1 — the admin console. Unlike the other tiles, this one is
-            HIDDEN for non-admins rather than shown-and-gated: everything else
-            in this app is a surface everybody is meant to use (the gate just
-            decides what renders inside it), whereas administering the account
-            is not most people's job and a locked door on the dashboard reads
-            as "there's a part of this you don't get." The real gate is still
-            is_org_admin() in Postgres, checked by every /api/admin route. */}
-        {isOrgAdmin && (
-          <div style={styles.resumeBanner}>
-            <div>
-              <h2 style={styles.resumeBannerTitle}>⚙️ Your account</h2>
-              <p style={styles.resumeBannerSub}>
-                Invite your people, set who reports to whom, and see how far along your
-                setup is.
-              </p>
-            </div>
-            <a href="/admin" style={styles.resumeBannerLink}>Manage →</a>
-          </div>
-        )}
-
-        {/* Floor Guide B — ideas from the floor. Admin-only and HIDDEN for
-            everybody else, following the T1B1 doctrine above: reviewing what the
-            floor surfaced is not most people's job, and a locked door reads worse
-            than no door. The real gate is is_org_admin() in Postgres, checked by
-            /api/insights/[id] on every action.
-            ⚠️ Draft copy, pending Brian. */}
-        {isOrgAdmin && (
-          <div style={styles.resumeBanner}>
-            <div>
-              <h2 style={styles.resumeBannerTitle}>💡 Ideas from your team</h2>
-              <p style={styles.resumeBannerSub}>
-                Things your people know that the library doesn&apos;t. Nothing here is
-                judgment until you say so.
-              </p>
-            </div>
-            <a href="/insights" style={styles.resumeBannerLink}>Review →</a>
-          </div>
-        )}
-
-        {/* Floor Guide C — deep dives. Admin-only and HIDDEN for everybody
-            else, same T1B1 doctrine as the two tiles above. The contributor-
-            facing half is the "A deep dive for you" banner further up; a
-            manager with a report's answer to read reaches /deep-dives through
-            that answer's notification-free surface (the page renders their
-            RLS slice). The real gate is is_org_admin() on the create route.
-            ⚠️ Draft copy, pending Brian. */}
-        {isOrgAdmin && (
-          <div style={styles.resumeBanner}>
-            <div>
-              <h2 style={styles.resumeBannerTitle}>🔍 Deep dives</h2>
-              <p style={styles.resumeBannerSub}>
-                Ask the people doing the work how they actually do it — and see whether the
-                training needs fixing or the playbook has something to learn.
-              </p>
-            </div>
-            <a href="/deep-dives" style={styles.resumeBannerLink}>Open →</a>
           </div>
         )}
 
@@ -977,6 +901,12 @@ const styles: Record<string, React.CSSProperties> = {
   settingsLink: { fontSize: '13px', fontWeight: 600, color: 'var(--muted)', textDecoration: 'none' },
   signOutLink: { fontSize: '13px', fontWeight: 600, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' },
   card: { padding: '24px', backgroundColor: 'var(--white)', border: '1px solid var(--line)', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' },
+  // "Needs attention" strip (2026-08-04) — one horizontal row of amber-family
+  // pills; the strip itself only mounts when at least one count is non-zero.
+  attentionStrip: { display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px 18px', backgroundColor: 'var(--warn-bg)', border: '1px solid var(--warn-border)', borderRadius: '14px' },
+  attentionHeader: { fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--warn-text)' },
+  attentionRow: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
+  attentionItem: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--warn-text)', background: 'var(--white)', border: '1px solid var(--warn-border)', borderRadius: '9999px', padding: '6px 14px', textDecoration: 'none', whiteSpace: 'nowrap' },
   resumeBanner: { padding: '20px 24px', backgroundColor: 'var(--deep-forest)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' },
   resumeBannerTitle: { fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--on-dark)' },
   resumeBannerSub: { fontSize: '13px', color: 'var(--on-dark-soft)', margin: '4px 0 0', lineHeight: 1.5, maxWidth: '360px' },

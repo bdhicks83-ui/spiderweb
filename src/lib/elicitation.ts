@@ -33,6 +33,16 @@
 // and, deliberately, so no branch feeds the Win Column ('win') or Coaching
 // Watch ('concern'/'friction') side channels by accident. The Methodology
 // Router below stays intact in code for in-flight legacy sessions.
+//
+// ⭐ THE ONE DELIBERATE EXCEPTION (Branch 7, 2026-08-04): "A win worth
+// telling" (capture_type='win') runs trigger_type='win' — because the Win
+// Column (src/lib/win-column.ts) aggregates ONLY trigger_type='win' records
+// (wins-only blameless doctrine), and the Aug-3 branching build had left the
+// column with no feed at all. Every OTHER branch still deliberately runs
+// 'judgment' so a person named in a problem/mistake record can never reach a
+// person-level surface. The per-branch trigger is table-driven via the
+// optional `triggerType` column below (default: CAPTURE_BRANCH_TRIGGER) —
+// use captureTriggerType(), never a special-case if.
 
 export type CaptureType =
   | "current_issue"
@@ -40,7 +50,8 @@ export type CaptureType =
   | "strategy"
   | "top_topic"
   | "common_mistake"
-  | "tell_early";
+  | "tell_early"
+  | "win";
 
 export type CaptureOption = {
   id: CaptureType;
@@ -55,6 +66,10 @@ export type CaptureOption = {
   opening: string;
   /** Closing frame shown when the capture completes (approved copy). */
   closing: string;
+  /** trigger_type this branch runs. Omitted = CAPTURE_BRANCH_TRIGGER
+   *  ('judgment'). ONLY the win branch sets this — see the block comment at
+   *  the top of this file for why that exception exists. */
+  triggerType?: TriggerType;
 };
 
 export const CAPTURE_PICKER_PROMPT = "What are you bringing?";
@@ -122,6 +137,34 @@ export const CAPTURE_TYPES: CaptureOption[] = [
     closing:
       "That’s the kind of thing that usually retires with the person who can see it. Not anymore — it’s got your name on it now.",
   },
+  {
+    // Branch 7 (2026-08-04) — the Win Column's feed. The ONE branch that runs
+    // trigger_type='win' (see triggerType below and the file-top comment).
+    // ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S WALK (all four strings).
+    id: "win",
+    label: "🏆 A win worth telling",
+    subline: "Something went right. Capture how — and who made it happen.",
+    promptFile: "capture-win",
+    opening:
+      "Tell me about a win — something that went right recently. Start with what happened.",
+    closing:
+      "Captured. Wins like this usually evaporate by Friday — this one’s in the library for good, with your name on it.",
+    triggerType: "win",
+  },
+];
+
+// ─── Grouped picker layout (2026-08-04, approved) ──────────────────────────
+// Seven cards render in TWO labeled row-groups — no extra click, no new
+// screen, behavior identical (layout-only; branches 1–6 byte-identical).
+// Group headers are ⚠️ DRAFT COPY — PENDING BRIAN (he may rename).
+export type CaptureGroup = { label: string; ids: CaptureType[] };
+
+export const CAPTURE_GROUPS: CaptureGroup[] = [
+  { label: "A moment", ids: ["win", "current_issue", "past_resolution"] },
+  {
+    label: "Your way of working",
+    ids: ["strategy", "top_topic", "common_mistake", "tell_early"],
+  },
 ];
 
 export function isCaptureType(v: unknown): v is CaptureType {
@@ -137,8 +180,16 @@ export function captureBranchPromptFile(t: CaptureType): string {
 }
 
 // Every capture branch runs the CDM engine internally (see block comment).
+// CAPTURE_BRANCH_TRIGGER is the DEFAULT trigger — the win branch overrides it
+// via its table entry's triggerType column (the one deliberate exception;
+// file-top comment has the why). Resolve through captureTriggerType(), never
+// by special-casing a branch id.
 export const CAPTURE_BRANCH_TRIGGER = "judgment" as const;
 export const CAPTURE_BRANCH_METHOD = "cdm" as const;
+
+export function captureTriggerType(t: CaptureType): TriggerType {
+  return captureOption(t).triggerType ?? CAPTURE_BRANCH_TRIGGER;
+}
 
 // ─── Methodology Router (P-0.5 §1) ─────────────────────────────────────────
 
@@ -564,6 +615,22 @@ const CAPTURE_FALLBACK_QUESTIONS: Record<CaptureType, BranchQuestionSet> = {
       "Which process or equipment does this show up in, and which roles tend to hit it? No names needed for who made it — a role is plenty.",
     boundaries:
       "What does this cost when nobody catches it — and is there a situation where what looks like this mistake is actually the right call?",
+  },
+  // Branch 7 (2026-08-04). AAR-flavored, past-tense, narrative-forward like
+  // past_resolution. The entity slot doubles as the ⭐ People Drive fallback —
+  // even a model-failure turn still asks who made the win happen and what
+  // they specifically did (the Win Column context chip comes from that
+  // moment, in the expert's words).
+  win: {
+    classify: "What kind of win was this — and what first told you it was going right?",
+    call: "What was the move that made it work? Walk me through what got done.",
+    signal:
+      "What specifically happened that made this a win — the concrete moment or decision, not just the outcome?",
+    reasoning: "Why did that work — what made it the right move rather than the default one?",
+    entity:
+      "Who was part of making this go right? Name them — even people outside your team — and what each of them specifically did. Names are fine — they stay internal to your org.",
+    boundaries:
+      "Where would this same play NOT work as well — a different team, a different starting point, a different scale?",
   },
   tell_early: {
     classify: "What kind of situation puts you on alert for this?",
