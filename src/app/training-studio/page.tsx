@@ -108,6 +108,16 @@ export default function TrainingStudioPage() {
     })();
   }, [router, load]);
 
+  // "Already Walked" (2026-08-04) — compare-session prefill from a conflict's
+  // X-ray view (?issue=<text>). Same rules as the gap prefill below: silent
+  // on any failure, and only ever seeds an EMPTY box.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const issue = new URLSearchParams(window.location.search).get("issue");
+    if (!issue || !issue.trim()) return;
+    setIssueText((prev) => (prev.trim() ? prev : issue.trim()));
+  }, []);
+
   // P-9 gap prefill. Silent on any failure — a missing prefill must never stop
   // someone creating training the normal way.
   useEffect(() => {

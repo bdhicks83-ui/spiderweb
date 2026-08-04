@@ -1212,6 +1212,83 @@ export async function checkFrameworkConflict(
   });
 }
 
+// ─── "Already Walked" (2026-08-04) — capture-time direction check ──────────
+// One model call, only for a 0.75–0.90 neighbor found right after the FIRST
+// rung's answer folds: is the in-progress capture headed toward the SAME
+// call an existing framework already makes, the OPPOSITE call, or unrelated
+// ground? Single attempt, NO withRetries — this is a BONUS path riding
+// inside the /api/codify/answer request, and an internal retry loop under
+// Vercel's hard 60s ceiling is worse than none (the raw capture must never
+// wait on it). Returns null on any failure; the caller logs the diagnostic
+// and drops the check (baseline fails loudly, bonus fails logged+dropped).
+export type WalkedDirection = "same_call" | "opposing_call" | "unrelated";
+
+export type WalkedJudgement = {
+  direction: WalkedDirection;
+  territory: string | null;
+  reason: string | null;
+};
+
+/** Set on failure so a fail-open is diagnosable from the server log —
+ *  stop_reason · block types · text length · which gate rejected. Never a
+ *  bare "try again" (the standing fail-open rule). */
+export let lastWalkedCheckDiagnostic: string | null = null;
+
+export async function classifyWalkedDirection(
+  captureSituation: string,
+  existingFramework: string
+): Promise<WalkedJudgement | null> {
+  lastWalkedCheckDiagnostic = null;
+  try {
+    const prompt = await loadPrompt("walked-check", {
+      capture_situation: captureSituation,
+      existing_framework: existingFramework,
+    });
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      // Own ceiling, sized for a thinking block + the small JSON verdict
+      // (the standing rule: the budget covers the WHOLE response, never just
+      // the text you want) — 1200, the same proven sizing as
+      // detectCandidateInsight and the P-7 divergence check. elicitNext's
+      // 6144 is untouched.
+      max_tokens: 1200,
+      messages: [{ role: "user", content: prompt }],
+    });
+    // Never assume content[0] is text — thinking blocks come first.
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) {
+      lastWalkedCheckDiagnostic = `no text block (stop_reason=${msg.stop_reason}, blocks=[${(
+        msg.content as { type: string }[]
+      )
+        .map((b) => b.type)
+        .join(", ")}])`;
+      return null;
+    }
+    const parsed = parseJsonLoose(text) as {
+      direction?: unknown;
+      territory?: unknown;
+      reason?: unknown;
+    } | null;
+    if (!parsed) {
+      lastWalkedCheckDiagnostic = `unparseable JSON (text length=${text.length}, snippet=${JSON.stringify(
+        text.slice(0, 160)
+      )})`;
+      return null;
+    }
+    const d = parsed.direction;
+    if (d !== "same_call" && d !== "opposing_call" && d !== "unrelated") {
+      lastWalkedCheckDiagnostic = `direction gate rejected value=${JSON.stringify(d)}`;
+      return null;
+    }
+    const str = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() ? v.trim() : null;
+    return { direction: d, territory: str(parsed.territory), reason: str(parsed.reason) };
+  } catch (e) {
+    lastWalkedCheckDiagnostic = `threw: ${e instanceof Error ? e.message : String(e)}`;
+    return null;
+  }
+}
+
 // Depth gate for conflict RESOLUTIONS — the belief-revision gate pattern
 // reapplied where a resolution changes a framework (sharpen_boundaries /
 // reconcile / supersede; escalate is a handoff and skips the gate). A

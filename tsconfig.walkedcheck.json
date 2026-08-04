@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/claude.ts",
+    "src/lib/walked-check.ts",
+    "src/lib/conflict.ts",
+    "src/app/api/codify/route.ts",
+    "src/app/api/codify/answer/route.ts",
+    "src/app/api/codify/walked/route.ts",
+    "src/app/codify/page.tsx",
+    "src/app/conflicts/[id]/page.tsx",
+    "src/app/training-studio/page.tsx"
+  ]
+}

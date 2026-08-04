@@ -114,7 +114,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { triggerType, method, captureType } = body ?? {};
+    const { triggerType, method, captureType, gapEntry } = body ?? {};
 
     // Capture branch path (the picker) vs legacy Methodology Router path.
     // Exactly one shape must be valid; the branch path derives trigger/method
@@ -179,6 +179,20 @@ export async function POST(req: Request) {
       entity_map: [],
     };
     if (resolvedCapture) insertRow.capture_type = resolvedCapture;
+    // "Already Walked" (2026-08-04): a /codify?gap= session SKIPS the
+    // capture-time duplicate/conflict check entirely — the gap exists because
+    // retrieval already failed at 0.75, so a >=0.90 duplicate is
+    // near-impossible and the interrupt would be noise. Pre-writing the latch
+    // here means /api/codify/answer never runs the check for this session.
+    // Campaign entry (?request=) sends no flag and keeps the check.
+    // NOTE: needs supabase/walked-check.sql run FIRST (deploy-order rule).
+    if (gapEntry === true) {
+      insertRow.walked_check = {
+        status: "skipped",
+        skip_reason: "gap_entry",
+        checked_at: nowIso,
+      };
+    }
     const { data: record, error: insertError } = await supabase
       .from("pattern_records")
       .insert(insertRow)

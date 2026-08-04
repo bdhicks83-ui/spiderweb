@@ -217,6 +217,19 @@ export default function ConflictDetailPage() {
           <SidePanel record={conflict.b} highlight={conflict.superseding_record_id === conflict.b?.id} />
         </div>
 
+        {/* ─── "Already Walked" (2026-08-04) — the paired compare-session
+            suggestion. Renders ONLY on conflicts the capture-time check
+            opened (detected_by walked-check-v1) so existing conflicts read
+            exactly as before. Human-gated: nothing is scheduled or sent —
+            a manager/admin (or either expert) launches it from the Training
+            Studio, pre-filled with the boundary framing (the Discussion
+            guide format: two groups who see it differently → a shared
+            answer; name both · the deciding tell · never average).
+            ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S WALK. */}
+        {isOpen && conflict.detected_by === "walked-check-v1" && (
+          <CompareSessionSuggestion conflict={conflict} />
+        )}
+
         {!isOpen && (
           <div style={styles.resolvedBox}>
             <div style={styles.resolvedTitle}>
@@ -316,6 +329,46 @@ export default function ConflictDetailPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// "Already Walked" — the concrete action that resolves the boundary WITH the
+// other expert, not around them. Builds a Training Studio prefill in the
+// Discussion-guide register and hands it to a human to launch.
+function CompareSessionSuggestion({ conflict }: { conflict: ConflictDetail }) {
+  const aAuthor = conflict.a?.author?.display_name ?? "One expert";
+  const bAuthor = conflict.b?.author?.display_name ?? "another expert";
+  const aTitle = conflict.a?.framework?.name ?? "their framework";
+  const bTitle = conflict.b?.framework?.name ?? "their framework";
+  const ground = conflict.territory ?? "the same ground";
+  // ⚠️ DRAFT — the pre-filled issue text a manager lands on in the Studio.
+  const issueText =
+    `Two of our experts draw the line in different places on ${ground}: ` +
+    `${aAuthor}'s "${aTitle}" and ${bAuthor}'s "${bTitle}". ` +
+    `Run a compare session that puts both in the room: name both calls fairly, in each expert's own terms; ` +
+    `make the deciding tell explicit — the observable condition that says which framework applies; ` +
+    `and practice both sides of that boundary. Never average the two into one mushy middle rule — ` +
+    `knowing the boundary IS the expertise.`;
+  return (
+    <div style={styles.compareBox}>
+      <div style={styles.compareTitle}>🤝 Set up the compare — teach the boundary</div>
+      <p style={styles.compareBody}>
+        {aAuthor} and {bAuthor} drew this line in different places. That&apos;s
+        expertise, not error — and it&apos;s teachable. The move is a compare
+        session: get both calls named, find the deciding tell that says which
+        one applies, and never average them.
+      </p>
+      <a
+        href={`/training-studio?issue=${encodeURIComponent(issueText)}`}
+        style={styles.compareButton}
+      >
+        Draft the compare session in the Training Studio →
+      </a>
+      <p style={styles.compareFootnote}>
+        Nothing is scheduled or sent yet — a manager (or either expert) launches
+        this from the Studio, and creating training stays a manager action.
+      </p>
     </div>
   );
 }
@@ -437,6 +490,28 @@ const styles: Record<string, React.CSSProperties> = {
   },
   panelText: { fontSize: "14px", margin: 0, lineHeight: 1.5 },
   panelList: { margin: 0, paddingLeft: 18, fontSize: "14px", lineHeight: 1.5 },
+  compareBox: {
+    background: "var(--white)",
+    border: "1px solid var(--line)",
+    borderLeft: "4px solid var(--new-leaf)",
+    borderRadius: 12,
+    padding: "16px 18px",
+    marginBottom: 24,
+  },
+  compareTitle: { fontSize: "15px", fontWeight: 700, color: "var(--pine)", marginBottom: 6 },
+  compareBody: { fontSize: "14px", color: "var(--pine-soft)", margin: "0 0 12px", lineHeight: 1.55 },
+  compareButton: {
+    display: "inline-block",
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "var(--white)",
+    background: "var(--growth)",
+    border: "none",
+    borderRadius: 8,
+    padding: "10px 16px",
+    textDecoration: "none",
+  },
+  compareFootnote: { fontSize: "12px", color: "var(--muted)", margin: "10px 0 0", lineHeight: 1.5 },
   resolvedBox: {
     background: "var(--ok-bg)",
     border: "1px solid var(--ok-border)",

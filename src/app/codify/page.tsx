@@ -69,6 +69,40 @@ type PatternRecord = {
 
 type Turn = { role: 'you' | 'engine'; text: string };
 
+// ─── "Already Walked" (2026-08-04) ──────────────────────────────────────────
+// The one-per-session capture-time check. A duplicate shows a SOFT inline
+// card between interviewer turns (never a modal, never a block); a conflict
+// shows a one-line heads-up and the capture continues — the value beat lands
+// on the completion screen. All strings below are
+// ⚠️ DRAFT CUSTOMER-FACING COPY — PENDING BRIAN'S WALK.
+type WalkedDuplicate = { kind: 'duplicate'; matchId: string; title: string; author: string };
+type WalkedConflict = { kind: 'conflict'; title: string; author: string };
+type WalkedDone = {
+  kind: 'conflict';
+  conflictId: string | null;
+  otherTitle: string;
+  otherAuthor: string;
+  managerName: string | null;
+};
+
+const WALKED_COPY = {
+  cardKicker: "Someone's walked this ground.",
+  cardBody: (author: string, title: string) =>
+    `${author}'s “${title}” looks like it covers this.`,
+  view: 'View it',
+  keepGoing: "Mine's different — keep going",
+  savesTime: 'Good — that saves me time',
+  conflictNotice: (author: string) =>
+    `⚡ Heads up — ${author} sees this one differently. That's worth capturing: finish yours, and we'll set up the compare.`,
+  savedTitle: 'Good call — that time is yours back.',
+  savedBody: (author: string, title: string) =>
+    `${author}'s “${title}” already covers this ground, so nothing was recorded from this session. Spotting that early is the system working.`,
+  savedView: 'View the framework →',
+  doneContested: (otherAuthor: string, managerName: string | null) =>
+    `⚡ This one's CONTESTED with ${otherAuthor} — a compare session is queued for ${managerName ?? 'your manager'} to launch.`,
+  doneConflictLink: 'View the conflict →',
+};
+
 type ResumableSession = {
   recordId: string;
   question: string;
@@ -139,6 +173,12 @@ export default function CodifyPage() {
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [now, setNow] = useState<number>(0);
   const [pausedNotice, setPausedNotice] = useState(false);
+  // Already Walked — card / one-liner / graceful-exit / completion-line state.
+  const [walkedCard, setWalkedCard] = useState<WalkedDuplicate | null>(null);
+  const [walkedNotice, setWalkedNotice] = useState<WalkedConflict | null>(null);
+  const [walkedSaved, setWalkedSaved] = useState<WalkedDuplicate | null>(null);
+  const [walkedDone, setWalkedDone] = useState<WalkedDone | null>(null);
+  const [walkedClosing, setWalkedClosing] = useState(false);
 
   const busy =
     state.phase === 'starting' ||
@@ -176,7 +216,56 @@ export default function CodifyPage() {
     setState({ phase: 'error', message });
   }
 
+  // One click on the duplicate card. Fire-and-forget record-keeping for
+  // "viewed"; "kept_going" collapses the card for good (never re-shown this
+  // session); "saved_time" ends the session gracefully — positive frame,
+  // nothing negative recorded.
+  async function walkedAct(
+    recordId: string,
+    action: 'viewed' | 'kept_going' | 'saved_time'
+  ) {
+    if (action === 'kept_going') setWalkedCard(null);
+    if (action === 'saved_time') {
+      if (walkedClosing) return;
+      setWalkedClosing(true);
+    }
+    try {
+      const res = await fetch('/api/codify/walked', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recordId, action }),
+      });
+      if (action === 'saved_time') {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setWalkedClosing(false);
+          setAnswerError(
+            data.error || 'Could not close the session — you can just keep going.'
+          );
+          return;
+        }
+        setWalkedSaved(walkedCard);
+        setWalkedCard(null);
+        setWalkedNotice(null);
+        setWalkedClosing(false);
+        setTranscript([]);
+        setInput('');
+        setState({ phase: 'picker', resumable: null });
+      }
+    } catch {
+      if (action === 'saved_time') {
+        setWalkedClosing(false);
+        setAnswerError('Could not close the session — you can just keep going.');
+      }
+      // viewed / kept_going are best-effort — the card already behaved.
+    }
+  }
+
   async function resumeSession(r: ResumableSession) {
+    setWalkedCard(null);
+    setWalkedNotice(null);
+    setWalkedSaved(null);
+    setWalkedDone(null);
     setTranscript([
       {
         role: 'engine',
@@ -208,13 +297,25 @@ export default function CodifyPage() {
     setPdfError(null);
     setAnswerError(null);
     setPausedNotice(false);
+    setWalkedCard(null);
+    setWalkedNotice(null);
+    setWalkedSaved(null);
+    setWalkedDone(null);
     setState({ phase: 'starting' });
+
+    // Already Walked: a ?gap= arrival skips the capture-time check entirely
+    // (retrieval already failed at 0.75 for that gap — the interrupt would be
+    // noise). Same window.location read the banners use, same reason: no
+    // useSearchParams Suspense restructuring for /codify.
+    const gapEntry =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).has('gap');
 
     try {
       const res = await fetch('/api/codify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ captureType }),
+        body: JSON.stringify({ captureType, gapEntry }),
       });
       const data = await res.json();
       if (res.status === 401) return fail('Please log in to capture your judgment.');
@@ -271,6 +372,11 @@ export default function CodifyPage() {
       setAnswerError(null);
 
       if (!data.done) {
+        // Already Walked: at most one turn ever carries this. A duplicate
+        // shows the soft card; a conflict shows the one-liner and the
+        // capture just continues.
+        if (data.walked?.kind === 'duplicate') setWalkedCard(data.walked);
+        else if (data.walked?.kind === 'conflict') setWalkedNotice(data.walked);
         setTranscript((t) => [...t, { role: 'engine', text: data.question }]);
         setState({
           phase: 'interview',
@@ -288,6 +394,9 @@ export default function CodifyPage() {
         return;
       }
 
+      // Already Walked conflict path: the completion screen's extra line.
+      setWalkedCard(null);
+      setWalkedDone(data.walked ?? null);
       setState({
         phase: 'done',
         recordId: state.recordId,
@@ -421,6 +530,24 @@ export default function CodifyPage() {
           </p>
         )}
 
+        {/* Already Walked — graceful exit after "that saves me time". Positive
+            frame: their time was respected, nothing negative recorded.
+            ⚠️ DRAFT COPY — PENDING BRIAN'S WALK. */}
+        {walkedSaved && state.phase === 'picker' && (
+          <div style={styles.walkedSavedCard}>
+            <p style={styles.walkedSavedTitle}>✅ {WALKED_COPY.savedTitle}</p>
+            <p style={styles.walkedSavedBody}>
+              {WALKED_COPY.savedBody(walkedSaved.author, walkedSaved.title)}
+            </p>
+            <a
+              href={`/library/${walkedSaved.matchId}`}
+              style={styles.walkedLink}
+            >
+              {WALKED_COPY.savedView}
+            </a>
+          </div>
+        )}
+
         {state.phase === 'picker' && (
           <>
             {(() => {
@@ -547,6 +674,51 @@ export default function CodifyPage() {
           </div>
         )}
 
+        {/* Already Walked — soft inline card between interviewer turns. NOT a
+            modal, NOT a block: the input below stays live the whole time.
+            ⚠️ DRAFT COPY — PENDING BRIAN'S WALK. */}
+        {interviewing && walkedCard && (
+          <div style={styles.walkedCard}>
+            <span style={styles.walkedKicker}>{WALKED_COPY.cardKicker}</span>
+            <p style={styles.walkedBody}>
+              {WALKED_COPY.cardBody(walkedCard.author, walkedCard.title)}
+            </p>
+            <div style={styles.actionRow}>
+              <a
+                href={`/library/${walkedCard.matchId}`}
+                target="_blank"
+                rel="noreferrer"
+                style={styles.walkedViewButton}
+                onClick={() => walkedAct(state.recordId, 'viewed')}
+              >
+                {WALKED_COPY.view}
+              </a>
+              <button
+                style={styles.walkedGhostButton}
+                onClick={() => walkedAct(state.recordId, 'kept_going')}
+              >
+                {WALKED_COPY.keepGoing}
+              </button>
+              <button
+                style={styles.walkedGhostButton}
+                disabled={walkedClosing}
+                onClick={() => walkedAct(state.recordId, 'saved_time')}
+              >
+                {walkedClosing ? 'Closing…' : WALKED_COPY.savesTime}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Already Walked — conflict heads-up: ONE line, capture continues,
+            no further interruption (the value beat is at completion).
+            ⚠️ DRAFT COPY — PENDING BRIAN'S WALK. */}
+        {interviewing && walkedNotice && (
+          <p style={styles.walkedNotice}>
+            {WALKED_COPY.conflictNotice(walkedNotice.author)}
+          </p>
+        )}
+
         {interviewing && (
           <>
             <div style={styles.inputCol}>
@@ -597,6 +769,22 @@ export default function CodifyPage() {
                 ? `✅ ${captureOption(state.captureType).closing}`
                 : `✅ Pattern captured — ${METHODS[state.method].name}, all eight fields including entities and boundaries.`}
             </p>
+
+            {/* Already Walked conflict path — the one extra completion line.
+                ⚠️ DRAFT COPY — PENDING BRIAN'S WALK. */}
+            {walkedDone && (
+              <p style={styles.walkedContestedLine}>
+                {WALKED_COPY.doneContested(walkedDone.otherAuthor, walkedDone.managerName)}{' '}
+                {walkedDone.conflictId && (
+                  <a
+                    href={`/conflicts/${walkedDone.conflictId}`}
+                    style={styles.walkedLink}
+                  >
+                    {WALKED_COPY.doneConflictLink}
+                  </a>
+                )}
+              </p>
+            )}
 
             {state.record.entity_map.length > 0 && (
               <div style={styles.entityRow}>
@@ -1036,5 +1224,80 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'var(--paper-2)',
     border: '1px solid var(--line)',
     borderRadius: '10px',
+  },
+  // ─── Already Walked (2026-08-04) ─────────────────────────────────────────
+  // Soft, never alarming: the duplicate card reads like a helpful colleague,
+  // the conflict notice borrows the warn palette but stays one line.
+  walkedCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '14px 18px',
+    backgroundColor: 'var(--paper-2)',
+    border: '1px solid var(--line)',
+    borderLeft: '4px solid var(--new-leaf)',
+    borderRadius: '10px',
+  },
+  walkedKicker: {
+    fontSize: '12px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    color: 'var(--growth-deep)',
+  },
+  walkedBody: { margin: 0, fontSize: '14px', lineHeight: 1.55, color: 'var(--pine)' },
+  walkedViewButton: {
+    padding: '8px 16px',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'var(--white)',
+    backgroundColor: 'var(--growth)',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    display: 'inline-block',
+  },
+  walkedGhostButton: {
+    padding: '8px 10px',
+    fontSize: '13px',
+    color: 'var(--pine-soft)',
+    background: 'none',
+    border: '1px solid var(--line)',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  walkedNotice: {
+    margin: 0,
+    fontSize: '13px',
+    lineHeight: 1.5,
+    color: 'var(--warn-text)',
+    backgroundColor: 'var(--warn-bg)',
+    border: '1px solid var(--warn-border)',
+    borderRadius: '8px',
+    padding: '10px 12px',
+  },
+  walkedSavedCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '14px 18px',
+    backgroundColor: 'var(--ok-bg)',
+    border: '1px solid var(--ok-border)',
+    borderRadius: '10px',
+  },
+  walkedSavedTitle: { margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--ok-text)' },
+  walkedSavedBody: { margin: 0, fontSize: '14px', lineHeight: 1.55, color: 'var(--ok-text)' },
+  walkedLink: { fontSize: '13px', fontWeight: 600, color: 'var(--growth-deep)' },
+  walkedContestedLine: {
+    margin: 0,
+    fontSize: '14px',
+    lineHeight: 1.55,
+    color: 'var(--warn-text)',
+    backgroundColor: 'var(--warn-bg)',
+    border: '1px solid var(--warn-border)',
+    borderRadius: '8px',
+    padding: '10px 14px',
   },
 };
