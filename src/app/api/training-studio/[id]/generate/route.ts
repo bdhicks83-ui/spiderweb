@@ -10,9 +10,11 @@
 // scenario really is setup + decision points + debrief.
 //
 // ⚠️ WHY THIS IS THREE CALLS, NOT ONE (measured on the deployed app, July 26):
-// Vercel kills an invocation at 60s with FUNCTION_INVOCATION_TIMEOUT, and
-// maxDuration=60 is already the ceiling on this plan. Writing all three
-// audience altitudes in one model call took ~55-60s and died on the wall. So:
+// Under the old maxDuration=60 cap, writing all three audience altitudes in
+// one model call took ~55-60s and died at Vercel's wall with
+// FUNCTION_INVOCATION_TIMEOUT. maxDuration is now 300 (Aug 5) because even
+// single-altitude calls were 504ing, but the three-call shape stays — each
+// call is short, retryable, and nothing half-built is ever stored. So:
 //
 //   1. "floor"      generates the substance and INSERTS the version row.
 //   2. "supervisor" re-frames the floor version and patches it in.
@@ -46,7 +48,7 @@ import {
 } from "@/lib/training-studio";
 import { computeRoutingTargets } from "@/lib/training-routing";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type RequestRow = {
   id: string;

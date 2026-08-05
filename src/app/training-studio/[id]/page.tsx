@@ -206,6 +206,10 @@ export default function TrainingStudioDetailPage({
   const [altitude, setAltitude] = useState<"floor" | "supervisor" | "exec">("floor");
   const [enhancement, setEnhancement] = useState("");
   const [genStep, setGenStep] = useState<string | null>(null);
+  // Generation failures render NEXT TO the generate button, not in the
+  // top-of-page error slot — a 504 after a long wait must be visible where
+  // the leader is actually looking. Cleared on the next click.
+  const [genError, setGenError] = useState<string | null>(null);
 
   useEffect(() => {
     params.then((p) => setId(p.id));
@@ -278,6 +282,7 @@ export default function TrainingStudioDetailPage({
     setBusy("generate");
     setMessage(null);
     setError(null);
+    setGenError(null);
     const steps: { altitude: string; label: string }[] = [
       { altitude: "floor", label: "Writing the floor version…" },
       { altitude: "supervisor", label: "Framing it for supervisors…" },
@@ -291,17 +296,24 @@ export default function TrainingStudioDetailPage({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ altitude: step.altitude }),
         });
-        const json = await res.json();
+        // A gateway 504 carries an HTML body, not JSON — parse defensively so
+        // a timeout lands in the !res.ok branch instead of the network catch.
+        const json = await res.json().catch(() => null);
         if (!res.ok) {
           // Whatever was written already is kept — the leader retries from
           // where it stopped rather than starting over.
-          setError(json.error || "That didn't go through.");
+          setGenError(
+            json?.error ||
+              (res.status === 504
+                ? "Generation timed out — try again."
+                : "That didn't go through — try again.")
+          );
           break;
         }
-        setMessage(json.message ?? null);
+        setMessage(json?.message ?? null);
       }
     } catch {
-      setError("That didn't go through.");
+      setGenError("Generation hit a network error — try again.");
     } finally {
       setGenStep(null);
       setBusy(null);
@@ -546,14 +558,17 @@ export default function TrainingStudioDetailPage({
             </div>
 
             {!training && data.can_act && (
-              <button
-                type="button"
-                style={styles.primaryButton}
-                disabled={busy !== null}
-                onClick={generateAll}
-              >
-                {busy === "generate" ? (genStep ?? "Writing it…") : "Build the training"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  style={styles.primaryButton}
+                  disabled={busy !== null}
+                  onClick={generateAll}
+                >
+                  {busy === "generate" ? (genStep ?? "Writing it…") : "Build the training"}
+                </button>
+                {genError && <p style={styles.errorText}>{genError}</p>}
+              </>
             )}
           </>
         )}
@@ -594,6 +609,7 @@ export default function TrainingStudioDetailPage({
             </div>
 
             {genStep && <p style={styles.strategyLine}>{genStep}</p>}
+            {genError && <p style={styles.errorText}>{genError}</p>}
 
             {r.status === "generated" && data.can_act && (
               <div style={styles.approveBar}>
