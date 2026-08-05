@@ -8,6 +8,10 @@ import path from "path";
 // timeout + maxRetries:0 — a stalled connection fails in 60s instead of
 // hanging silently for up to the SDK's 10-minute default; withRetries()
 // above handles our own retries with backoff.
+// ⚠️ 60s fits routes whose maxDuration is 60. Any call made from a
+// longer-wall route MUST override per request (create(body, { timeout }))
+// or the SDK kills it at 60s no matter what the route's wall allows —
+// that mismatch was the Aug 5 Training Studio "generator flaked" outage.
 const anthropic = new Anthropic({ timeout: 60_000, maxRetries: 0 }); // reads ANTHROPIC_API_KEY from env
 
 // Claude can return a "thinking" block before the actual "text" block.
@@ -2063,16 +2067,24 @@ export async function generateFormatTraining(
   });
   return withRetries("generateFormatTraining", async () => {
     try {
-      const msg = await anthropic.messages.create({
-        model: "claude-sonnet-5",
-        // ⭐ TOKEN BUDGET COVERS THE THINKING BLOCK, NOT JUST THE OUTPUT
-        // (standing P-7 gotcha). The richer artifact (450-900 words + JSON
-        // wrapper) plus reasoning needs real headroom; a bigger ceiling costs
-        // no wall-clock because the model stops when done. Single attempt,
-        // fail open — the timeout is the real constraint, never the tokens.
-        max_tokens: 12000,
-        messages: [{ role: "user", content: prompt }],
-      });
+      const msg = await anthropic.messages.create(
+        {
+          model: "claude-sonnet-5",
+          // ⭐ TOKEN BUDGET COVERS THE THINKING BLOCK, NOT JUST THE OUTPUT
+          // (standing P-7 gotcha). The richer artifact (450-900 words + JSON
+          // wrapper) plus reasoning needs real headroom; a bigger ceiling costs
+          // no wall-clock because the model stops when done. Single attempt,
+          // fail open — the timeout is the real constraint, never the tokens.
+          max_tokens: 12000,
+          messages: [{ role: "user", content: prompt }],
+        },
+        // The shared client's 60s timeout is sized for routes with a 60s
+        // maxDuration. This call runs only from the Studio generate route
+        // (maxDuration 300) and single-altitude writes routinely exceed 60s —
+        // that mismatch was the Aug 5 "generator flaked" outage. 240s keeps
+        // headroom inside the 300s wall for grounding + the insert.
+        { timeout: 240_000 }
+      );
       const text = firstText(msg.content as { type: string; text?: string }[]);
       lastFormatGenerationDiagnostic = {
         stopReason: msg.stop_reason ?? null,
@@ -2131,13 +2143,18 @@ export async function reframeTrainingAltitude(input: {
     floor_body: input.floorBody,
   });
   return withRetries(`reframeTrainingAltitude:${input.altitude}`, async () => {
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-5",
-      // Sized for thinking + output (standing P-7 gotcha): the floor body this
-      // re-frames is now up to ~900 words of input, and headroom is free.
-      max_tokens: 8000,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const msg = await anthropic.messages.create(
+      {
+        model: "claude-sonnet-5",
+        // Sized for thinking + output (standing P-7 gotcha): the floor body this
+        // re-frames is now up to ~900 words of input, and headroom is free.
+        max_tokens: 8000,
+        messages: [{ role: "user", content: prompt }],
+      },
+      // Same 300s-route override as generateFormatTraining — the shared
+      // client's 60s timeout would kill a slow re-frame mid-write.
+      { timeout: 240_000 }
+    );
     const text = firstText(msg.content as { type: string; text?: string }[]);
     if (!text) return null;
     const parsed = parseJsonLoose(text);
