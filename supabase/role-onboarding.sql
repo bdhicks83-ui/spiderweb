@@ -51,6 +51,17 @@ create policy "own onboarding progress read" on onboarding_progress
 -- ═══ 3. Backfill — existing seats are exempt from auto-routing ══════════════
 -- Mirrors resolveTrackKey() in src/lib/onboarding-tracks.ts. Change one,
 -- change BOTH.
+--
+-- ⚠️ 2026-08-05 — SEAT PINS POSTDATE THIS BACKFILL (which already ran, one
+-- time — do NOT re-run it). resolveTrackKey() now has a step 0 ABOVE the
+-- is_org_admin check: three AWIP exec-demo seats are pinned BY EMAIL to the
+-- 'awip-leadership' track (SEAT_TRACK_PINS in src/lib/onboarding-tracks.ts —
+-- brian.montes@ / joe.paparella@ / greg.lusty@awip-demo.example). The CASE
+-- below deliberately does NOT model the pins: it is kept as the historical
+-- record of what ran. If this backfill is ever adapted for a future run, the
+-- pin check must be added above the is_org_admin arm — the mirror rule still
+-- stands. The track check constraint was extended to include
+-- 'awip-leadership' by supabase/awip-leadership-track.sql.
 
 insert into onboarding_progress (user_id, track, steps_done, completed_at)
 select

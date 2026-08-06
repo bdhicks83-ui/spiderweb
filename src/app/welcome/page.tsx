@@ -8,9 +8,19 @@
 // expandable "peek under the hood" panel. The four tracks differ only in
 // their definitions — steps, emphasis, depth — which is the whole design.
 //
-// ROUTING. The dashboard auto-routes a brand-new seat here once (see the
-// needsOnboarding contract in /api/welcome). On mount, this page immediately
-// records "seen" (steps_done 0), so nobody is ever force-routed twice.
+// ROUTING (2026-08-05 forced click-through). The dashboard auto-routes here
+// until the person's own track is COMPLETE (see the needsOnboarding contract
+// in /api/welcome), and while incomplete this page renders NO exits: no skip
+// line, no step deep-links, no track switcher, and a bare (non-linking) brand
+// header. Every seat clicks through its whole track once; after completion,
+// all of it comes back (deep links, switcher, replay, dashboard links).
+// On mount, this page still records "seen" (steps_done 0) — progress resume
+// unchanged.
+//
+// PER-SEAT STEPS (2026-08-05). A step may carry seatVariants keyed by account
+// email (awip-leadership Step 1 greets Montes/Paparella/Lusty by name) —
+// resolved through resolveStepForSeat() with the email /api/welcome returns.
+// Steps without variants pass through untouched.
 //
 // ⭐ THE SWITCH IS VIEW-ONLY, STRUCTURALLY. "?view=<track>" renders any other
 // track — the trust feature (an exec reading the operator's "nobody's grading
@@ -29,6 +39,7 @@ import {
   TRACKS,
   TRACK_KEYS,
   isTrackKey,
+  resolveStepForSeat,
   type TrackDef,
   type TrackKey,
   type TrackStep,
@@ -40,6 +51,7 @@ type Status = {
   completedAt: string | null;
   seen: boolean;
   displayName: string | null;
+  email: string | null;
   floorGuideActive: boolean;
   canSeeReadout: boolean;
 };
@@ -259,16 +271,21 @@ function StepCard({
   step,
   floorGuideActive,
   canSeeReadout,
+  linksLocked,
 }: {
   step: TrackStep;
   floorGuideActive: boolean;
   canSeeReadout: boolean;
+  /** 2026-08-05 forced click-through: while the person's own track is
+   *  incomplete, no step renders a link out of the wizard — for everyone. */
+  linksLocked: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
   // Deep-link gates: never render a link that would 403 (readout) or land on
   // a surface that isn't switched on for this seat (floor guide → /retrieve).
   let link = step.link ?? null;
+  if (linksLocked) link = null;
   if (link?.gate === "readout" && !canSeeReadout) link = null;
   if (link?.gate === "floorGuide" && !floorGuideActive) {
     link = { ...link, href: "/retrieve" };
@@ -370,7 +387,14 @@ export default function WelcomePage() {
   }, [router]);
 
   const ownKey = status?.track ?? null;
-  const viewing = !!(viewKey && ownKey && viewKey !== ownKey);
+  // 2026-08-05 forced click-through: everything that leads out of the wizard
+  // (skip, deep links, the track switcher, even the header's home link) stays
+  // hidden until the person's OWN track is complete. finishedLocally counts —
+  // the moment completion is recorded, the closing card's exits appear.
+  const ownDone = !!status?.completedAt || finishedLocally;
+  // Viewing another track is a post-completion feature now — an incomplete
+  // seat typing ?view= by hand still gets their own track.
+  const viewing = ownDone && !!(viewKey && ownKey && viewKey !== ownKey);
   const activeKey: TrackKey | null = viewing ? viewKey : ownKey;
   const def: TrackDef | null = activeKey ? TRACKS[activeKey] : null;
 
@@ -433,7 +457,7 @@ export default function WelcomePage() {
     return (
       <div style={styles.page}>
         <div style={styles.shell}>
-          <BrandHeader />
+          <BrandHeader bare />
           <p style={styles.center}>{loadError}</p>
         </div>
       </div>
@@ -444,7 +468,7 @@ export default function WelcomePage() {
     return (
       <div style={styles.page}>
         <div style={styles.shell}>
-          <BrandHeader />
+          <BrandHeader bare />
           <p style={styles.center}>Loading…</p>
         </div>
       </div>
@@ -452,13 +476,18 @@ export default function WelcomePage() {
   }
 
   const showClosing = finishedLocally || (completed && !viewing);
-  const step = def.steps[Math.min(index, def.steps.length - 1)];
+  // Per-seat step resolution (awip-leadership Step 1A/1B/1C) — identity for
+  // every step without seatVariants.
+  const step = resolveStepForSeat(
+    def.steps[Math.min(index, def.steps.length - 1)],
+    status.email
+  );
   const fin = finishHref(def);
 
   return (
     <div style={styles.page}>
       <div style={styles.shell}>
-        <BrandHeader />
+        <BrandHeader bare={!ownDone} />
 
         <h1 style={styles.tagline}>{def.tagline}</h1>
         {!viewing && status.displayName ? (
@@ -517,6 +546,7 @@ export default function WelcomePage() {
               step={step}
               floorGuideActive={!!status.floorGuideActive}
               canSeeReadout={!!status.canSeeReadout}
+              linksLocked={!ownDone}
             />
 
             <div style={styles.navRow}>
@@ -549,22 +579,27 @@ export default function WelcomePage() {
               <a href="/welcome" style={styles.skip}>
                 {UI.backToMine}
               </a>
-            ) : (
+            ) : ownDone ? (
+              // Skip only exists once the tour is already complete (a replay
+              // convenience) — forced click-through means no skipping the
+              // first run, for anyone.
               <button type="button" style={styles.skip} onClick={() => void onSkip()}>
                 {UI.skip}
               </button>
-            )}
+            ) : null}
           </>
         )}
 
-        <div style={styles.switchWrap}>
-          <p style={styles.switchHeading}>{UI.switchHeading}</p>
-          {otherTracks.map((k) => (
-            <a key={k} href={`/welcome?view=${k}`} style={styles.switchLink}>
-              {TRACKS[k].seesLabel} →
-            </a>
-          ))}
-        </div>
+        {ownDone ? (
+          <div style={styles.switchWrap}>
+            <p style={styles.switchHeading}>{UI.switchHeading}</p>
+            {otherTracks.map((k) => (
+              <a key={k} href={`/welcome?view=${k}`} style={styles.switchLink}>
+                {TRACKS[k].seesLabel} →
+              </a>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

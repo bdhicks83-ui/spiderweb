@@ -75,8 +75,35 @@ const styles: Record<string, CSSProperties> = {
   },
 };
 
-export default function BrandHeader() {
+export default function BrandHeader({ bare = false }: { bare?: boolean }) {
   const [logoMissing, setLogoMissing] = useState(false);
+
+  const mark = logoMissing ? (
+    <>
+      <Daisy />
+      <span>Viridescent</span>
+    </>
+  ) : (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={LOGO_SRC}
+      alt="Viridescent"
+      style={styles.logo}
+      onError={() => setLogoMissing(true)}
+    />
+  );
+
+  // 2026-08-05 forced onboarding click-through: /welcome renders the header
+  // `bare` until the person's own track is complete — the mark doesn't link
+  // home and no badge (each can carry a link out) is mounted. Every other
+  // page keeps the default linking header, unchanged.
+  if (bare) {
+    return (
+      <div style={styles.row}>
+        <span style={styles.wrap}>{mark}</span>
+      </div>
+    );
+  }
 
   return (
     // P-9: the mark and the "your question was answered" badge travel together
@@ -85,20 +112,7 @@ export default function BrandHeader() {
     // visually identical to what shipped before.
     <div style={styles.row}>
       <a href="/dashboard" style={styles.wrap}>
-        {logoMissing ? (
-          <>
-            <Daisy />
-            <span>Viridescent</span>
-          </>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={LOGO_SRC}
-            alt="Viridescent"
-            style={styles.logo}
-            onError={() => setLogoMissing(true)}
-          />
-        )}
+        {mark}
       </a>
       <GapBadge />
       <CaptureRequestBadge />

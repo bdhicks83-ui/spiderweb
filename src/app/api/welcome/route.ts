@@ -1,11 +1,16 @@
 // ROLE-BASED ONBOARDING — /api/welcome
 //
 // GET  → who am I, which track is mine, how far am I, and should the dashboard
-//        auto-route me there. needsOnboarding is true ONLY when the caller has
-//        an org and NO row exists for their own track — the /welcome page
-//        writes a row the moment it loads (steps_done 0), so a person is
-//        auto-routed at most once and never hijacked mid-life. Existing seats
-//        were backfilled complete by supabase/role-onboarding.sql.
+//        auto-route me there. needsOnboarding is true when the caller has an
+//        org and their own track is NOT COMPLETE (no completed_at) — the
+//        2026-08-05 forced click-through: the dashboard keeps routing to
+//        /welcome until the person finishes their track, and /welcome renders
+//        no exits until then. Existing seats were backfilled complete by
+//        supabase/role-onboarding.sql, so only fresh (or deliberately reset)
+//        seats are ever captured by this.
+//        The caller's own track can be PINNED by email (SEAT_TRACK_PINS in
+//        onboarding-tracks.ts — the 2026-08-05 exec-demo seats), which is why
+//        resolveTrackKey also receives the auth email here.
 //
 // POST → record progress on the caller's OWN track. The track is resolved
 //        SERVER-SIDE from the caller's profile — the body cannot name a track,
@@ -61,7 +66,7 @@ async function readCaller() {
     .eq("id", user.id)
     .maybeSingle();
   const profile = (data ?? null) as ProfileRow | null;
-  return { session, userId: user.id, profile };
+  return { session, userId: user.id, email: user.email ?? null, profile };
 }
 
 export async function GET() {
@@ -69,7 +74,7 @@ export async function GET() {
   if (!caller) {
     return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   }
-  const { session, userId, profile } = caller;
+  const { session, userId, email, profile } = caller;
 
   // No org yet (a brand-new account mid /admin/start) — the tour would only be
   // in the way. Never route.
@@ -81,6 +86,7 @@ export async function GET() {
     isOrgAdmin: profile.is_org_admin,
     role: profile.role,
     persona: profile.persona,
+    email,
   });
 
   // Own rows only — the RLS select policy is the gate.
@@ -105,8 +111,10 @@ export async function GET() {
     stepsDone: own?.steps_done ?? 0,
     completedAt: own?.completed_at ?? null,
     seen: !!own,
-    needsOnboarding: !own,
+    // 2026-08-05 forced click-through: route until COMPLETE, not until seen.
+    needsOnboarding: !own?.completed_at,
     displayName: profile.display_name,
+    email,
     floorGuideActive: !!profile.floor_guide_active,
     canSeeReadout: isManager === true || isAdmin === true,
   });
@@ -117,7 +125,7 @@ export async function POST(request: Request) {
   if (!caller) {
     return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   }
-  const { userId, profile } = caller;
+  const { userId, email, profile } = caller;
   if (!profile?.org_id || profile.deactivated_at) {
     return NextResponse.json({ error: "No organization" }, { status: 409 });
   }
@@ -134,6 +142,7 @@ export async function POST(request: Request) {
     isOrgAdmin: profile.is_org_admin,
     role: profile.role,
     persona: profile.persona,
+    email,
   });
   const stepCount = TRACKS[track].steps.length;
 

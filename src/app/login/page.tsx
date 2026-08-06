@@ -5,6 +5,27 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+// ─── SIMPLIFIED DEMO LOGIN (2026-08-05) ─────────────────────────────────────
+// Live-demo affordance for the AWIP exec walk: three first names log the
+// three pinned leadership seats in, with a forgiving password.
+//
+// SCOPE — deliberately tiny:
+//   · Fires ONLY on the password form, ONLY when the username field contains
+//     no "@", and ONLY when the typed name is in this explicit alias table
+//     (case-insensitive). Anything containing "@" follows the existing path
+//     completely untouched.
+//   · On an alias hit the typed password is UPPERCASED before submitting to
+//     Supabase auth (seat passwords are exactly "AWIP2026", so any casing of
+//     awip2026 works on stage).
+//   · An explicit table, NEVER a generic first-name → domain mapping —
+//     brian.ng@… also exists in the demo org, and "brian" must always mean
+//     Brian Montes here.
+const DEMO_LOGIN_ALIASES: Record<string, string> = {
+  brian: "brian.montes@awip-demo.example",
+  joe: "joe.paparella@awip-demo.example",
+  greg: "greg.lusty@awip-demo.example",
+};
+
 // Stacked lockup (mark above wordmark) for the centered login card — distinct
 // from BrandHeader's horizontal nav lockup used elsewhere. Falls back to a
 // plain wordmark so a missing asset can never render a broken image.
@@ -73,7 +94,23 @@ export default function Login() {
   async function signInPassword(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Demo alias shim — see DEMO_LOGIN_ALIASES above. Both transforms (alias
+    // email + uppercased password) apply together, and only on an alias hit;
+    // any input containing "@" (and any unknown alias) is submitted verbatim,
+    // exactly as before.
+    let loginEmail = email;
+    let loginPassword = password;
+    if (!email.includes("@")) {
+      const alias = DEMO_LOGIN_ALIASES[email.trim().toLowerCase()];
+      if (alias) {
+        loginEmail = alias;
+        loginPassword = password.toUpperCase();
+      }
+    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password: loginPassword,
+    });
     if (error) setError(error.message);
     else window.location.href = "/";
   }
@@ -128,9 +165,14 @@ export default function Login() {
         {notice && <p style={styles.notice}>{notice}</p>}
 
         <form onSubmit={signInPassword} style={styles.form}>
+          {/* type="text", not "email": the demo alias shim ("brian"/"joe"/
+              "greg") must be submittable — the browser's built-in email
+              validation would block a bare first name before JS ever ran.
+              Email-format logins behave exactly as before. */}
           <input
             style={styles.input}
-            type="email"
+            type="text"
+            autoComplete="username"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}

@@ -71,10 +71,23 @@ function die(msg) {
   process.exit(1);
 }
 
+// Retries transient network flakes (ECONNRESET / "fetch failed") before
+// aborting — a PostgREST builder re-executes on every await, so re-awaiting
+// the same builder is a clean retry. Real API errors die immediately.
 async function must(promise, label) {
-  const { data, error } = await promise;
-  if (error) die(`${label}: ${error.message}`);
-  return data;
+  for (let attempt = 1; ; attempt++) {
+    let data, error;
+    try {
+      ({ data, error } = await promise);
+    } catch (e) {
+      error = { message: e.message ?? String(e) };
+    }
+    if (!error) return data;
+    const transient = /fetch failed|ECONNRESET|ETIMEDOUT|socket|network/i.test(error.message);
+    if (!transient || attempt === 4) die(`${label}: ${error.message}`);
+    console.log(`  · ${label} failed (${error.message}) — retry ${attempt}/3…`);
+    await new Promise((r) => setTimeout(r, 1500 * attempt));
+  }
 }
 
 // ═══ 1. Resolve the demo org — by flag + name, never by assumption ══════════

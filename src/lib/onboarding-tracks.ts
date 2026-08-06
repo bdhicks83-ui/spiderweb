@@ -40,8 +40,18 @@
 //      skip line; approved by Brian as-is, July 30).
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type TrackKey = "admin" | "executive" | "expert" | "operator";
+export type TrackKey =
+  | "admin"
+  | "executive"
+  | "expert"
+  | "operator"
+  | "awip-leadership";
 
+// ⚠️ TRACK_KEYS is deliberately ONLY the four general tracks — it drives the
+// "see what the rest of your team sees" switch links and the ?view= allowlist.
+// "awip-leadership" (2026-08-05, the exec-demo track for three pinned AWIP
+// seats) is personalized per seat and never appears in the switcher; it is
+// reachable only by being one of the three pinned seats (SEAT_TRACK_PINS).
 export const TRACK_KEYS: readonly TrackKey[] = [
   "operator",
   "expert",
@@ -76,10 +86,30 @@ export type TrackStep = {
    *       (manager or org admin — requireReadoutViewer's rule);
    *       "floorGuide" → href swaps to /retrieve when the viewer's Floor Guide
    *       mode isn't switched on.
+   * NOTE (2026-08-05 forced click-through): step links are HIDDEN entirely
+   * until the person's own track is complete — see /welcome.
    */
   link?: { label: string; href: string; gate?: "readout" | "floorGuide" };
   panel?: TrackPanel;
+  /**
+   * Per-seat step overrides, keyed by LOWERCASE account email. The smallest
+   * mechanism that lets one track greet different people differently
+   * (awip-leadership Step 1: Montes → 1A base, Paparella → 1B, Lusty → 1C).
+   * Resolved by resolveStepForSeat(); a step without variants — every step on
+   * every other track — is returned untouched, so the four existing tracks
+   * are structurally unaffected.
+   */
+  seatVariants?: Record<string, Omit<TrackStep, "seatVariants">>;
 };
+
+/** Resolve a step for the seat viewing it. Pure; identity for no-variant steps. */
+export function resolveStepForSeat(
+  step: TrackStep,
+  email?: string | null
+): TrackStep {
+  if (!step.seatVariants || !email) return step;
+  return step.seatVariants[email.toLowerCase()] ?? step;
+}
 
 export type TrackDef = {
   key: TrackKey;
@@ -350,19 +380,119 @@ const ADMIN: TrackDef = {
   ],
 };
 
+// ─── TRACK: AWIP LEADERSHIP (exec-demo, 2026-08-05) ─────────────────────────
+// ✅ APPROVED copy (Brian, Aug 5 — ship VERBATIM, zero edits; any deviation is
+// a defect). A fifth track for a live exec demo, pinned to exactly three AWIP
+// demo seats via SEAT_TRACK_PINS (never resolved by role/persona):
+//   · Brian Montes (VP Operations)  → Step 1A (the base step below)
+//   · Joe Paparella (President)     → Step 1B (seatVariants)
+//   · Greg Lusty  (President)       → Step 1C (seatVariants — 1B verbatim,
+//                                     greeting "Greg — welcome." only change)
+// Steps 2–4 + closing are shared. Finish lands on /dashboard.
+// NOT in TRACK_KEYS: never shows in the switcher, never viewable via ?view=.
+// label/seesLabel/viewingLabel are chrome for surfaces this track never
+// reaches (switcher/banner) — they cannot render for a pinned seat.
+
+const PAPARELLA_STEP_1B = {
+  title: "Welcome — what this actually protects",
+  body:
+    "Joe — welcome. Every company says its people are its greatest asset. This makes it literally true — it takes the judgment AWIP's best people carry and turns it into something the company owns, keeps, and compounds.",
+  panel: {
+    label: "The asset that isn't on the books",
+    body:
+      "The balance sheet lists every machine and building. It doesn't list the decades of judgment walking around your plants — the asset that actually runs the place. This captures it, puts names on it, and makes it permanent. It's the one asset that appreciates.",
+  },
+};
+
+const AWIP_LEADERSHIP: TrackDef = {
+  key: "awip-leadership",
+  label: "AWIP Leadership",
+  tagline: "AWIP Leadership",
+  seesLabel: "See what AWIP leadership sees",
+  viewingLabel: "the welcome AWIP leadership gets",
+  copyStatus: "approved",
+  finish: { label: "Open your dashboard", href: "/dashboard" },
+  closing:
+    "That's the whole idea: capture what AWIP's people know, put it to work today, and build the foundation that keeps AWIP ahead for the next decade. Your dashboard is ready.",
+  steps: [
+    {
+      // STEP 1A — Brian Montes (base). 1B/1C ride in seatVariants.
+      title: "Welcome — what this actually protects",
+      body:
+        "Brian — welcome. You run operations, so you already know where AWIP's real playbook lives: in the heads of a handful of people who've seen everything twice. This is the tool that gets it out of their heads and into the company's hands — without slowing anyone down to do it.",
+      panel: {
+        label: "What this means for operations",
+        body:
+          "Every line, every plant, every shift leans on judgment nobody wrote down. When a veteran retires, the line doesn't stop — it just gets slower, and problems that were solved ten years ago come back. This captures the judgment while it's still in the building, and puts it one question away from anyone who needs it.",
+      },
+      seatVariants: {
+        "joe.paparella@awip-demo.example": PAPARELLA_STEP_1B,
+        "greg.lusty@awip-demo.example": {
+          ...PAPARELLA_STEP_1B,
+          body:
+            "Greg — welcome. Every company says its people are its greatest asset. This makes it literally true — it takes the judgment AWIP's best people carry and turns it into something the company owns, keeps, and compounds.",
+        },
+      },
+    },
+    {
+      title: "Go first",
+      body:
+        "Here's the part most leaders skip — and shouldn't. You've made calls nobody else could make. Pick one. The system interviews you like a sharp colleague would — fifteen minutes, your words — and out comes a framework with your name on it, ready the day someone needs it.\n\nThe leaders who capture one themselves are the ones whose teams follow. Go first.",
+      panel: {
+        label: "Why going first matters",
+        body:
+          "When the floor sees leadership's judgment in the library — captured, named, real — the message is unmistakable: this isn't another software rollout. It's how we work now. One framework from you is worth ten announcements.",
+      },
+    },
+    {
+      title: "The AWIP Brain",
+      body:
+        "Now widen the lens. Picture every expert at AWIP doing what you just did — every plant, R&D, engineering, quality, maintenance, sales, the floor. Hundreds of careers of judgment: captured, connected, searchable. Not a wiki. A working brain built from AWIP's best thinking, and it gets sharper every time someone uses it.",
+      panel: {
+        label: "What the brain does",
+        body:
+          "It answers in seconds what used to take three phone calls. It spots where two experts disagree so the company can settle it once. It shows exactly where knowledge is thin before a retirement makes it a crisis. And every answer carries the name of the person who earned it.",
+      },
+    },
+    {
+      title: "Years ahead",
+      body:
+        "Here's the long game. AI is coming for every manufacturer — and the winners won't be the ones with the fanciest tools. They'll be the ones whose knowledge was already captured, structured, and ready to feed it. Build the AWIP brain now, and when the next wave of automation arrives, AWIP plugs in years ahead of competitors still trying to figure out what their experts know.\n\nThe work you do this year is the head start nobody can buy later.",
+      panel: {
+        label: "Why competitors can't catch up",
+        body:
+          "A competitor can buy the same software tomorrow. They can't buy the years of AWIP judgment already inside it. Every framework widens a gap that compounds — because what feeds future AI isn't the technology. It's the knowledge. And AWIP will have already done the work.",
+      },
+    },
+  ],
+};
+
 export const TRACKS: Record<TrackKey, TrackDef> = {
   operator: OPERATOR,
   expert: EXPERT,
   executive: EXECUTIVE,
   admin: ADMIN,
+  "awip-leadership": AWIP_LEADERSHIP,
 };
 
 // ─── The role → track resolver ──────────────────────────────────────────────
+//
+// ⭐ SEAT PINS (2026-08-05, step 0 below). Three AWIP demo seats are pinned to
+// "awip-leadership" BY EMAIL, checked BEFORE everything else — deliberately
+// above is_org_admin, because Joe Paparella IS org admin and must land on
+// awip-leadership, not Admin (and Montes would otherwise land Executive).
+// Pinned by email (not user id) because emails are the stable, human-auditable
+// identifier across DB resets; matching is case-insensitive. ⚠️ brian.ng@… is
+// a DIFFERENT person than brian.montes@… — pin exact full emails only.
+// The role-onboarding.sql backfill CASE mirrors this resolver but PREDATES the
+// pins and already ran (one-time) — do NOT re-run it; the mirror rule is
+// documented at both locations instead.
 //
 // ⭐ THE PRECEDENCE ORDER (decided here, documented here, mirrored in the
 // migration backfill in supabase/role-onboarding.sql — change one, change
 // BOTH):
 //
+//   0. email pinned in SEAT_TRACK_PINS → that track (exec-demo seats only)
 //   1. is_org_admin            → admin      (they run the account; the machine
 //                                            room comes first)
 //   2. role = 'contributor'    → operator   (their seat IS the floor — even a
@@ -385,14 +515,25 @@ export const TRACKS: Record<TrackKey, TrackDef> = {
 //                                            on record, so the capture-side
 //                                            welcome is the honest default)
 //
-// The resolver is deliberately a pure function of three profile fields so the
-// API route, the page, and the SQL backfill can never disagree about who lands
-// where.
+// The resolver is deliberately a pure function of the caller's profile fields
+// (+ email, for the seat pins) so the API route, the page, and the SQL
+// backfill can never disagree about who lands where.
+
+/** Exec-demo seat pins — full lowercase emails only. See the block comment above. */
+export const SEAT_TRACK_PINS: Record<string, TrackKey> = {
+  "brian.montes@awip-demo.example": "awip-leadership",
+  "joe.paparella@awip-demo.example": "awip-leadership",
+  "greg.lusty@awip-demo.example": "awip-leadership",
+};
+
 export function resolveTrackKey(p: {
   isOrgAdmin?: boolean | null;
   role?: string | null;
   persona?: string | null;
+  email?: string | null;
 }): TrackKey {
+  const pinned = p.email ? SEAT_TRACK_PINS[p.email.toLowerCase()] : undefined;
+  if (pinned) return pinned;
   if (p.isOrgAdmin) return "admin";
   if (p.role === "contributor") return "operator";
   if (p.persona === "technical_director") return "expert";
