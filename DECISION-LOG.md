@@ -4,6 +4,16 @@ Running log of non-obvious build decisions. Newest first.
 
 ---
 
+## 2026-08-05 — Onboarding copy: dropped "pilots die" framing from the capture-campaign track
+
+**Context:** Customer-facing copy in the admin onboarding track (`src/lib/onboarding-tracks.ts`) used death/loss framing — `"Hope people codify" is how pilots die.` — to motivate running capture as a campaign instead of hoping it happens organically. Brian flagged and approved the replacement.
+
+**Decision:** Swapped to `Hope isn't a plan.` — same beat (hope alone doesn't work, a campaign does), no death/loss language.
+
+**Reasoning:** Death/loss framing reads as unnecessarily dark for onboarding copy an admin sees while setting up their org; the point (turn hope into a tracked initiative) doesn't need it.
+
+**Result:** Grepped `src/` for `pilots die`, `is how pilots`, and general die/death/kill/fatal framing — this was the ONLY customer-facing occurrence; every other hit was a dev comment (`non-fatal:`, Vercel `kills` the invocation, `die-changeover` manufacturing term) or unrelated (CSS gradients). Scoped `tsc --noEmit` clean. Not committed — Brian commits/pushes from PowerShell.
+
 ## 2026-07-29 -- TIER 1 / BUILD 2: Capture Campaign (the ask that turns an empty account into a full one)
 
 **What shipped (code + migration staged; Brian runs the SQL, commits, and

@@ -326,7 +326,7 @@ const ADMIN: TrackDef = {
     {
       title: "Run capture like a rollout, not a hope",
       body:
-        "“Hope people codify” is how pilots die. A capture campaign turns it into a tracked initiative: pick the topics that matter, pick the experts, and watch coverage fill in — who's done, who's pending, what's still exposed.",
+        "Hope isn't a plan. A capture campaign turns it into a tracked initiative: pick the topics that matter, pick the experts, and watch coverage fill in — who's done, who's pending, what's still exposed.",
       link: { label: "Start a campaign", href: "/campaigns" },
       panel: {
         label: "Peek under the hood",
