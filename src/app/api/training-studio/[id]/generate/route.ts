@@ -40,7 +40,12 @@ import {
   reframeTrainingAltitude,
   type TrainingAltitude,
 } from "@/lib/claude";
-import { TRAINING_FORMATS, isTrainingFormatKey } from "@/lib/training-formats";
+import {
+  TRAINING_FORMATS,
+  isTrainingFormatKey,
+  finishedTrainingHours,
+} from "@/lib/training-formats";
+import { emitValueEvent, valueDedupeKey } from "@/lib/value-ledger";
 import {
   describeEntities,
   groundingForIssue,
@@ -187,6 +192,44 @@ export async function POST(
           .from("training_requests")
           .update({ status: "generated" })
           .eq("id", request.id);
+
+        // ─── VALUE LEDGER (2026-08-06) — event 4 of 6: `training_generated` ──
+        // SUBSTITUTION tier: a finished training piece built from your own
+        // experts instead of bought from an instructional designer. The
+        // quantity is the format's OWN published length (low end), priced at
+        // read time against the org's own $/finished-training-hour. A format
+        // with no stated duration yields null and is excluded from every total
+        // rather than given a plausible number.
+        //
+        // ⭐ FIRES ONLY ON THE TRANSITION. The outer guard (`!== "deployed"`)
+        // is NOT enough on its own: regenerating the exec altitude of an
+        // already-`generated` request re-enters this block, and three
+        // regenerations would otherwise put 4× one module into the substitution
+        // tier. The `!== "generated"` check is the actual once-only condition,
+        // and the deterministic dedupe key is the belt to that brace.
+        //
+        // Fail-open: emitValueEvent never throws and the training is saved.
+        if (request.status !== "generated") await emitValueEvent(service, {
+          orgId: request.org_id,
+          eventType: "training_generated",
+          occurredAt: new Date().toISOString(),
+          subjectType: "training_request",
+          subjectId: request.id,
+          contributorId: request.requested_by ?? null,
+          dedupeKey: valueDedupeKey({
+            eventType: "training_generated",
+            subjectId: request.id,
+          }),
+          quantity: {
+            finished_training_hours: finishedTrainingHours(formatKey),
+            format: formatKey,
+            altitudes: 3,
+          },
+          basis:
+            `A ${TRAINING_FORMATS[formatKey].name.toLowerCase()} (${TRAINING_FORMATS[formatKey].effort}) ` +
+            `built from your own experts' captured judgment, at three altitudes. ` +
+            `Counted at the finished length of the format, low end.`,
+        });
 
         // ⭐ The "who else needs it" beat, computed the moment the training is
         // complete — the panel is already waiting when the leader reads the

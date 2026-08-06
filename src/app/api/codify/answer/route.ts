@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/server";
 // as P-2 detection). Everything else in this route stays on the session
 // client so RLS keeps doing the work.
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { inngest } from "@/inngest/client";
 import { requireCanCodify } from "@/lib/floor-guide";
 import { elicitNext, framePattern } from "@/lib/claude";
 import { embedPatternRecord } from "@/lib/pattern-embedding";
@@ -473,6 +474,31 @@ async function completeRecord(
         e
       );
     }
+  }
+
+  // ─── VALUE LEDGER (2026-08-06) — hand the finished framework to the scorer ──
+  // ⭐ WHY A JOB AND NOT A DIRECT WRITE: value_events is APPEND-ONLY, so the
+  // `pattern_captured` row cannot be written now and updated with the score
+  // later. The Inngest job scores first and emits ONCE, with the score already
+  // in quantity_json. A pattern the model can't confidently score is still
+  // emitted — with reproduction_hours null, which excludes it from every total
+  // and shows up in the visible excluded count.
+  //
+  // ⚠️ ENTIRELY FAIL-OPEN. Completion has already succeeded; nothing below may
+  // undo or delay it. If this send fails the record simply has no ledger event
+  // yet, and the backfill picks it up.
+  // ─── EXPOSURE BLOCK 2 (2026-08-06) — precedence extraction ────────────────
+  // One question: does this framework assert that one observable condition
+  // precedes another outcome? Zero is the common and correct answer.
+  //
+  // Both sends share one wrapper: neither may cost the expert their capture.
+  try {
+    await Promise.all([
+      inngest.send({ name: "ledger/score-pattern", data: { record_id: recordId } }),
+      inngest.send({ name: "precedence/extract", data: { record_id: recordId } }),
+    ]);
+  } catch (e) {
+    console.error(`codify/answer: background triggers failed for ${recordId} (dropped):`, e);
   }
 
   return NextResponse.json({

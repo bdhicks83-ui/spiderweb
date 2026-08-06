@@ -373,3 +373,34 @@ export function canonicalPrinciple(raw: string): string | null {
 export function isCitablePrinciple(name: string): boolean {
   return canonicalPrinciple(name) !== null;
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// VALUE LEDGER (2026-08-06) — how long the finished training actually is.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Finished training hours for one format, parsed from its own `effort` string.
+ *
+ * ⭐ WHY PARSE RATHER THAN INVENT: `instructional_design_rate` is priced per
+ * FINISHED TRAINING HOUR — the industry L&D unit — so the ledger needs the
+ * length of the finished piece. That length is already a published property of
+ * each format (it is shown to the leader next to the name before they pick it),
+ * so the ledger reads the number the product already stands behind instead of
+ * making up a new one.
+ *
+ * ⭐ ALWAYS THE LOW END of a range. A ledger that rounds its own quantities up
+ * is a ledger somebody catches.
+ *
+ * Returns null for a format with no stated duration ("one page, no session").
+ * Null means EXCLUDED FROM TOTALS and counted in the visible excluded number —
+ * never defaulted to something plausible.
+ */
+export function finishedTrainingHours(key: TrainingFormatKey): number | null {
+  const effort = TRAINING_FORMATS[key]?.effort;
+  if (!effort) return null;
+  const match = /(\d+)(?:\s*[-–]\s*\d+)?\s*-?\s*minute/i.exec(effort);
+  if (!match) return null;
+  const minutes = parseInt(match[1], 10);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  return Math.round((minutes / 60) * 100) / 100;
+}

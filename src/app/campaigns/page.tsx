@@ -192,6 +192,35 @@ export default function CampaignsPage() {
     })();
   }, [router, load]);
 
+  // ─── EXPOSURE "Close this" PRE-FILL (2026-08-06) ──────────────────────────
+  // /exposure links here with the campaign name, purpose and the question
+  // already written; the manager only picks who to ask. This is why Exposure
+  // needs NO parallel mechanism — a "Close this" IS a targeted capture request
+  // through the existing capture_requests flow.
+  //
+  // window.location instead of useSearchParams, same reason as /codify and the
+  // hub pages: the latter forces this whole client page into a Suspense
+  // boundary. Runs once on mount and only ADDS to empty fields, so it can never
+  // stomp something the person has already typed.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") !== "1") return;
+    const qName = params.get("name");
+    const qPrompt = params.get("prompt");
+    const qPurpose = params.get("purpose");
+    setCreating(true);
+    if (qName) setName((v) => v || qName.slice(0, 120));
+    if (qPurpose) setPurpose((v) => v || qPurpose.slice(0, 600));
+    if (qPrompt) {
+      setTab("manual");
+      setManualPrompt((v) => v || qPrompt.slice(0, 600));
+    }
+    // Strip the params so a refresh doesn't re-open the form over the person's
+    // work, and so the URL they might share is just /campaigns.
+    window.history.replaceState(null, "", "/campaigns");
+  }, []);
+
   const nameById = useMemo(
     () => Object.fromEntries(people.map((p) => [p.id, p.display_name || "A teammate"])),
     [people]

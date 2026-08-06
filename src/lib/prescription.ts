@@ -42,6 +42,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { triagePrescriptionGap, checkCoverageGap } from "@/lib/claude";
 import { embedText } from "@/lib/voyage";
 import type { EntityMapEntry, FrameworkArtifact } from "@/lib/elicitation";
+import { emitValueEvent, valueDedupeKey } from "@/lib/value-ledger";
 
 // ─── The intervention ladder (shared by triage, queue UI, detail UI) ───────
 
@@ -1206,6 +1207,42 @@ export async function runEfficacyLoop(
       if (error) throw new Error(`Could not close prescription ${rx.id}: ${error.message}`);
       summary.effective++;
       summary.outcomes.push({ prescriptionId: rx.id, outcome: "effective", note });
+
+      // ─── VALUE LEDGER (2026-08-06) — event 3 of 6: `prescription_effective` ─
+      // REALIZED tier, and the strongest evidence the product has: a problem
+      // that was recurring stopped recurring on live evidence. The quantity is
+      // the org's OWN recurrence count — the number of times this actually
+      // happened before the intervention — never a projection.
+      //
+      // stated_problem_cost stays null here on purpose: it is the one figure a
+      // HUMAN types about their own operation, and nothing in this sweep is a
+      // human. Absent it, read-time pricing falls back to the org's own
+      // rework_incident_cost, and absent that too the event is simply unpriced.
+      //
+      // Fail-open: emitValueEvent never throws, and the prescription is already
+      // closed above whatever happens here.
+      await emitValueEvent(service, {
+        orgId,
+        eventType: "prescription_effective",
+        occurredAt: checkedAt,
+        subjectType: "prescription",
+        subjectId: rx.id,
+        contributorId: null,
+        dedupeKey: valueDedupeKey({
+          eventType: "prescription_effective",
+          subjectId: rx.id,
+        }),
+        quantity: {
+          incidents_avoided: rx.recurrence,
+          stated_problem_cost: null,
+          quiet_days: quietDays,
+        },
+        basis:
+          `"${subjectNames}" produced ${rx.recurrence} failure/friction record` +
+          `${rx.recurrence === 1 ? "" : "s"} before the intervention, and none in the ` +
+          `${EFFICACY_QUIET_WINDOW_DAYS} days after delivery. Counted at the org's own ` +
+          `incident cost — measured, not projected.`,
+      });
     } else {
       // ── Still WATCHING — quiet, but the window hasn't elapsed. ──
       const daysIn = Math.floor((now - deliveredMs) / (24 * 60 * 60 * 1000));

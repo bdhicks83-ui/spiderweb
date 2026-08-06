@@ -58,6 +58,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { embedText } from "@/lib/voyage";
 import { embedPatternRecord } from "@/lib/pattern-embedding";
 import { recordLearningSignal } from "@/lib/learning-ledger";
+import { emitValueEvent, readReproductionHours, valueDedupeKey } from "@/lib/value-ledger";
 
 // ─── The de-dupe threshold ──────────────────────────────────────────────────
 //
@@ -586,6 +587,56 @@ export async function resolveGapWithRecord(
     actorId: args.userId,
     actorRole: "expert",
     writtenBy: "knowledge-gaps-v1",
+  });
+
+  // ── Part 6: VALUE LEDGER (2026-08-06) — event 5 of 6: `gap_closed` ────────
+  // MODELED tier, and the one place the ledger talks about exposure rather than
+  // work done: a question the org could not answer now has a captured answer,
+  // so the cost of reacquiring that judgment if its holder leaves is no longer
+  // being carried.
+  //
+  // ⭐ THE HOURS ARE NOT RE-SCORED. reproduction_hours was already computed for
+  // this exact framework by the valuation scorer; reading it back is the single
+  // source of truth.
+  //
+  // ⭐⭐ AND resolved_record_id IS STORED ALONGSIDE IT, because the scorer is an
+  // async job: a gap filled seconds after the framework was captured lands here
+  // BEFORE the scoring job has run, and value_events is append-only so a null
+  // written now could never be corrected. buildLedger() resolves the hours from
+  // the pattern_captured event at read time whenever this is null. Storing the
+  // pointer costs nothing; not storing it would leave the modeled tier
+  // permanently near-empty on exactly the orgs using the product properly.
+  //
+  // coverage_fraction is 1 because a HUMAN pointed this framework at this gap.
+  // The system never fills its own gap and never infers partial coverage.
+  //
+  // departure_probability stays null: it is the customer's own read on their
+  // people and is supplied on /ledger, then applied at read time. This system
+  // does not guess how likely somebody is to leave.
+  //
+  // Entirely fail-open — the gap is already resolved above.
+  const reacquisitionHours = await readReproductionHours(service, record.id);
+  await emitValueEvent(service, {
+    orgId: args.orgId,
+    eventType: "gap_closed",
+    occurredAt: nowIso,
+    subjectType: "knowledge_gap",
+    subjectId: gap.id,
+    contributorId: args.userId,
+    dedupeKey: valueDedupeKey({ eventType: "gap_closed", subjectId: gap.id }),
+    quantity: {
+      reacquisition_hours: reacquisitionHours,
+      resolved_record_id: record.id,
+      coverage_fraction: 1,
+      departure_probability: null,
+      asked_count: gap.asked_count,
+      days_open: daysOpen,
+    },
+    basis:
+      `"${gap.question_text}" was asked ${gap.asked_count} ` +
+      `${gap.asked_count === 1 ? "time" : "times"} with nothing to answer it, for ${daysOpen} ` +
+      `${daysOpen === 1 ? "day" : "days"}. A captured framework now covers it. ` +
+      `Modeled against your own departure probability — no saving is claimed.`,
   });
 
   return {

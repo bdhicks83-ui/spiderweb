@@ -2647,3 +2647,253 @@ export async function assessDivergence(args: {
     return null;
   }
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// THE VALUATION SCORER (2026-08-06) — four dimensions, never a dollar.
+//
+// ⭐⭐ THE MODEL NEVER SEES AND NEVER OUTPUTS A CURRENCY FIGURE. It scores
+// DIFFICULTY and SCARCITY. Rates live in value_assumptions, are supplied by the
+// customer, and are multiplied at read time by code the model never touches.
+// This separation is the whole reason the amended no-invented-dollars doctrine
+// survives contact with a language model.
+//
+// ⭐ A PATTERN IT CANNOT CONFIDENTLY SCORE COMES BACK WITH reproduction_hours
+// null, which EXCLUDES it from every total. That is the designed outcome, not a
+// failure — and the excluded count is shown on /ledger rather than swallowed.
+// Returns null only on model/parse failure; the caller distinguishes the two.
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type ValuationScore = {
+  /** null = could not be scored confidently → excluded from every total. */
+  reproductionHours: number | null;
+  scarcity: number | null;
+  blastRadius: "low" | "medium" | "high" | null;
+  halfLifeYears: number | null;
+  basis: string | null;
+  /** Set when something about the response had to be corrected, e.g. a currency figure. */
+  note: string | null;
+};
+
+/**
+ * ⭐ THE DIAGNOSTIC TRAVELS WITH THE RESULT, not in a module-level global.
+ * Two ledger scoring jobs can run concurrently in one Node process; a shared
+ * `lastDiagnostic` variable means record A's failure reason can be overwritten
+ * by record B before A reads it — and that reason is written ONCE into an
+ * append-only table as the auditable explanation a CFO reads for why a
+ * framework was excluded. Wrong-but-plausible is the worst outcome available.
+ */
+export type ValuationResult =
+  | { ok: true; score: ValuationScore }
+  | { ok: false; diagnostic: string };
+
+export async function scorePatternValue(input: {
+  frameworkName: string;
+  frameworkTagline: string;
+  contextSummary: string;
+  contextOntology: string;
+  triggerSignal: string;
+  signalDetail: string;
+  judgment: string;
+  rationale: string;
+  boundaries: string;
+  yearsExperience: string;
+}): Promise<ValuationResult> {
+  let basisNote: string | null = null;
+  try {
+    const prompt = await loadPrompt("value-score", {
+      framework_name: input.frameworkName || "(unnamed)",
+      framework_tagline: input.frameworkTagline || "(none)",
+      context_summary: input.contextSummary || "(none)",
+      context_ontology: input.contextOntology || "(none)",
+      trigger_signal: input.triggerSignal || "(none)",
+      signal_detail: input.signalDetail || "(none)",
+      judgment: input.judgment || "(none)",
+      rationale: input.rationale || "(none)",
+      boundaries: input.boundaries || "(none)",
+      years_experience: input.yearsExperience || "an unstated number of",
+    });
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      // Sized for a thinking block plus a small JSON verdict — the same proven
+      // 1200 as classifyWalkedDirection and the P-7 divergence check. The
+      // standing rule: the budget covers the WHOLE response, never just the
+      // text you want.
+      max_tokens: 1200,
+      messages: [{ role: "user", content: prompt }],
+    });
+    // Never assume content[0] is text — thinking blocks come first.
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) {
+      return {
+        ok: false,
+        diagnostic: `no text block (stop_reason=${msg.stop_reason}, blocks=[${(
+          msg.content as { type: string }[]
+        )
+          .map((b) => b.type)
+          .join(", ")}])`,
+      };
+    }
+    const parsed = parseJsonLoose(text) as Record<string, unknown> | null;
+    if (!parsed || typeof parsed !== "object") {
+      return {
+        ok: false,
+        diagnostic: `unparseable JSON (text length=${text.length}, snippet=${JSON.stringify(
+          text.slice(0, 160)
+        )})`,
+      };
+    }
+
+    // Defensive parsing throughout: an out-of-range or wrong-typed value becomes
+    // null (→ excluded) rather than being coerced into something plausible.
+    const posInt = (v: unknown): number | null =>
+      typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : null;
+    const unit = (v: unknown): number | null =>
+      typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1
+        ? Math.round(v * 100) / 100
+        : null;
+    const years = (v: unknown): number | null =>
+      typeof v === "number" && Number.isFinite(v) && v > 0 && v <= 50
+        ? Math.round(v * 10) / 10
+        : null;
+    const radius = (v: unknown): "low" | "medium" | "high" | null =>
+      v === "low" || v === "medium" || v === "high" ? v : null;
+    const str = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() ? v.trim().slice(0, 600) : null;
+
+    // ⛔ A currency symbol anywhere in the basis means the model ignored the one
+    // rule that matters. Drop the basis rather than let a figure the model
+    // invented reach a page that promises it never does.
+    let basis = str(parsed.basis);
+    if (basis && /[$£€]|\bUSD\b|\bdollars?\b/i.test(basis)) {
+      basisNote = "the scorer's own sentence mentioned money and was dropped";
+      basis = null;
+    }
+
+    return {
+      ok: true,
+      score: {
+        reproductionHours: posInt(parsed.reproduction_hours),
+        scarcity: unit(parsed.scarcity),
+        blastRadius: radius(parsed.blast_radius),
+        halfLifeYears: years(parsed.half_life_years),
+        basis,
+        note: basisNote,
+      },
+    };
+  } catch (e) {
+    return { ok: false, diagnostic: `threw: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRECEDENCE EXTRACTION (2026-08-06) — Exposure Block 2.
+//
+// One question per pattern: does this captured judgment assert that one
+// OBSERVABLE condition precedes or causes another outcome? Zero, one, or several
+// pairs come back.
+//
+// ⭐ 'stated' ONLY EVER FIRES A WARNING. 'implied' is stored and never surfaced
+// in this build. The prompt is deliberately strict about the difference: a
+// generous 'stated' is a false alarm in front of a plant manager, and a strict
+// one costs nothing.
+//
+// 🛑 NEVER A PERSON. The prompt forbids an antecedent that is a person, a role,
+// a shift or a team, and the parser below drops any pair whose antecedent looks
+// like one. This product does not predict outcomes from who was working.
+// Returns null on model/parse failure — the caller leaves the record unlatched
+// so a later pass can retry.
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type PrecedenceLink = {
+  antecedent: string;
+  consequent: string;
+  confidence: "stated" | "implied";
+};
+
+/** See ValuationResult — the diagnostic travels with the result, never in a global. */
+export type PrecedenceResult =
+  | { ok: true; links: PrecedenceLink[] }
+  | { ok: false; diagnostic: string };
+
+// Belt-and-braces mirror of the prompt's person ban. Cheap, and it fails in the
+// safe direction: a dropped legitimate link costs one warning; a person-shaped
+// antecedent on a management surface costs the whole no-person-level-negative
+// doctrine.
+const PERSON_ANTECEDENT_RE =
+  /\b(operator|supervisor|manager|technician|engineer|crew|shift|team|staff|employee|worker|contractor|he |she |they |his |her |their )\b/i;
+
+export async function extractPrecedenceLinks(input: {
+  frameworkName: string;
+  frameworkTagline: string;
+  contextSummary: string;
+  triggerSignal: string;
+  signalDetail: string;
+  judgment: string;
+  rationale: string;
+  boundaries: string;
+}): Promise<PrecedenceResult> {
+  try {
+    const prompt = await loadPrompt("precedence-extract", {
+      framework_name: input.frameworkName || "(unnamed)",
+      framework_tagline: input.frameworkTagline || "(none)",
+      context_summary: input.contextSummary || "(none)",
+      trigger_signal: input.triggerSignal || "(none)",
+      signal_detail: input.signalDetail || "(none)",
+      judgment: input.judgment || "(none)",
+      rationale: input.rationale || "(none)",
+      boundaries: input.boundaries || "(none)",
+    });
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      // Sized for a thinking block plus a small JSON array — the standing rule
+      // is that the budget covers the WHOLE response, never just the text you
+      // want. A little above the 1200 used elsewhere because several pairs can
+      // legitimately come back.
+      max_tokens: 1600,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = firstText(msg.content as { type: string; text?: string }[]);
+    if (!text) {
+      return {
+        ok: false,
+        diagnostic: `no text block (stop_reason=${msg.stop_reason}, blocks=[${(
+          msg.content as { type: string }[]
+        )
+          .map((b) => b.type)
+          .join(", ")}])`,
+      };
+    }
+    const parsed = parseJsonLoose(text) as { links?: unknown } | null;
+    if (!parsed || typeof parsed !== "object") {
+      return {
+        ok: false,
+        diagnostic: `unparseable JSON (text length=${text.length}, snippet=${JSON.stringify(
+          text.slice(0, 160)
+        )})`,
+      };
+    }
+    const raw = Array.isArray(parsed.links) ? parsed.links : [];
+    const out: PrecedenceLink[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== "object") continue;
+      const r = item as Record<string, unknown>;
+      const a = typeof r.antecedent === "string" ? r.antecedent.trim() : "";
+      const c = typeof r.consequent === "string" ? r.consequent.trim() : "";
+      const conf = r.confidence === "stated" ? "stated" : r.confidence === "implied" ? "implied" : null;
+      if (!a || !c || !conf) continue;
+      if (a.length > 160 || c.length > 160) continue;
+      if (PERSON_ANTECEDENT_RE.test(a)) {
+        console.warn(
+          `precedence: dropped a person-shaped antecedent (${JSON.stringify(a.slice(0, 60))})`
+        );
+        continue;
+      }
+      out.push({ antecedent: a, consequent: c, confidence: conf });
+    }
+    // An empty array is a REAL, common, correct answer — most captured judgment
+    // is a decision rule, not a prediction. Distinct from ok:false (a failure).
+    return { ok: true, links: out };
+  } catch (e) {
+    return { ok: false, diagnostic: `threw: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
