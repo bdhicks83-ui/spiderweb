@@ -421,9 +421,11 @@ const AWIP_LEADERSHIP: TrackDef = {
   seesLabel: "See what AWIP leadership sees",
   viewingLabel: "the welcome AWIP leadership gets",
   copyStatus: "approved",
-  // 2026-08-06 (Brian): the last page sends them into their FIRST CAPTURE,
-  // not the dashboard — label mirrors the dashboard Capture card's button.
-  finish: { label: "Start a session", href: "/codify" },
+  // 2026-08-06 (Brian, corrected same day): finish lands on the DASHBOARD —
+  // the final step's copy tells them which card/button to press there
+  // (🌱 Capture → "Start a session"), rather than teleporting them into
+  // /codify directly.
+  finish: { label: "Open your dashboard", href: "/dashboard" },
   closing:
     "That's the whole idea: capture what AWIP's people know, put it to work today, and build the foundation that keeps AWIP ahead for the next decade. Your dashboard is ready.",
   steps: [
@@ -496,13 +498,13 @@ const AWIP_LEADERSHIP: TrackDef = {
       },
     },
     {
-      // 2026-08-06 (Brian): action-focused final page — encourage the first
-      // capture, point at the "Start a session" button, then invite play.
-      // The finish CTA below ("Start a session" → /codify) matches the
-      // dashboard Capture card's button label exactly.
+      // 2026-08-06 (Brian): action-focused final page. Lands on the
+      // DASHBOARD; this copy tells them exactly what to press there —
+      // the 🌱 Capture card's "Start a session →" button (label quoted
+      // verbatim from src/app/dashboard/page.tsx).
       title: "Now make it yours",
       body:
-        "That's the tour. The fastest way to understand what this really is — is to feel it capture YOUR judgment. Pick a call you've made that mattered, press Start a session, and give it fifteen minutes.\n\nThen play around. Ask it things. Poke through the library. And use your imagination — every place at AWIP where the answer lives in one person's head is a place this works. What you build here is limited only by what you decide to point it at.",
+        "That's the tour. The fastest way to understand what this really is — is to feel it capture YOUR judgment. Your dashboard opens next: find the 🌱 Capture card and press Start a session. Pick a call you've made that mattered, and give it fifteen minutes.\n\nThen play around. Ask it things. Poke through the library. And use your imagination — every place at AWIP where the answer lives in one person's head is a place this works. What you build here is limited only by what you decide to point it at.",
     },
   ],
 };
