@@ -267,6 +267,134 @@ const styles: Record<string, CSSProperties> = {
   },
 };
 
+// ─── Training Studio visual (2026-08-06) ────────────────────────────────────
+// Two example training artifacts rendered ON the Training Studio step
+// (step.visual === "trainingStudio") so a leader sees what the studio
+// produces before they've captured anything. Pure illustration — static
+// content, brand tokens only, no data fetch, no links (forced click-through
+// stays intact). The examples mirror real seeded AWIP demo content (Brian
+// Ng's controlled-restart framework; the peel-check drill) so the library
+// they meet later feels continuous with the tour.
+const tsStyles: Record<string, CSSProperties> = {
+  wrap: { display: "flex", gap: "12px", flexWrap: "wrap", margin: "16px 0 4px" },
+  card: {
+    flex: "1 1 240px",
+    minWidth: "230px",
+    background: "var(--paper)",
+    border: "1px solid var(--line)",
+    borderRadius: "12px",
+    padding: "14px 16px 12px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+  },
+  tagRow: { display: "flex", alignItems: "center", gap: "8px" },
+  tag: {
+    background: "var(--growth-soft)",
+    color: "var(--growth-deep)",
+    fontSize: "10.5px",
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    padding: "3px 9px",
+    borderRadius: "999px",
+  },
+  audience: {
+    color: "var(--muted)",
+    fontSize: "11px",
+    border: "1px solid var(--line)",
+    borderRadius: "999px",
+    padding: "2px 9px",
+    background: "var(--white)",
+  },
+  title: {
+    fontFamily: "var(--font-serif)",
+    fontSize: "15.5px",
+    color: "var(--pine)",
+    margin: "11px 0 9px",
+    lineHeight: 1.35,
+  },
+  row: {
+    display: "flex",
+    gap: "8px",
+    fontSize: "13px",
+    color: "var(--pine-soft)",
+    lineHeight: 1.5,
+    marginBottom: "6px",
+  },
+  check: { color: "var(--growth)", fontWeight: 700, flexShrink: 0 },
+  foot: {
+    marginTop: "10px",
+    paddingTop: "10px",
+    borderTop: "1px dashed var(--line)",
+    fontSize: "11.5px",
+    color: "var(--muted)",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
+  proven: {
+    background: "var(--growth-soft)",
+    color: "var(--growth-deep)",
+    border: "1px solid var(--ok-border)",
+    borderRadius: "6px",
+    padding: "2px 8px",
+    fontSize: "11px",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
+};
+
+function TrainingStudioVisual() {
+  return (
+    <div style={tsStyles.wrap} aria-hidden="true">
+      <div style={tsStyles.card}>
+        <div style={tsStyles.tagRow}>
+          <span style={tsStyles.tag}>Job aid</span>
+          <span style={tsStyles.audience}>Floor</span>
+        </div>
+        <p style={tsStyles.title}>Post-Changeover First-Run Release Check</p>
+        <div style={tsStyles.row}>
+          <span style={tsStyles.check}>✓</span>
+          <span>First-piece inspection cleared — and logged</span>
+        </div>
+        <div style={tsStyles.row}>
+          <span style={tsStyles.check}>✓</span>
+          <span>Bond-strength check on the first run, not the second</span>
+        </div>
+        <div style={tsStyles.row}>
+          <span style={tsStyles.check}>✓</span>
+          <span>Any drift: hold the run, flag Quality</span>
+        </div>
+        <div style={tsStyles.foot}>
+          <span>Built from Brian Ng&apos;s “The Controlled Restart Release”</span>
+        </div>
+      </div>
+      <div style={tsStyles.card}>
+        <div style={tsStyles.tagRow}>
+          <span style={tsStyles.tag}>Hands-on drill</span>
+          <span style={tsStyles.audience}>Supervisor</span>
+        </div>
+        <p style={tsStyles.title}>Peel-Check Drill: Catch It Before It Ships</p>
+        <div style={tsStyles.row}>
+          <span style={tsStyles.check}>✓</span>
+          <span>20 minutes, on the line, three panels</span>
+        </div>
+        <div style={tsStyles.row}>
+          <span style={tsStyles.check}>✓</span>
+          <span>One seeded peel defect — find it</span>
+        </div>
+        <div style={tsStyles.row}>
+          <span style={tsStyles.check}>✓</span>
+          <span>Teach-back scored, not checked off</span>
+        </div>
+        <div style={tsStyles.foot}>
+          <span style={tsStyles.proven}>✓ Proven — no recurrence in 20 days</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StepCard({
   step,
   floorGuideActive,
@@ -303,6 +431,7 @@ function StepCard({
           “{step.example}”
         </div>
       ) : null}
+      {step.visual === "trainingStudio" ? <TrainingStudioVisual /> : null}
       {link ? (
         <a href={link.href} target="_blank" rel="noreferrer" style={styles.linkOut}>
           {link.label} →
@@ -337,7 +466,6 @@ export default function WelcomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [viewKey, setViewKey] = useState<TrackKey | null>(null);
   const [index, setIndex] = useState(0);
-  const [finishedLocally, setFinishedLocally] = useState(false);
   // "Run through it again" for someone whose track is already complete —
   // local replay only; completion never un-writes.
   const [reviewing, setReviewing] = useState(false);
@@ -389,9 +517,8 @@ export default function WelcomePage() {
   const ownKey = status?.track ?? null;
   // 2026-08-05 forced click-through: everything that leads out of the wizard
   // (skip, deep links, the track switcher, even the header's home link) stays
-  // hidden until the person's OWN track is complete. finishedLocally counts —
-  // the moment completion is recorded, the closing card's exits appear.
-  const ownDone = !!status?.completedAt || finishedLocally;
+  // hidden until the person's OWN track is complete.
+  const ownDone = !!status?.completedAt;
   // Viewing another track is a post-completion feature now — an incomplete
   // seat typing ?view= by hand still gets their own track.
   const viewing = ownDone && !!(viewKey && ownKey && viewKey !== ownKey);
@@ -403,8 +530,7 @@ export default function WelcomePage() {
     if (viewing) setIndex(0);
   }, [viewing]);
 
-  const completed =
-    !viewing && !!status?.completedAt && !finishedLocally && !reviewing;
+  const completed = !viewing && !!status?.completedAt && !reviewing;
 
   const otherTracks = useMemo(
     () => TRACK_KEYS.filter((k) => k !== ownKey),
@@ -440,12 +566,16 @@ export default function WelcomePage() {
       void recordProgress(nextIndex, false);
       return;
     }
-    // Finish: record completion, show the closing, then hand off to the real
-    // surface this track leads into.
+    // Finish (2026-08-06, Brian): record completion, then land DIRECTLY on
+    // the surface this track leads into — no closing/confirmation stop. The
+    // closing card still renders for a completed person who revisits
+    // /welcome; it just isn't a gate on the way out anymore. If the write
+    // ever failed, the dashboard's needsOnboarding check routes them back —
+    // self-healing, never stranding.
     setSaving(true);
     await recordProgress(def.steps.length, true);
     setSaving(false);
-    setFinishedLocally(true);
+    router.push(finishHref(def).href);
   }
 
   async function onSkip() {
@@ -475,7 +605,7 @@ export default function WelcomePage() {
     );
   }
 
-  const showClosing = finishedLocally || (completed && !viewing);
+  const showClosing = completed;
   // Per-seat step resolution (awip-leadership Step 1A/1B/1C) — identity for
   // every step without seatVariants.
   const step = resolveStepForSeat(
@@ -505,7 +635,6 @@ export default function WelcomePage() {
                   type="button"
                   style={styles.ghost}
                   onClick={() => {
-                    setFinishedLocally(false);
                     setReviewing(true);
                     setIndex(0);
                   }}

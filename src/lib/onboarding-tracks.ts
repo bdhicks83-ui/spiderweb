@@ -92,6 +92,13 @@ export type TrackStep = {
   link?: { label: string; href: string; gate?: "readout" | "floorGuide" };
   panel?: TrackPanel;
   /**
+   * A keyed, hard-coded illustration rendered by /welcome between the body
+   * and the panel (2026-08-06 — the Training Studio step shows two example
+   * training artifacts). Kept as a string key so this file stays client-safe
+   * and JSX-free; the component lives in src/app/welcome/page.tsx.
+   */
+  visual?: "trainingStudio";
+  /**
    * Per-seat step overrides, keyed by LOWERCASE account email. The smallest
    * mechanism that lets one track greet different people differently
    * (awip-leadership Step 1: Montes → 1A base, Paparella → 1B, Lusty → 1C).
@@ -380,9 +387,12 @@ const ADMIN: TrackDef = {
   ],
 };
 
-// ─── TRACK: AWIP LEADERSHIP (exec-demo, 2026-08-05) ─────────────────────────
+// ─── TRACK: AWIP LEADERSHIP (exec-demo, 2026-08-05 · revised 08-06) ─────────
 // ✅ APPROVED copy (Brian, Aug 5 — ship VERBATIM, zero edits; any deviation is
-// a defect). A fifth track for a live exec demo, pinned to exactly three AWIP
+// a defect). Aug 6 live-walk revisions by Brian: Step 2 + Step 3 bodies
+// reworded/extended, NEW "The Training Studio" step (with on-page visual),
+// NEW action-focused final step, finish → "Start a session" → /codify.
+// A fifth track for a live exec demo, pinned to exactly three AWIP
 // demo seats via SEAT_TRACK_PINS (never resolved by role/persona):
 //   · Brian Montes (VP Operations)  → Step 1A (the base step below)
 //   · Joe Paparella (President)     → Step 1B (seatVariants)
@@ -411,7 +421,9 @@ const AWIP_LEADERSHIP: TrackDef = {
   seesLabel: "See what AWIP leadership sees",
   viewingLabel: "the welcome AWIP leadership gets",
   copyStatus: "approved",
-  finish: { label: "Open your dashboard", href: "/dashboard" },
+  // 2026-08-06 (Brian): the last page sends them into their FIRST CAPTURE,
+  // not the dashboard — label mirrors the dashboard Capture card's button.
+  finish: { label: "Start a session", href: "/codify" },
   closing:
     "That's the whole idea: capture what AWIP's people know, put it to work today, and build the foundation that keeps AWIP ahead for the next decade. Your dashboard is ready.",
   steps: [
@@ -436,8 +448,9 @@ const AWIP_LEADERSHIP: TrackDef = {
     },
     {
       title: "Go first",
+      // Body revised + approved by Brian (Aug 6).
       body:
-        "Here's the part most leaders skip — and shouldn't. You've made calls nobody else could make. Pick one. The system interviews you like a sharp colleague would — fifteen minutes, your words — and out comes a framework with your name on it, ready the day someone needs it.\n\nThe leaders who capture one themselves are the ones whose teams follow. Go first.",
+        "Here's the part most leaders skip — and shouldn't. Over the years you've made calls nobody else could have made. Think of one that mattered. This system interviews you about it the way a sharp colleague would — fifteen minutes, your words — and out comes a framework with your name on it, ready the day someone needs it.\n\nThe leaders who capture one themselves are the ones whose teams follow. Go first.",
       panel: {
         label: "Why going first matters",
         body:
@@ -446,12 +459,30 @@ const AWIP_LEADERSHIP: TrackDef = {
     },
     {
       title: "The AWIP Brain",
+      // Body revised + approved by Brian (Aug 6) — the original said "doing
+      // what you just did," but nobody has captured a framework at this point
+      // in the tour; this version explains what the brain IS instead.
       body:
-        "Now widen the lens. Picture every expert at AWIP doing what you just did — every plant, R&D, engineering, quality, maintenance, sales, the floor. Hundreds of careers of judgment: captured, connected, searchable. Not a wiki. A working brain built from AWIP's best thinking, and it gets sharper every time someone uses it.",
+        "Now widen the lens. Picture every expert at AWIP sitting down for that same fifteen-minute interview — every plant, R&D, engineering, quality, maintenance, sales, the floor. Hundreds of careers of judgment: captured, connected, searchable. Not a wiki. A working brain built from AWIP's best thinking — ask it anything and it answers with the company's best call, and the name of the person who earned it.\n\nNow imagine the power of that: every answer AWIP has ever earned, not just available on request but woven into the work — as your people talk through problems and issues, the system brings the judgment that applies into the conversation. The best thinking in the company shows up exactly when it's needed. And it gets sharper every time someone uses it.",
       panel: {
         label: "What the brain does",
         body:
           "It answers in seconds what used to take three phone calls. It spots where two experts disagree so the company can settle it once. It shows exactly where knowledge is thin before a retirement makes it a crisis. And every answer carries the name of the person who earned it.",
+      },
+    },
+    {
+      title: "The Training Studio",
+      // 2026-08-06 (Brian): dedicated capability step, with two on-page
+      // example artifacts (visual: "trainingStudio" — rendered by /welcome).
+      // Claims match the shipped product: formats (job aid / hands-on drill),
+      // audience altitudes, recurrence-measured efficacy, auto-escalation.
+      body:
+        "Captured judgment shouldn't just sit in a library — it should teach. The Training Studio turns any expert's framework into real training: a job aid for the floor, a hands-on drill, a briefing for supervisors — pitched to the audience that needs it, in minutes, not months.\n\nAnd it closes the loop most training never closes: it watches whether the problem actually stops happening. Training that worked gets proven. Training that didn't gets rebuilt and re-aimed — flagged automatically, never quietly forgotten.",
+      visual: "trainingStudio",
+      panel: {
+        label: "How the studio knows it worked",
+        body:
+          "Most companies measure training by who clicked “complete.” This measures whether the problem recurred. When a lesson lands, the recurrence stops and the system marks it proven on real evidence. When it doesn't, the system escalates — a different format, a harder drill, the right people — until it does. That's training run like an operation, not an event.",
       },
     },
     {
@@ -463,6 +494,15 @@ const AWIP_LEADERSHIP: TrackDef = {
         body:
           "A competitor can buy the same software tomorrow. They can't buy the years of AWIP judgment already inside it. Every framework widens a gap that compounds — because what feeds future AI isn't the technology. It's the knowledge. And AWIP will have already done the work.",
       },
+    },
+    {
+      // 2026-08-06 (Brian): action-focused final page — encourage the first
+      // capture, point at the "Start a session" button, then invite play.
+      // The finish CTA below ("Start a session" → /codify) matches the
+      // dashboard Capture card's button label exactly.
+      title: "Now make it yours",
+      body:
+        "That's the tour. The fastest way to understand what this really is — is to feel it capture YOUR judgment. Pick a call you've made that mattered, press Start a session, and give it fifteen minutes.\n\nThen play around. Ask it things. Poke through the library. And use your imagination — every place at AWIP where the answer lives in one person's head is a place this works. What you build here is limited only by what you decide to point it at.",
     },
   ],
 };
