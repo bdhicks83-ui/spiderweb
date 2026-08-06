@@ -4,6 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { generateSpeech } from "@/lib/elevenlabs";
 import { getPageCount, extractPageRangeBase64, PAGES_PER_CHUNK } from "@/lib/pdf";
 import { evaluateUploadRisk } from "@/lib/risk";
+import { ledgerFunctions } from "./ledger";
+import { precedenceFunctions } from "./precedence";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
@@ -339,4 +341,11 @@ export const renderVideo = inngest.createFunction(
   }
 );
 
-export const functions = [extractInsights, renderVideo];
+// Value Ledger + Exposure background jobs (2026-08-06) live in their own
+// modules and are registered here so /api/inngest keeps ONE function list.
+export const functions = [
+  extractInsights,
+  renderVideo,
+  ...ledgerFunctions,
+  ...precedenceFunctions,
+];

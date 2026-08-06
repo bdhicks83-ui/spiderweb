@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/value-ledger.ts",
+    "src/lib/leadership-gate.ts",
+    "src/lib/training-formats.ts",
+    "src/lib/claude.ts",
+    "src/lib/knowledge-gaps.ts",
+    "src/lib/prescription.ts",
+    "src/lib/readout-pdf.tsx",
+    "src/lib/value-readout.ts",
+    "src/inngest/ledger.ts",
+    "src/inngest/functions.ts",
+    "src/app/api/codify/answer/route.ts",
+    "src/app/api/retrieve/signal/route.ts",
+    "src/app/api/training-studio/[id]/generate/route.ts",
+    "src/app/api/welcome/route.ts",
+    "src/app/api/ledger/route.ts",
+    "src/app/api/ledger/assumptions/route.ts",
+    "src/app/api/ledger/backfill/route.ts",
+    "src/app/api/readout/route.ts",
+    "src/app/api/readout/pdf/route.ts",
+    "src/app/readout/page.tsx"
+  ]
+}

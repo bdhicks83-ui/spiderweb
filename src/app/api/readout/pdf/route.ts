@@ -23,6 +23,7 @@ import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { buildReadout, requireReadoutViewer } from "@/lib/value-readout";
 import { ReadoutDocument } from "@/lib/readout-pdf";
+import { buildLedger, toReadoutBlock } from "@/lib/value-ledger";
 
 function slugify(text: string): string {
   return (
@@ -52,10 +53,22 @@ export async function GET(req: NextRequest) {
     );
     const readout = await buildReadout(service, gate.orgId, since);
 
+    // ─── VALUE LEDGER BLOCK (2026-08-06) ──────────────────────────────────
+    // null when the org has entered no rates → the document renders exactly as
+    // it did in v2.59. A half-populated dollar figure must never leave the
+    // building, and this file is the thing that leaves the building.
+    // Fail-open: the two pages a champion forwards are never lost to this.
+    let ledger = null;
+    try {
+      ledger = toReadoutBlock(await buildLedger(service, gate.orgId, since));
+    } catch (e) {
+      console.error("readout PDF: ledger block failed and was dropped:", e);
+    }
+
     // Called as a plain function, not as JSX — this is a .ts route file, and it
     // mirrors how /api/codify/pdf and /api/generate-resume already do it. Using
     // JSX here would force the file to .tsx for no benefit.
-    const buffer = await renderToBuffer(ReadoutDocument({ readout }));
+    const buffer = await renderToBuffer(ReadoutDocument({ readout, ledger }));
     const stamp = new Date().toISOString().slice(0, 10);
     const filename = `${slugify(readout.org_name)}-readout-${stamp}.pdf`;
 

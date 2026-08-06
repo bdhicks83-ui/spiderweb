@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { buildReadout, requireReadoutViewer } from "@/lib/value-readout";
+import { buildLedger, toReadoutBlock } from "@/lib/value-ledger";
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,7 +34,26 @@ export async function GET(req: NextRequest) {
     );
 
     const readout = await buildReadout(service, gate.orgId, since);
-    return NextResponse.json({ readout });
+
+    // ─── VALUE LEDGER BLOCK (2026-08-06) ──────────────────────────────────
+    // ⭐ ADDITIVE ONLY. The years-of-judgment anchor above is untouched and
+    // stays the headline; this block sits BELOW it, never above.
+    //
+    // ⭐⭐ toReadoutBlock() RETURNS null WHEN THE ORG HAS ENTERED NO RATES, and
+    // on null the page and the PDF render nothing at all — the readout falls
+    // back to exactly its v2.59 behaviour. No half-populated dollar figure ever
+    // leaves the building.
+    //
+    // Fail-open: a ledger that cannot be built must never cost a champion their
+    // readout the week before a renewal conversation.
+    let ledger = null;
+    try {
+      ledger = toReadoutBlock(await buildLedger(service, gate.orgId, since));
+    } catch (e) {
+      console.error("readout: ledger block failed and was dropped:", e);
+    }
+
+    return NextResponse.json({ readout, ledger });
   } catch (err) {
     console.error("Unexpected error in readout route:", err);
     return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });

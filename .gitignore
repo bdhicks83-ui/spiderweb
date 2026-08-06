@@ -11,3 +11,4 @@ next-env.d.ts
 .DS_Store
 memory/
 _to_delete/
+exposure-ledger-v2.60.patch

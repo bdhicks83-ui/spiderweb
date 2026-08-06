@@ -88,6 +88,11 @@ export default function DashboardPage() {
   const [hasOrg, setHasOrg] = useState(true);
   // T1B2 — capture campaigns.
   const [canRunCampaigns, setCanRunCampaigns] = useState(false);
+  // Exposure + Ledger (2026-08-06) — manager OR admin OR an executive seat.
+  // One rung wider than the readout gate, matching requireExposureViewer /
+  // requireLedgerViewer in Postgres-terms: the readout is what a champion
+  // forwards OUT, these are what leadership uses INSIDE. Hidden, never locked.
+  const [canSeeExposure, setCanSeeExposure] = useState(false);
   // Floor Guide Phase A — the role ladder + the onboarding state.
   const [isContributor, setIsContributor] = useState(false);
   const [floorGuideActive, setFloorGuideActive] = useState(false);
@@ -143,13 +148,14 @@ export default function DashboardPage() {
     if (!user) return;
     const { data } = await supabase
       .from('profiles')
-      .select('is_org_admin, org_id, role, floor_guide_active, deactivated_at')
+      .select('is_org_admin, org_id, role, persona, floor_guide_active, deactivated_at')
       .eq('id', user.id)
       .maybeSingle();
     const row = data as {
       is_org_admin: boolean | null;
       org_id: string | null;
       role: string | null;
+      persona: string | null;
       floor_guide_active: boolean | null;
       deactivated_at: string | null;
     } | null;
@@ -170,6 +176,9 @@ export default function DashboardPage() {
       supabase.rpc('is_org_admin'),
     ]);
     setCanRunCampaigns(mgr === true || adm === true);
+    // The exec seat is `persona`, not `role` — the same signal resolveTrackKey()
+    // uses to route the executive onboarding track.
+    setCanSeeExposure(mgr === true || adm === true || row?.persona === 'exec');
 
     try {
       const res = await fetch('/api/requests/mine?count=1');
@@ -368,7 +377,10 @@ export default function DashboardPage() {
                 "exactly four cards" holds without orphaning either route.
                 (Design call in the build; Brian can move or drop these.) */}
             {isOrgAdmin && <a href="/admin" style={styles.settingsLink}>Admin</a>}
-            {canRunCampaigns && <a href="/readout" style={styles.settingsLink}>Readout</a>}
+            {/* Readout link widened to the exec seat 2026-08-06, alongside the
+                requireReadoutViewer change — the Value Ledger now lives on that
+                page, and execs are part of its audience. */}
+            {canSeeExposure && <a href="/readout" style={styles.settingsLink}>Readout</a>}
             <a href="/settings" style={styles.settingsLink}>Settings</a>
             <button
               style={styles.signOutLink}
@@ -493,6 +505,26 @@ export default function DashboardPage() {
               </p>
             </div>
             <a href="/people" style={styles.resumeBannerLink}>Open →</a>
+          </div>
+        )}
+
+        {/* ⚠️ WHAT'S AT RISK — the FIFTH card (Brian's call, 2026-08-06).
+            This deliberately takes the v2.58 dashboard from four verb cards to
+            five. The four-card collapse was approved and walked 11/11, so the
+            change is a decision, not a drift — recorded in the decision log.
+            Same audience as the readout: manager, admin, or an executive seat,
+            HIDDEN (never shown-and-gated) for everyone else.
+            ⚠️ DRAFT COPY — pending Brian's walk. */}
+        {canSeeExposure && (
+          <div style={styles.resumeBanner}>
+            <div>
+              <h2 style={styles.resumeBannerTitle}>⚠️ What&apos;s at risk</h2>
+              <p style={styles.resumeBannerSub}>
+                Which judgment sits in too few heads, and what your own frameworks
+                are telling you to watch.
+              </p>
+            </div>
+            <a href="/exposure" style={styles.resumeBannerLink}>Open →</a>
           </div>
         )}
 

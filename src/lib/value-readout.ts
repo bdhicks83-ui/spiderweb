@@ -47,6 +47,7 @@
 //    checked, and it only has to be caught once.
 // ═════════════════════════════════════════════════════════════════════════════
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { requireLeadershipViewer } from "@/lib/leadership-gate";
 
 // ═════════════════════════════════════════════════════════════════════════════
 // EVIDENCE LEVELS
@@ -502,39 +503,23 @@ export type ReadoutGate =
   | { ok: false; status: number; error: string; code?: string };
 
 /**
- * Manager or org admin — the same bar as running a capture campaign, and for
- * the same reason: this is a management artifact. It carries no person-level
- * negative, so a wider audience would be safe; it is gated because a readout
- * circulating before its owner has read it is how a half-finished number ends
- * up in front of a VP.
+ * Manager, org admin, OR an executive seat (persona 'exec').
+ *
+ * ⭐ WIDENED 2026-08-06 (Brian's call), and the reason is the Value Ledger.
+ * The ledger was specced for manager + admin + executive, and Brian moved it
+ * onto this page rather than giving it a route of its own — so the readout's
+ * audience had to become the union or the exec seats would lose the ledger
+ * entirely. Executives can now read AND export the readout.
+ *
+ * The original T1B3 reasoning still holds for everyone below that bar: this
+ * carries no person-level negative so a wider audience would be safe, but a
+ * readout circulating before its owner has read it is how a half-finished
+ * number ends up in front of a VP. One implementation, shared with /exposure —
+ * see src/lib/leadership-gate.ts.
  */
 export async function requireReadoutViewer(session: SupabaseClient): Promise<ReadoutGate> {
-  const {
-    data: { user },
-  } = await session.auth.getUser();
-  if (!user) return { ok: false, status: 401, error: "Not logged in" };
-
-  const { data: profile } = await session
-    .from("profiles")
-    .select("org_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  const orgId = (profile as { org_id: string | null } | null)?.org_id ?? null;
-  if (!orgId) {
-    return { ok: false, status: 409, error: "You're not part of an organization yet.", code: "NO_ORG" };
-  }
-
-  const [{ data: isManager }, { data: isAdmin }] = await Promise.all([
-    session.rpc("is_manager"),
-    session.rpc("is_org_admin"),
-  ]);
-  if (isManager !== true && isAdmin !== true) {
-    return {
-      ok: false,
-      status: 403,
-      error: "The readout is for managers and account admins.",
-      code: "NOT_VIEWER",
-    };
-  }
-  return { ok: true, userId: user.id, orgId };
+  return requireLeadershipViewer(session, {
+    // ⚠️ DRAFT CUSTOMER-FACING COPY — pending Brian.
+    denial: "The readout is for managers, executives, and account admins.",
+  });
 }

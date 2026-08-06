@@ -59,6 +59,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { recordLearningSignal, similarityBand } from "@/lib/learning-ledger";
+import { emitValueEvent, valueDedupeKey } from "@/lib/value-ledger";
 import { logSuppressed, resolveFloorGuideMode } from "@/lib/floor-guide";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -161,6 +162,51 @@ export async function POST(req: NextRequest) {
       actorId: viewer.userId,
       actorRole: "member",
     });
+
+    // ─── VALUE LEDGER (2026-08-06) — event 2 of 6: `answer_applied` ─────────
+    // ⭐ ONLY 'helped' EMITS. Opening a result is behaviour; "this answered my
+    // question" is a judgment, and the REALIZED tier is the one number on
+    // /ledger a skeptic reads first. Filling it with implicit clicks would make
+    // the honest tier the loudest and the least honest at the same time.
+    //
+    // The suppression above still governs: a Floor-Guide-confirmed call returns
+    // before this line, so no ledger event is written for it either.
+    //
+    // Additive and fail-open by construction — emitValueEvent never throws, and
+    // the response below is identical either way.
+    if (kind === "helped") {
+      const occurredAt = new Date().toISOString();
+      await emitValueEvent(service, {
+        orgId: record.org_id,
+        eventType: "answer_applied",
+        occurredAt,
+        subjectType: "retrieval",
+        subjectId: record.id,
+        contributorId: null,
+        // ⭐ ONE PERSON, ONE FRAMEWORK, ONE DAY = ONE AVOIDED INTERRUPTION.
+        // learning_signals is append-only INCLUDING repeats — a second click
+        // really did happen and that is the right record of behaviour. But the
+        // REALIZED tier is the number a skeptic reads first, and it must not be
+        // inflatable by clicking the same card again next week.
+        dedupeKey: valueDedupeKey({
+          eventType: "answer_applied",
+          subjectId: record.id,
+          actorId: viewer.userId,
+          occurredAt,
+        }),
+        quantity: {
+          retrievals: 1,
+          // Priced at read time from the org's own interruption rate + minutes.
+          interruption_minutes_avoided: null,
+          // Stored, deliberately NOT monetized in the realized tier — a
+          // probability inside the honest number stops it being honest.
+          rework_probability: null,
+        },
+        basis:
+          "Someone searched the library, opened this framework and said it answered their question. " +
+          "That is one expert interruption that did not have to happen.",
+      });
+    }
 
     // Deliberately says nothing about whether the ledger write succeeded: the
     // ledger never throws into a user's path, and a capture control that could

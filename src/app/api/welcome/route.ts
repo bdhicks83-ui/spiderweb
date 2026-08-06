@@ -25,6 +25,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
 import { serviceClient } from "@/lib/org-admin";
+import { emitValueEvent, valueDedupeKey } from "@/lib/value-ledger";
 import {
   STEPS_DONE_COMPLETE,
   TRACKS,
@@ -178,6 +179,45 @@ export async function POST(request: Request) {
   );
   if (error) {
     return NextResponse.json({ error: "Could not save progress" }, { status: 500 });
+  }
+
+  // ─── VALUE LEDGER (2026-08-06) — event 6 of 6: `ramp_compressed` ──────────
+  // MODELED tier. Fires ONCE per person per track, on the transition from
+  // "not complete" to "complete" — `existing?.completed_at` was null and
+  // `completedAt` is not. A re-post on an already-complete track cannot
+  // double-count, because completedAt is sticky (it keeps the existing value).
+  //
+  // ⭐ THE ONLY OBSERVED QUANTITY IS COMPLETION. How many ramp weeks a finished
+  // onboarding track is worth is the CUSTOMER'S judgment about their own
+  // operation — it is entered on /ledger (ramp_weeks_credited_per_track, capped
+  // at their own average ramp) and applied at read time. This system does not
+  // decide how fast somebody got up to speed.
+  //
+  // Fail-open: progress is already saved, and emitValueEvent never throws.
+  if (!existing?.completed_at && completedAt) {
+    await emitValueEvent(service, {
+      orgId: profile.org_id,
+      eventType: "ramp_compressed",
+      occurredAt: completedAt,
+      subjectType: "onboarding",
+      subjectId: `${userId}:${track}`,
+      contributorId: userId,
+      dedupeKey: valueDedupeKey({
+        eventType: "ramp_compressed",
+        subjectId: `${userId}:${track}`,
+      }),
+      quantity: {
+        completion_fraction: 1,
+        track,
+        steps: stepCount,
+        ramp_weeks_saved: null,
+        productivity_delta: null,
+      },
+      basis:
+        `Someone finished the ${TRACKS[track].label} onboarding track — ${stepCount} ` +
+        `steps, start to finish. Priced against the ramp weeks your organization credits to a ` +
+        `completed track, capped at your own average ramp.`,
+    });
   }
 
   return NextResponse.json({

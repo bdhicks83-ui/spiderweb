@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/exposure.ts",
+    "src/lib/precedence.ts",
+    "src/lib/leadership-gate.ts",
+    "src/lib/walked-check.ts",
+    "src/lib/claude.ts",
+    "src/inngest/precedence.ts",
+    "src/inngest/functions.ts",
+    "src/app/api/exposure/route.ts",
+    "src/app/api/codify/answer/route.ts",
+    "src/app/exposure/page.tsx",
+    "src/app/campaigns/page.tsx",
+    "src/app/dashboard/page.tsx"
+  ]
+}
