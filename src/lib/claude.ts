@@ -21,6 +21,87 @@ function firstText(content: { type: string; text?: string }[]): string {
   return block?.text ?? "";
 }
 
+// ─── Prompt caching (Aug 6 Training Studio speed pass) ─────────────────────
+// A cached prefix only pays if it is BYTE-IDENTICAL across every call that
+// shares it. One stray per-call token inside the prefix and the entry misses
+// SILENTLY — no error, no warning, just full price. So the split lives in the
+// PROMPT FILE (shared doctrine + grounding first, then the marker, then
+// anything per-call) rather than in string surgery here, where a future edit
+// to a prompt would quietly move a variable across the line.
+//
+// A prompt WITHOUT the marker keeps its old single-user-message shape exactly
+// as before — this is additive, and every untouched prompt is unaffected.
+const CACHE_BREAKPOINT = "<<<CACHE-BREAKPOINT>>>";
+
+// ⚠️ TTL IS 5 MINUTES, NOT THE 1 HOUR THE SPEED-PASS BRIEF ASKED FOR.
+// @anthropic-ai/sdk pinned at 0.39.0 types cache_control as { type:
+// "ephemeral" } with NO ttl field, and the 1h TTL additionally wants a beta
+// header this SDK predates. Sending an untyped ttl would mean casting around
+// the compiler on the one route that has already had two timeout outages, with
+// no way to smoke-test it from here. 5 minutes still covers the case that
+// actually repeats: the leader clicking "Write it again" right after reading a
+// draft that missed. To get the hour: bump the SDK, add ttl: "1h" in
+// cachedRequestShape() below, re-run the full typecheck, and smoke one
+// generation before trusting it.
+export const CACHE_TTL =
+  "ephemeral/5m — 1h needs an @anthropic-ai/sdk bump past 0.39.0";
+
+/**
+ * Split a loaded prompt at its cache breakpoint. Returns null when the prompt
+ * carries no marker, or when either side would be empty (an empty user message
+ * is an API error, so a malformed marker falls back rather than throwing).
+ */
+function splitCachedPrompt(
+  prompt: string
+): { prefix: string; tail: string } | null {
+  const at = prompt.indexOf(CACHE_BREAKPOINT);
+  if (at === -1) return null;
+  const prefix = prompt.slice(0, at).trimEnd();
+  const tail = prompt.slice(at + CACHE_BREAKPOINT.length).trimStart();
+  if (!prefix || !tail) return null;
+  return { prefix, tail };
+}
+
+/**
+ * Turn a loaded prompt into the { system, messages } pair for messages.create.
+ * Marker present ⇒ cached system prefix + per-call user turn. Marker absent ⇒
+ * the original shape, byte for byte.
+ */
+function cachedRequestShape(prompt: string): {
+  system?: Anthropic.TextBlockParam[];
+  messages: Anthropic.MessageParam[];
+} {
+  const split = splitCachedPrompt(prompt);
+  if (!split) return { messages: [{ role: "user", content: prompt }] };
+  return {
+    system: [
+      { type: "text", text: split.prefix, cache_control: { type: "ephemeral" } },
+    ],
+    messages: [{ role: "user", content: split.tail }],
+  };
+}
+
+export type CacheUsage = {
+  cacheCreationInputTokens: number | null;
+  cacheReadInputTokens: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+};
+
+/**
+ * Lift the cache counters out of a response so a route can prove a hit without
+ * digging through serverless logs. cache_read_input_tokens > 0 is the ONLY
+ * honest proof the prefix matched; a silent miss looks like a normal call.
+ */
+function readCacheUsage(usage: Anthropic.Usage | undefined): CacheUsage {
+  return {
+    cacheCreationInputTokens: usage?.cache_creation_input_tokens ?? null,
+    cacheReadInputTokens: usage?.cache_read_input_tokens ?? null,
+    inputTokens: usage?.input_tokens ?? null,
+    outputTokens: usage?.output_tokens ?? null,
+  };
+}
+
 export async function loadPrompt(
   name: string,
   vars: Record<string, string> = {}
@@ -1745,6 +1826,15 @@ import {
   type TrainingFormatKey,
 } from "@/lib/training-formats";
 
+// ⭐ ONE-LINE REVERT (Aug 6 speed pass). The two altitude RE-FRAMES run on
+// Haiku 4.5; the FLOOR version — the one call that carries all the substance
+// and every grounded fact — stays on Sonnet and is not touched. Re-framing is
+// a constrained rewrite of text that already exists (the prompt forbids adding
+// a fact the floor version does not contain), which is the shape of job a
+// smaller model does well. If the supervisor or exec voice ever reads thin,
+// change this ONE string back to "claude-sonnet-5" and the pass is undone.
+export const REFRAME_MODEL = "claude-haiku-4-5-20251001";
+
 export type TrainingIssueEntity = {
   type: "error_class" | "equipment_asset" | "process" | "department";
   name: string;
@@ -1912,11 +2002,19 @@ export async function recommendTrainingFormat(
   // serverless timeout, and a killed connection reads to the leader as a
   // network failure instead of a clean retryable error. Validation and the
   // closed citation catalog are unchanged.
+  // Aug 6 speed pass — the ONE cached prefix in the create flow that is worth
+  // caching. The fit rules, the credibility rule, and the whole closed format
+  // catalog are byte-identical for EVERY recommendation in EVERY org, so this
+  // entry is shared across requests rather than only across a repeat of one.
+  // (understandTrainingIssue was deliberately left alone: its static block is
+  // well under the minimum cacheable prefix, so a breakpoint there would look
+  // like caching while silently never creating an entry.)
+  const shape = cachedRequestShape(prompt);
   return withRetries("recommendTrainingFormat", async () => {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 6000,
-      messages: [{ role: "user", content: prompt }],
+      ...shape,
     });
     const text = firstText(msg.content as { type: string; text?: string }[]);
     if (!text) return null;
@@ -2027,6 +2125,12 @@ export let lastFormatGenerationDiagnostic: {
   textLength: number;
   snippet: string;
   error: string | null;
+  /** Aug 6: cache counters, surfaced so a hit is verifiable from the route's
+   *  error/diagnostic body instead of Vercel logs. cacheReadInputTokens > 0
+   *  means the prefix matched; 0 or null means it did not, and a miss is
+   *  otherwise invisible. */
+  cache?: CacheUsage;
+  model?: string;
 } | null = null;
 
 export type TrainingFloorArtifact = {
@@ -2065,6 +2169,12 @@ export async function generateFormatTraining(
     frameworks: input.frameworks,
     conflict_note: input.conflictNote,
   });
+  // Doctrine + format spec + the grounding slice are the cached prefix; only
+  // THE REQUEST and the JSON contract sit after the breakpoint. A re-generate
+  // of the same request ("Write it again") retrieves the same frameworks, so
+  // the prefix matches and the second run reads the whole framework surface
+  // out of cache instead of paying for it twice.
+  const shape = cachedRequestShape(prompt);
   return withRetries("generateFormatTraining", async () => {
     try {
       const msg = await anthropic.messages.create(
@@ -2076,7 +2186,7 @@ export async function generateFormatTraining(
           // no wall-clock because the model stops when done. Single attempt,
           // fail open — the timeout is the real constraint, never the tokens.
           max_tokens: 12000,
-          messages: [{ role: "user", content: prompt }],
+          ...shape,
         },
         // The shared client's 60s timeout is sized for routes with a 60s
         // maxDuration. This call runs only from the Studio generate route
@@ -2092,6 +2202,8 @@ export async function generateFormatTraining(
         textLength: text.length,
         snippet: text.slice(0, 240),
         error: null,
+        cache: readCacheUsage(msg.usage),
+        model: "claude-sonnet-5",
       };
       if (!text) return null;
       const parsed = parseJsonLoose(text);
@@ -2124,6 +2236,30 @@ export const ALTITUDE_SPEC: Record<"supervisor" | "exec", string> = {
     'The EXECUTIVE altitude: why this matters and what it costs. The pattern behind it, what knowledge is moving from whom to whom, and what "it worked" will look like. No procedural detail. At most 120 words — read in under a minute or it does not get read.',
 };
 
+// Per-ALTITUDE, not "last" — the two re-frames now run CONCURRENTLY, so a
+// single module-level slot would be overwritten by whichever finished second
+// and the other altitude's evidence would vanish. Keyed by altitude, both
+// survive. Reset at the top of each pair so a stale entry from an earlier
+// click can never be read as this run's proof.
+export const lastReframeDiagnostics: Record<
+  string,
+  {
+    stopReason: string | null;
+    blockTypes: string;
+    textLength: number;
+    error: string | null;
+    cache: CacheUsage;
+    model: string;
+    ms: number;
+  }
+> = {};
+
+export function resetReframeDiagnostics(): void {
+  for (const k of Object.keys(lastReframeDiagnostics)) {
+    delete lastReframeDiagnostics[k];
+  }
+}
+
 export async function reframeTrainingAltitude(input: {
   formatKey: TrainingFormatKey;
   altitude: "supervisor" | "exec";
@@ -2142,20 +2278,59 @@ export async function reframeTrainingAltitude(input: {
     floor_title: input.floorTitle,
     floor_body: input.floorBody,
   });
+  // The prefix — doctrine, format shape, the issue, and the whole floor
+  // version — is IDENTICAL for the supervisor and the exec call. Only
+  // {{altitude_spec}} and the JSON contract sit after the breakpoint, which is
+  // why the prompt file had to be reordered: altitude_spec used to sit in the
+  // middle, and a per-call token inside a cached prefix means a silent miss.
+  //
+  // ⚠️⚠️ MEASURED, NOT ASSUMED — THIS BREAKPOINT DOES NOT CURRENTLY FIRE.
+  // Rendered with a realistic 450-900-word floor body, this prefix measures
+  // ~1,000-1,800 tokens. Sonnet's minimum cacheable prefix is 1,024, but
+  // Haiku's is 2,048 — and the line above just moved this call to Haiku. So as
+  // long as REFRAME_MODEL is Haiku, no cache entry is ever created here and
+  // cacheReadInputTokens stays 0. It costs nothing and errors nothing; it
+  // simply does nothing.
+  //
+  // The breakpoint stays anyway, because it is correct and free: flip
+  // REFRAME_MODEL back to Sonnet and it starts working immediately, and an
+  // unusually long floor version clears Haiku's bar on its own. What it must
+  // NOT do is let anyone read "caching is on the re-frames" and believe the
+  // token bill went down. Read lastReframeDiagnostics[altitude].cache.
+  //
+  // Separately, even where the entry DOES get created: the two re-frames fire
+  // in PARALLEL, so neither can read the other's write within a single run —
+  // the write lands only after the first call returns. Any saving is on the
+  // NEXT run of the same request, never this one.
+  const shape = cachedRequestShape(prompt);
+  const startedAt = Date.now();
   return withRetries(`reframeTrainingAltitude:${input.altitude}`, async () => {
     const msg = await anthropic.messages.create(
       {
-        model: "claude-sonnet-5",
+        // Haiku 4.5 — see REFRAME_MODEL for the one-line revert.
+        model: REFRAME_MODEL,
         // Sized for thinking + output (standing P-7 gotcha): the floor body this
         // re-frames is now up to ~900 words of input, and headroom is free.
+        // NOT lowered with the model change — a smaller model still emits a
+        // thinking block, and a budget that fits only the visible answer
+        // returns ZERO text blocks and reads as a flaked call.
         max_tokens: 8000,
-        messages: [{ role: "user", content: prompt }],
+        ...shape,
       },
       // Same 300s-route override as generateFormatTraining — the shared
       // client's 60s timeout would kill a slow re-frame mid-write.
       { timeout: 240_000 }
     );
     const text = firstText(msg.content as { type: string; text?: string }[]);
+    lastReframeDiagnostics[input.altitude] = {
+      stopReason: msg.stop_reason ?? null,
+      blockTypes: (msg.content as { type: string }[]).map((b) => b.type).join(","),
+      textLength: text.length,
+      error: text ? null : "no text block (thinking consumed the budget?)",
+      cache: readCacheUsage(msg.usage),
+      model: REFRAME_MODEL,
+      ms: Date.now() - startedAt,
+    };
     if (!text) return null;
     const parsed = parseJsonLoose(text);
     return isTrainingAltitude(parsed) ? parsed : null;

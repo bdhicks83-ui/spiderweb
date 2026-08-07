@@ -5,9 +5,6 @@ RE-FRAME, DO NOT REWRITE. The substance is fixed. You may not add a fact, a step
 KEEP THE FORMAT'S SHAPE. This is a {{format_name}}, and it stays one at every altitude:
 {{format_structure}}
 
-THE ALTITUDE YOU ARE WRITING:
-{{altitude_spec}}
-
 TONE DOCTRINE (blameless, non-negotiable): the audience is never the problem. A recurring failure is a knowledge-TRANSFER gap, never a competence gap. Never blame anyone. Gender-neutral. Land each point once.
 
 WRITING FORMAT: plain text only - NO markdown syntax. SHORT ALL-CAPS section headers on their own line, numbered steps, simple dashes for lists. Blank line between sections.
@@ -20,6 +17,10 @@ THE FLOOR VERSION (the only permitted source of substance):
 {{floor_title}}
 
 {{floor_body}}
+
+<<<CACHE-BREAKPOINT>>>
+THE ALTITUDE YOU ARE WRITING:
+{{altitude_spec}}
 
 Respond with ONLY a JSON object, no markdown, no code fence:
 {

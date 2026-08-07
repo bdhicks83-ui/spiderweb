@@ -37,7 +37,9 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import {
   generateFormatTraining,
   lastFormatGenerationDiagnostic,
+  lastReframeDiagnostics,
   reframeTrainingAltitude,
+  resetReframeDiagnostics,
   type TrainingAltitude,
 } from "@/lib/claude";
 import { TRAINING_FORMATS, isTrainingFormatKey } from "@/lib/training-formats";
@@ -82,8 +84,15 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
-    const altitude: "floor" | "supervisor" | "exec" =
-      body?.altitude === "supervisor" || body?.altitude === "exec"
+    // "reframes" (Aug 6 speed pass) writes BOTH non-floor altitudes in one
+    // invocation, concurrently. "supervisor" and "exec" still work on their
+    // own — the client no longer sends them, but keeping them means a stuck
+    // request can be finished one altitude at a time, and it is the seam the
+    // partial-failure test drives.
+    const altitude: "floor" | "supervisor" | "exec" | "reframes" =
+      body?.altitude === "supervisor" ||
+      body?.altitude === "exec" ||
+      body?.altitude === "reframes"
         ? body.altitude
         : "floor";
 
@@ -154,24 +163,86 @@ export async function POST(
         );
       }
 
-      const reframed = await reframeTrainingAltitude({
-        formatKey,
-        altitude,
-        floorTitle: floor.title,
-        floorBody: floor.body,
-        issueRestated: request.issue_restated ?? request.issue_text,
-        audience: request.audience_summary,
+      // ═══ THE PARALLEL PAIR ═══════════════════════════════════════════════
+      // Both re-frames take the SAME input — the floor version — and neither
+      // reads the other's output, so running them in sequence was ~12s of pure
+      // waiting. allSettled, NOT all: Promise.all rejects on the first failure
+      // and would throw away a re-frame that had already succeeded. The
+      // invariant this route has always held is that a part-way failure keeps
+      // what was written, and allSettled is what preserves it — one merged
+      // write persists whatever landed, and the approve gate stays shut
+      // because `complete` still requires all three altitudes.
+      //
+      // On "reframes" only the MISSING altitudes are written. That is what
+      // makes retry-after-partial cheap: if the supervisor version landed and
+      // the exec one flaked, clicking again re-frames the exec alone instead
+      // of paying for both and overwriting a version the leader may already
+      // have read. A genuine "write it again" is unaffected — that path
+      // inserts a fresh training row carrying only the floor version, so both
+      // altitudes are missing and both get written.
+      const existingAlts: Altitudes = training.altitudes || {};
+      const wanted: ("supervisor" | "exec")[] =
+        altitude === "reframes"
+          ? (["supervisor", "exec"] as const).filter((a) => !existingAlts[a])
+          : [altitude];
+
+      // wanted may be EMPTY (both altitudes already present). That is not an
+      // early return: it falls through with zero model calls so the completion
+      // bookkeeping below — status flip, routing targets — still runs. A row
+      // that has all three altitudes but a request stuck short of 'generated'
+      // is exactly the state a click is meant to repair.
+      resetReframeDiagnostics();
+      const settled =
+        wanted.length === 0
+          ? []
+          : await Promise.allSettled(
+              wanted.map((a) =>
+                reframeTrainingAltitude({
+                  formatKey,
+                  altitude: a,
+                  floorTitle: floor.title,
+                  floorBody: floor.body,
+                  issueRestated: request.issue_restated ?? request.issue_text,
+                  audience: request.audience_summary,
+                })
+              )
+            );
+
+      const altitudes: Altitudes = { ...existingAlts };
+      const written: ("supervisor" | "exec")[] = [];
+      const failed: ("supervisor" | "exec")[] = [];
+      settled.forEach((outcome, i) => {
+        const a = wanted[i];
+        if (outcome.status === "fulfilled" && outcome.value) {
+          altitudes[a] = outcome.value;
+          written.push(a);
+        } else {
+          failed.push(a);
+          if (outcome.status === "rejected") {
+            console.warn(`reframe ${a} rejected:`, outcome.reason);
+          }
+        }
       });
-      if (!reframed) {
+
+      const label = (a: "supervisor" | "exec") =>
+        a === "exec" ? "executive" : "supervisor";
+
+      // Every attempted re-frame failed — there is nothing new to persist, so
+      // say so and stop. The floor version is untouched either way. Guarded on
+      // `wanted.length > 0` so the nothing-to-do case above does not fall in
+      // here and report a failure that never happened.
+      if (wanted.length > 0 && written.length === 0) {
         return NextResponse.json(
           {
-            error: `The ${altitude === "exec" ? "executive" : "supervisor"} version didn't come through — the floor version is safe. Try again.`,
+            error: `The ${failed.map(label).join(" and ")} version${
+              failed.length > 1 ? "s" : ""
+            } didn't come through — the floor version is safe. Try again.`,
+            diagnostic: lastReframeDiagnostics,
           },
           { status: 502 }
         );
       }
 
-      const altitudes: Altitudes = { ...(training.altitudes || {}), [altitude]: reframed };
       const complete = !!(altitudes.floor && altitudes.supervisor && altitudes.exec);
 
       const { error: updTrError } = await service
@@ -225,13 +296,44 @@ export async function POST(
         }
       }
 
+      // PART-WAY FAILURE. The successful re-frame is already committed above —
+      // that write happens BEFORE this branch on purpose, so the leader keeps
+      // it — but the request is not done, so this must not read as success.
+      // 502 lands in the client's existing !res.ok path: the stepper resets and
+      // shows the inline retry line, and clicking again re-frames only what is
+      // still missing. `complete` is false here by construction, so the approve
+      // gate stays shut.
+      if (failed.length > 0) {
+        return NextResponse.json(
+          {
+            error: `The ${failed
+              .map(label)
+              .join(" and ")} version didn't come through. The ${written
+              .map(label)
+              .join(" and ")} version was saved — click again to finish the rest.`,
+            partial: true,
+            written,
+            failed,
+            complete,
+            diagnostic: lastReframeDiagnostics,
+          },
+          { status: 502 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
         altitude,
         complete,
+        written,
+        // Cache counters ride along so a hit is verifiable from the browser
+        // network tab — no serverless log access needed.
+        diagnostic: lastReframeDiagnostics,
         message: complete
           ? "All three versions are written. Read them — nothing goes out until you approve it."
-          : `The ${altitude === "exec" ? "executive" : "supervisor"} version is written.`,
+          : written.length > 0
+            ? `The ${written.map(label).join(" and ")} version is written.`
+            : "Nothing left to re-frame.",
       });
     }
 
@@ -345,6 +447,10 @@ export async function POST(
       success: true,
       altitude: "floor",
       complete: false,
+      // Aug 6: carries cache_creation_input_tokens / cache_read_input_tokens
+      // on the SUCCESS path too, not only on failure. A cache miss is
+      // invisible otherwise — the call just costs full price and says nothing.
+      diagnostic: lastFormatGenerationDiagnostic,
       training: {
         id: trainingId,
         version: nextVersion,

@@ -14,6 +14,12 @@ THE HONESTY RULE: your primary recommendation must be genuinely different from t
 
 THE FRAMING RULE: the audience is never the problem. Frame every rationale as what the format does for the learner, never as what the learner lacks. Write plainly and without hedging; gender-neutral throughout; make each point once.
 
+THE PRIOR RULE: the organization's track record (supplied below) is evidence, not a verdict. The WEIGHT line inside it is binding — early evidence must never override the fit rules, established evidence may break ties between otherwise-fitting formats. An outcome marked leader-enhanced credits the leader's change as much as the format. When the record informs your pick, say so in the rationale in plain language with the count; when it doesn't, don't mention it.
+
+THE FORMAT LIBRARY — recommend from these keys ONLY:
+{{format_catalog}}
+
+<<<CACHE-BREAKPOINT>>>
 THE ISSUE:
 - What the leader described: {{issue_text}}
 - Understood as: {{issue_restated}}
@@ -28,11 +34,6 @@ WHAT THE ORGANIZATION HAS ALREADY CODIFIED ON THIS TERRITORY (the material the t
 
 WHAT HAS ACTUALLY WORKED IN THIS ORGANIZATION (the format-outcome log: real deliveries, verdicts from the efficacy watch on live floor records, and where leaders overrode past recommendations):
 {{track_record}}
-
-THE PRIOR RULE: the track record is evidence, not a verdict. The WEIGHT line inside it is binding — early evidence must never override the fit rules, established evidence may break ties between otherwise-fitting formats. An outcome marked leader-enhanced credits the leader's change as much as the format. When the record informs your pick, say so in the rationale in plain language with the count; when it doesn't, don't mention it.
-
-THE FORMAT LIBRARY — recommend from these keys ONLY:
-{{format_catalog}}
 
 Return the THREE best-fitting formats ONLY, ranked 1-3. Exactly one has "is_primary": true and rank 1. Do NOT return more than three. The leader still sees every other format in the library alongside your ranking, so a format you leave out is not hidden from them - it is simply not one of your three. Keep every rationale to ONE line.
 
