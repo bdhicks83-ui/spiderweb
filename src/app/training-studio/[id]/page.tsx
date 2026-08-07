@@ -189,6 +189,69 @@ const ALTITUDES: { key: "floor" | "supervisor" | "exec"; label: string }[] = [
   { key: "exec", label: "Executive" },
 ];
 
+// ⚠️ DRAFT COPY — pending Brian's sign-off. Nothing customer-facing ships
+// without it, and these four lines are the most-read text in the Studio: they
+// are what a leader stares at for the length of the wait.
+const GEN_STEPS = [
+  "Reading the captured frameworks",
+  "Writing the floor version",
+  "Reframing for supervisors and execs",
+  "Ready for your approval",
+];
+
+/**
+ * Steps 1 and 2 light TOGETHER, and that is deliberate rather than sloppy.
+ * Grounding and floor-writing happen inside a single server invocation, so the
+ * client genuinely does not know when the first finishes and the second
+ * starts. Ticking step 1 on a timer would be inventing progress — the one
+ * thing a progress indicator must never do. Reporting them separately needs
+ * either a generation_stage column the client polls or a streamed response;
+ * both were judged more risk than this route should carry in a speed pass.
+ */
+function stepState(
+  index: number,
+  phase: 0 | 1 | 2 | 3
+): "done" | "active" | "todo" {
+  if (phase === 0) return "todo";
+  if (phase === 1) return index <= 1 ? "active" : "todo";
+  if (phase === 2) return index <= 1 ? "done" : index === 2 ? "active" : "todo";
+  return "done";
+}
+
+function GenerationStepper({ phase }: { phase: 0 | 1 | 2 | 3 }) {
+  if (phase === 0) return null;
+  return (
+    <ol style={styles.stepList} aria-live="polite">
+      {GEN_STEPS.map((label, i) => {
+        const state = stepState(i, phase);
+        return (
+          <li key={label} style={styles.stepRow}>
+            <span
+              aria-hidden
+              style={{
+                ...styles.stepMark,
+                ...(state === "done" ? styles.stepMarkDone : {}),
+                ...(state === "active" ? styles.stepMarkActive : {}),
+              }}
+            >
+              {state === "done" ? "✓" : state === "active" ? "•" : ""}
+            </span>
+            <span
+              style={{
+                ...styles.stepLabel,
+                ...(state === "todo" ? styles.stepLabelTodo : {}),
+                ...(state === "active" ? styles.stepLabelActive : {}),
+              }}
+            >
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export default function TrainingStudioDetailPage({
   params,
 }: {
@@ -205,7 +268,13 @@ export default function TrainingStudioDetailPage({
   const [overrideReason, setOverrideReason] = useState("");
   const [altitude, setAltitude] = useState<"floor" | "supervisor" | "exec">("floor");
   const [enhancement, setEnhancement] = useState("");
-  const [genStep, setGenStep] = useState<string | null>(null);
+  // ── Generation progress (Aug 6) ────────────────────────────────────────
+  // The whole run used to be one word — "Writing it…" — for something north
+  // of a minute, which reads as a hang. genPhase is how far the run has got;
+  // the stepper below turns it into four lines the leader can watch.
+  //   0 = not running · 1 = floor call in flight (steps 1-2)
+  //   2 = re-frame pair in flight (step 3) · 3 = done (step 4)
+  const [genPhase, setGenPhase] = useState<0 | 1 | 2 | 3>(0);
   // Generation failures render NEXT TO the generate button, not in the
   // top-of-page error slot — a 504 after a long wait must be visible where
   // the leader is actually looking. Cleared on the next click.
@@ -272,52 +341,76 @@ export default function TrainingStudioDetailPage({
     }
   };
 
-  // Generation runs as THREE requests, not one. Vercel kills an invocation at
-  // 60s and writing all three audience altitudes in a single model call ran
-  // right into that wall — the connection died and read to the leader as a
-  // network failure. The floor version carries the substance; the other two
-  // re-frame it. Sequential, visible, and each one comfortably inside the cap.
+  // Generation runs as TWO requests, not one and not three. Vercel kills an
+  // invocation at 60s (the route's own wall is 300s, but a single model call
+  // writing all three altitudes ran past even that once) so the floor version
+  // still gets its own invocation — it carries all the substance and is the
+  // slowest call by a wide margin.
+  //
+  // The change on Aug 6: the supervisor and exec re-frames used to be two more
+  // sequential round trips. They both take the floor version as input and
+  // neither reads the other, so they now go in ONE request that runs them
+  // concurrently server-side. Two boundaries instead of three, and the second
+  // one costs about as long as the slower of the two re-frames instead of
+  // their sum.
   const generateAll = async () => {
     if (!id || busy) return;
     setBusy("generate");
     setMessage(null);
     setError(null);
     setGenError(null);
-    const steps: { altitude: string; label: string }[] = [
-      { altitude: "floor", label: "Writing the floor version…" },
-      { altitude: "supervisor", label: "Framing it for supervisors…" },
-      { altitude: "exec", label: "Framing it for the exec…" },
-    ];
+    setGenPhase(1);
+
+    // A gateway 504 carries an HTML body, not JSON — parse defensively so a
+    // timeout lands in the !res.ok branch instead of the network catch.
+    const call = async (altitude: string) => {
+      const res = await fetch(`/api/training-studio/${id}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ altitude }),
+      });
+      const json = await res.json().catch(() => null);
+      return { ok: res.ok, status: res.status, json };
+    };
+
+    const fail = (r: { status: number; json: { error?: string } | null }) => {
+      // Whatever was written already is kept — the leader retries from where
+      // it stopped rather than starting over. The stepper resets so a half-lit
+      // list never sits there implying work is still happening.
+      setGenError(
+        r.json?.error ||
+          (r.status === 504
+            ? "Generation timed out — try again."
+            : "That didn't go through — try again.")
+      );
+      setGenPhase(0);
+    };
+
     try {
-      for (const step of steps) {
-        setGenStep(step.label);
-        const res = await fetch(`/api/training-studio/${id}/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ altitude: step.altitude }),
-        });
-        // A gateway 504 carries an HTML body, not JSON — parse defensively so
-        // a timeout lands in the !res.ok branch instead of the network catch.
-        const json = await res.json().catch(() => null);
-        if (!res.ok) {
-          // Whatever was written already is kept — the leader retries from
-          // where it stopped rather than starting over.
-          setGenError(
-            json?.error ||
-              (res.status === 504
-                ? "Generation timed out — try again."
-                : "That didn't go through — try again.")
-          );
-          break;
-        }
-        setMessage(json?.message ?? null);
+      const floor = await call("floor");
+      if (!floor.ok) {
+        fail(floor);
+        return;
       }
+      setMessage(floor.json?.message ?? null);
+
+      setGenPhase(2);
+      const reframes = await call("reframes");
+      if (!reframes.ok) {
+        fail(reframes);
+        return;
+      }
+      setMessage(reframes.json?.message ?? null);
+      setGenPhase(3);
     } catch {
       setGenError("Generation hit a network error — try again.");
+      setGenPhase(0);
     } finally {
-      setGenStep(null);
       setBusy(null);
       await load(id);
+      // Step 4 lingers for a beat so "Ready for your approval" is actually
+      // read, then the stepper gets out of the way of the artifact itself.
+      setTimeout(() => setGenPhase(0), 1200);
     }
   };
 
@@ -565,8 +658,9 @@ export default function TrainingStudioDetailPage({
                   disabled={busy !== null}
                   onClick={generateAll}
                 >
-                  {busy === "generate" ? (genStep ?? "Writing it…") : "Build the training"}
+                  {busy === "generate" ? "Writing it…" : "Build the training"}
                 </button>
+                <GenerationStepper phase={genPhase} />
                 {genError && <p style={styles.errorText}>{genError}</p>}
               </>
             )}
@@ -608,7 +702,7 @@ export default function TrainingStudioDetailPage({
               )}
             </div>
 
-            {genStep && <p style={styles.strategyLine}>{genStep}</p>}
+            <GenerationStepper phase={genPhase} />
             {genError && <p style={styles.errorText}>{genError}</p>}
 
             {r.status === "generated" && data.can_act && (
@@ -632,7 +726,7 @@ export default function TrainingStudioDetailPage({
                     disabled={busy !== null}
                     onClick={generateAll}
                   >
-                    {busy === "generate" ? (genStep ?? "Rewriting…") : "Write it again"}
+                    {busy === "generate" ? "Rewriting…" : "Write it again"}
                   </button>
                 </div>
               </div>
@@ -889,6 +983,39 @@ const styles: Record<string, React.CSSProperties> = {
   quoteLabel: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.03em", color: "var(--muted)", textTransform: "uppercase" as const },
   quoteText: { fontSize: "14px", color: "var(--pine)", margin: "6px 0 0", lineHeight: 1.55, fontStyle: "italic" as const },
   quoteNote: { fontSize: "12px", color: "var(--muted)", margin: "8px 0 0", lineHeight: 1.5 },
+  // ── Generation stepper (Aug 6) ────────────────────────────────────────
+  stepList: {
+    listStyle: "none",
+    margin: "14px 0 0",
+    padding: "12px 14px",
+    background: "var(--paper-2)",
+    border: "1px solid var(--line)",
+    borderRadius: 12,
+  },
+  stepRow: { display: "flex", alignItems: "center", gap: 10, padding: "5px 0" },
+  stepMark: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 18,
+    height: 18,
+    flexShrink: 0,
+    borderRadius: 999,
+    border: "1px solid var(--line)",
+    background: "var(--white)",
+    fontSize: "11px",
+    fontWeight: 700,
+    lineHeight: 1,
+  },
+  stepMarkDone: {
+    borderColor: "var(--growth)",
+    background: "var(--growth-soft)",
+    color: "var(--growth-deep)",
+  },
+  stepMarkActive: { borderColor: "var(--growth)", color: "var(--growth-deep)" },
+  stepLabel: { fontSize: "13px", color: "var(--pine)", lineHeight: 1.45 },
+  stepLabelTodo: { color: "var(--muted)" },
+  stepLabelActive: { color: "var(--pine)", fontWeight: 600 },
   successText: { fontSize: "13px", color: "var(--ok-text)", margin: "14px 0 0" },
   errorText: { fontSize: "14px", color: "var(--danger)", margin: "14px 0 0" },
   sectionTitle: {

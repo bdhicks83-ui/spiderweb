@@ -27,14 +27,15 @@ LENGTH DISCIPLINE: 450-900 words. Rich enough to deliver as-is; tight enough to 
 
 WRITING FORMAT: plain text only - NO markdown syntax (no #, no **, no backticks). Structure with SHORT ALL-CAPS section headers on their own line, numbered steps (1. 2. 3.) and simple dashes for lists. Blank line between sections.
 
+THE EXPERT FRAMEWORK MATERIAL (the ONLY permitted source of substance):
+{{frameworks}}
+
+<<<CACHE-BREAKPOINT>>>
 THE REQUEST:
 - The issue as the leader described it: {{issue_text}}
 - Understood as: {{issue_restated}} (type: {{issue_type}})
 - Audience: {{audience}}
 - Attempt: {{attempt_note}}
-
-THE EXPERT FRAMEWORK MATERIAL (the ONLY permitted source of substance):
-{{frameworks}}
 
 Respond with ONLY a JSON object, no markdown, no code fence:
 {
